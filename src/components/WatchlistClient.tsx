@@ -27,6 +27,7 @@ export default function WatchlistClient({
   const [op, setOp] = useState<"lte" | "gte">("lte");
   const [value, setValue] = useState(-15);
   const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
 
@@ -34,26 +35,44 @@ export default function WatchlistClient({
     e.preventDefault();
     if (!cardId) return;
     setBusy(true);
+    setErrorMsg(null);
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("watchlist_items").insert({
+    if (!user) {
+      setBusy(false);
+      setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
+      return;
+    }
+    const { error } = await supabase.from("watchlist_items").insert({
       user_id: user.id,
       card_id: cardId,
       alert_rule: { type: "pct_vs_avg30", op, value },
     });
     setBusy(false);
+    if (error) {
+      setErrorMsg(`登録に失敗しました：${error.message}`);
+      return;
+    }
     router.refresh();
   }
 
   async function removeItem(id: string) {
-    await supabase.from("watchlist_items").delete().eq("id", id);
+    setErrorMsg(null);
+    const { error } = await supabase.from("watchlist_items").delete().eq("id", id);
+    if (error) {
+      setErrorMsg(`削除に失敗しました：${error.message}`);
+      return;
+    }
     router.refresh();
   }
 
   return (
     <div>
+      {errorMsg && (
+        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
+      )}
+
       <form onSubmit={addItem} className="mb-6 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-bg-elevated p-4">
         <div className="flex-1 min-w-40">
           <label className="mb-1 block text-xs text-ink-muted">カード</label>

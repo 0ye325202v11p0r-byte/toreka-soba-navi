@@ -31,6 +31,7 @@ export default function PortfolioClient({
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
 
@@ -43,13 +44,18 @@ export default function PortfolioClient({
 
   async function addTransaction(e: React.FormEvent) {
     e.preventDefault();
-    if (!cardId || pricePerUnit === "") return;
+    if (!cardId || pricePerUnit === "" || quantity < 1) return;
     setBusy(true);
+    setErrorMsg(null);
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from("transactions").insert({
+    if (!user) {
+      setBusy(false);
+      setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
+      return;
+    }
+    const { error } = await supabase.from("transactions").insert({
       user_id: user.id,
       card_id: cardId,
       type,
@@ -58,11 +64,21 @@ export default function PortfolioClient({
       transaction_date: date,
     });
     setBusy(false);
+    if (error) {
+      setErrorMsg(`記録に失敗しました：${error.message}`);
+      return;
+    }
+    setPricePerUnit("");
     router.refresh();
   }
 
   async function removeTransaction(id: string) {
-    await supabase.from("transactions").delete().eq("id", id);
+    setErrorMsg(null);
+    const { error } = await supabase.from("transactions").delete().eq("id", id);
+    if (error) {
+      setErrorMsg(`削除に失敗しました：${error.message}`);
+      return;
+    }
     router.refresh();
   }
 
@@ -74,6 +90,10 @@ export default function PortfolioClient({
         <StatBox label="実現損益（確定済み）" value={yen(pnl.realizedPnl)} tone={pnl.realizedPnl} />
         <StatBox label="合計損益" value={yen(totalPnl)} tone={totalPnl} emphasize />
       </div>
+
+      {errorMsg && (
+        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
+      )}
 
       <form
         onSubmit={addTransaction}
@@ -118,6 +138,7 @@ export default function PortfolioClient({
           <label className="mb-1 block text-xs text-ink-muted">単価</label>
           <input
             type="number"
+            min={0}
             required
             value={pricePerUnit}
             onChange={(e) => setPricePerUnit(e.target.value === "" ? "" : Number(e.target.value))}

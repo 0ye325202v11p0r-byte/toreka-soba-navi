@@ -39,11 +39,12 @@ create policy "cards are publicly readable"
   on public.cards for select
   using (true);
 
--- writes to cards only via service role (cron job / migration script), not from the browser
-create policy "only service role can write cards"
-  on public.cards for all
-  using (auth.role() = 'service_role')
-  with check (auth.role() = 'service_role');
+-- No insert/update/delete policy is defined for anon/authenticated roles, so
+-- RLS denies all writes from the browser by default. The migration script
+-- and the Phase 2 cron job use the service_role key, which bypasses RLS
+-- entirely (this is a Postgres/Supabase guarantee, not something a policy
+-- needs to grant) — do not add a "service_role" policy here, it would be
+-- dead code and could misleadingly suggest writes are otherwise possible.
 
 -- ============ price_snapshots ============
 -- normalized, append-only time series (replaces the fixed 90-length array)
@@ -65,10 +66,8 @@ create policy "price snapshots are publicly readable"
   on public.price_snapshots for select
   using (true);
 
-create policy "only service role can write price snapshots"
-  on public.price_snapshots for all
-  using (auth.role() = 'service_role')
-  with check (auth.role() = 'service_role');
+-- same reasoning as public.cards above: no write policy for anon/authenticated
+-- means the browser can never write here; the service_role key bypasses RLS.
 
 -- ============ profiles ============
 create table if not exists public.profiles (
@@ -192,7 +191,6 @@ create policy "users can view their own subscription"
   on public.subscriptions for select
   using (auth.uid() = user_id);
 
-create policy "only service role can write subscriptions"
-  on public.subscriptions for all
-  using (auth.role() = 'service_role')
-  with check (auth.role() = 'service_role');
+-- no write policy for anon/authenticated: only the Stripe webhook handler
+-- (Phase 3), using the service_role key, may write here. service_role
+-- bypasses RLS automatically — no policy needed or added for it.
