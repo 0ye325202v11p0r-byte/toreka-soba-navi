@@ -194,3 +194,25 @@ create policy "users can view their own subscription"
 -- no write policy for anon/authenticated: only the Stripe webhook handler
 -- (Phase 3), using the service_role key, may write here. service_role
 -- bypasses RLS automatically — no policy needed or added for it.
+
+-- ============ grants ============
+-- RLS policies decide which ROWS a role may see/touch, but Postgres also
+-- requires a plain table-level GRANT before RLS is even evaluated — some
+-- Supabase projects don't pre-configure this for tables created via the SQL
+-- Editor, so it's granted explicitly here rather than assumed.
+grant usage on schema public to anon, authenticated, service_role;
+
+grant select on public.cards, public.price_snapshots to anon, authenticated;
+grant select, insert, update, delete on public.cards, public.price_snapshots to service_role;
+
+grant select, insert, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.profiles to service_role;
+
+grant select, insert, update, delete on public.transactions to authenticated;
+grant select, insert, update, delete on public.transactions to service_role;
+
+grant select, insert, update, delete on public.watchlist_items to authenticated;
+grant select, insert, update, delete on public.watchlist_items to service_role;
+
+grant select on public.subscriptions to authenticated;
+grant select, insert, update, delete on public.subscriptions to service_role;
