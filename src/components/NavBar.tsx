@@ -9,11 +9,11 @@ export default async function NavBar() {
 
   return (
     <header className="border-b border-border bg-bg-elevated">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-lg font-bold text-ink">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-y-2 px-4 py-3">
+        <Link href="/" className="text-base font-bold text-ink sm:text-lg">
           トレカ相場ナビ
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:gap-x-4">
           <Link href="/" className="text-ink-muted hover:text-ink">
             相場一覧
           </Link>

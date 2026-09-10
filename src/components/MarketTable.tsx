@@ -76,7 +76,46 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
 
       <div className="mb-2 text-xs text-ink-faint">{visible.length}件表示</div>
 
-      <div className="overflow-x-auto rounded-lg border border-border">
+      {/* mobile: stacked cards (a 6-column table doesn't fit a phone screen) */}
+      <div className="space-y-2 sm:hidden">
+        {visible.map((c) => {
+          const dq = dataQualityLabel(c.data_quality);
+          return (
+            <Link
+              key={c.id}
+              href={`/cards/${c.id}`}
+              className="block rounded-lg border border-border bg-bg-elevated p-3"
+            >
+              <div className="mb-1 flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-medium text-ink">{c.name}</div>
+                  <div className="text-xs text-ink-faint">
+                    {c.rarity} ・ {c.set_name}
+                  </div>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${judgmentClasses(c.judgment)}`}>
+                  {c.judgment ?? "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono">{yen(c.current_price)}</span>
+                  <span className="font-mono text-xs text-ink-muted">{pct(c.pct_vs_avg30)}</span>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${dq.cls}`}>{dq.label}</span>
+              </div>
+            </Link>
+          );
+        })}
+        {visible.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-faint">
+            該当するカードがありません。
+          </p>
+        )}
+      </div>
+
+      {/* desktop / tablet: full table */}
+      <div className="hidden overflow-x-auto rounded-lg border border-border sm:block">
         <table className="w-full text-sm">
           <thead className="bg-bg-sunken text-left text-ink-muted">
             <tr>

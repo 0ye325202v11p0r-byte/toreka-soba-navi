@@ -20,6 +20,9 @@ export default async function MarketListPage() {
   }
 
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const { data: cards, error } = await supabase
     .from("cards")
     .select("*")
@@ -29,9 +32,24 @@ export default async function MarketListPage() {
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">相場一覧</h1>
-      <p className="mb-6 text-sm text-ink-muted">
+      <p className="mb-4 text-sm text-ink-muted">
         表示価格はカードショップの店頭平均販売価格です。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。
       </p>
+
+      {!user && (
+        <div className="mb-6 rounded-lg border border-accent bg-accent-soft p-4">
+          <p className="text-sm text-accent-strong">
+            <b>相場を見るだけなら無料です。</b>ログインすると、保有カードの<b>収支（含み損益・実現損益）を自動計算するポートフォリオ</b>と、
+            <b>価格が動いたら知らせるウォッチリスト</b>が使えるようになります。
+          </p>
+          <Link
+            href="/login"
+            className="mt-2 inline-block rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg-elevated hover:bg-accent-strong"
+          >
+            無料でログイン →
+          </Link>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-warn-soft p-4 text-warn">
