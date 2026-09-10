@@ -44,12 +44,14 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
       <div className="mb-3 flex flex-wrap gap-2">
         <input
           type="text"
+          aria-label="カード名・弾名で検索"
           placeholder="カード名・弾名で検索"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="flex-1 min-w-40 rounded-md border border-border bg-bg-elevated px-3 py-1.5 text-sm"
         />
         <select
+          aria-label="弾で絞り込み"
           value={setFilter}
           onChange={(e) => setSetFilter(e.target.value)}
           className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm"
@@ -62,6 +64,7 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
           ))}
         </select>
         <select
+          aria-label="並び替え"
           value={sortKey}
           onChange={(e) => setSortKey(e.target.value as SortKey)}
           className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm"

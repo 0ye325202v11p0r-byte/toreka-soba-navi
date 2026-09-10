@@ -82,6 +82,7 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
     <div>
       <input
         type="text"
+        aria-label="カード名・弾名で検索"
         placeholder="カード名・弾名で検索"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
