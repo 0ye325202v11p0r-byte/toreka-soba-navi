@@ -48,7 +48,7 @@ export default async function CardDetailPage({
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatBox label="現在価格" value={yen(c.current_price)} />
         <StatBox label="30日平均" value={yen(c.avg30)} />
-        <StatBox label="90日平均" value={yen(c.avg90)} />
+        <StatBox label="90日平均" value={`${yen(c.avg90)}（${pct(c.pct_vs_avg90)}）`} />
         <div className="rounded-lg border border-border bg-bg-elevated p-3">
           <div className="text-xs text-ink-muted">判定</div>
           <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-sm font-semibold ${judgmentClasses(c.judgment)}`}>

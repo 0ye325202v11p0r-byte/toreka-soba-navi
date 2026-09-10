@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { yen } from "@/lib/format";
 import type { Transaction, TransactionType, PnlSummary } from "@/lib/types";
+import CardPicker from "./CardPicker";
 
 interface CardOption {
   id: string;
@@ -99,20 +100,7 @@ export default function PortfolioClient({
         onSubmit={addTransaction}
         className="mb-6 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-bg-elevated p-4"
       >
-        <div className="flex-1 min-w-40">
-          <label className="mb-1 block text-xs text-ink-muted">カード</label>
-          <select
-            value={cardId}
-            onChange={(e) => setCardId(e.target.value)}
-            className="w-full rounded-md border border-border bg-bg px-2 py-1.5"
-          >
-            {cards.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}（{c.rarity}）
-              </option>
-            ))}
-          </select>
-        </div>
+        <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
         <div>
           <label className="mb-1 block text-xs text-ink-muted">売買</label>
           <select
