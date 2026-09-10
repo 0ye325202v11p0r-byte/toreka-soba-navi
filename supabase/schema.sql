@@ -195,6 +195,30 @@ create policy "users can view their own subscription"
 -- (Phase 3), using the service_role key, may write here. service_role
 -- bypasses RLS automatically — no policy needed or added for it.
 
+-- ============ sync_runs ============
+-- Phase 2 failure detection: one row per cron execution of
+-- /api/cron/refresh-prices, so a silently-broken scraper (site layout
+-- change, IP block, etc.) shows up as a fact in the database instead of
+-- disappearing into a log nobody reads.
+create table if not exists public.sync_runs (
+  id uuid primary key default gen_random_uuid(),
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  total_count integer not null default 0,
+  success_count integer not null default 0,
+  fail_count integer not null default 0,
+  error_sample text
+);
+
+alter table public.sync_runs enable row level security;
+
+create policy "authenticated users can view sync runs"
+  on public.sync_runs for select
+  using (auth.role() = 'authenticated');
+
+-- no write policy for anon/authenticated: only the cron job (service_role)
+-- writes here.
+
 -- ============ grants ============
 -- RLS policies decide which ROWS a role may see/touch, but Postgres also
 -- requires a plain table-level GRANT before RLS is even evaluated — some
@@ -216,3 +240,6 @@ grant select, insert, update, delete on public.watchlist_items to service_role;
 
 grant select on public.subscriptions to authenticated;
 grant select, insert, update, delete on public.subscriptions to service_role;
+
+grant select on public.sync_runs to authenticated;
+grant select, insert, update, delete on public.sync_runs to service_role;
