@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { buildVerdictText } from "@/lib/ai-verdict";
+import type { Judgment } from "@/lib/types";
 
 export const maxDuration = 300; // seconds — 345 cards at ~1 req/sec needs headroom
 export const dynamic = "force-dynamic";
@@ -42,7 +44,7 @@ function computeStats(history: { snapshot_date: string; price: number }[]) {
   const pctVsAvg30 = Math.round(((current - avg30) / avg30) * 1000) / 10;
   const pctVsAvg90 = Math.round(((current - avg90) / avg90) * 1000) / 10;
   const low30 = Math.min(...last30);
-  const judgment = pctVsAvg30 > 15 ? "割高" : pctVsAvg30 < -15 ? "割安" : "適正";
+  const judgment: Judgment = pctVsAvg30 > 15 ? "割高" : pctVsAvg30 < -15 ? "割安" : "適正";
   const trend = pctVsAvg30 > 3 ? "rising" : pctVsAvg30 < -3 ? "declining" : "flat";
   return {
     current_price: current,
@@ -70,7 +72,10 @@ export async function GET(request: Request) {
   const limitParam = url.searchParams.get("limit");
   const limit = limitParam ? Number(limitParam) : null;
 
-  let query = supabase.from("cards").select("id, source_url").not("source_url", "is", null);
+  let query = supabase
+    .from("cards")
+    .select("id, name, source_url")
+    .not("source_url", "is", null);
   if (limit) query = query.limit(limit);
   const { data: cards, error: cardsErr } = await query;
 
@@ -105,9 +110,27 @@ export async function GET(request: Request) {
 
       if (history && history.length > 0) {
         const stats = computeStats(history);
+        // regenerate the verdict text from the SAME numbers being saved,
+        // so it can never drift out of sync the way it would if left
+        // untouched from card creation time
+        const verdictText = buildVerdictText({
+          name: card.name as string,
+          currentPrice: stats.current_price,
+          avg30: stats.avg30,
+          avg90: stats.avg90,
+          pctVsAvg30: stats.pct_vs_avg30,
+          pctVsAvg90: stats.pct_vs_avg90,
+          judgment: stats.judgment,
+        });
         await supabase
           .from("cards")
-          .update({ ...stats, updated_at: new Date().toISOString() })
+          .update({
+            ...stats,
+            ai_verdict: stats.judgment,
+            ai_verdict_text: verdictText,
+            ai_verdict_at: today,
+            updated_at: new Date().toISOString(),
+          })
           .eq("id", card.id);
       }
 
