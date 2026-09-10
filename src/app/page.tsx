@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
 import type { Card } from "@/lib/types";
 import SetupNotice from "@/components/SetupNotice";
 import TodaysPicks from "@/components/TodaysPicks";
 import MoverStrip from "@/components/MoverStrip";
+import MarketTable from "@/components/MarketTable";
 
 export const revalidate = 60;
 
@@ -23,7 +23,7 @@ export default async function MarketListPage() {
   const { data: cards, error } = await supabase
     .from("cards")
     .select("*")
-    .order("updated_at", { ascending: false })
+    .order("name", { ascending: true })
     .limit(500);
 
   return (
@@ -61,48 +61,7 @@ export default async function MarketListPage() {
         </>
       )}
 
-      {cards && cards.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-sunken text-left text-ink-muted">
-              <tr>
-                <th className="px-3 py-2">カード</th>
-                <th className="px-3 py-2">レアリティ</th>
-                <th className="px-3 py-2 text-right">現在価格</th>
-                <th className="px-3 py-2 text-right">30日平均比</th>
-                <th className="px-3 py-2">判定</th>
-                <th className="px-3 py-2">データ品質</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(cards as Card[]).map((c) => {
-                const dq = dataQualityLabel(c.data_quality);
-                return (
-                  <tr key={c.id} className="border-t border-border hover:bg-bg-elevated">
-                    <td className="px-3 py-2">
-                      <Link href={`/cards/${c.id}`} className="font-medium text-ink hover:text-accent">
-                        {c.name}
-                      </Link>
-                      <div className="text-xs text-ink-faint">{c.set_name}</div>
-                    </td>
-                    <td className="px-3 py-2 text-ink-muted">{c.rarity}</td>
-                    <td className="px-3 py-2 text-right font-mono">{yen(c.current_price)}</td>
-                    <td className="px-3 py-2 text-right font-mono">{pct(c.pct_vs_avg30)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${judgmentClasses(c.judgment)}`}>
-                        {c.judgment ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${dq.cls}`}>{dq.label}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {cards && cards.length > 0 && <MarketTable cards={cards as Card[]} />}
     </div>
   );
 }
