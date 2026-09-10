@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -5,6 +6,26 @@ import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
 import type { Card, PriceSnapshot } from "@/lib/types";
 import PriceChart from "@/components/PriceChart";
 import SetupNotice from "@/components/SetupNotice";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  if (!isSupabaseConfigured()) return { title: "カード詳細" };
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: card } = await supabase
+    .from("cards")
+    .select("name, rarity, set_name, current_price")
+    .eq("id", id)
+    .single();
+  if (!card) return { title: "カード詳細" };
+  return {
+    title: card.name,
+    description: `${card.name}（${card.rarity}・${card.set_name}）の価格推移。現在価格 ${yen(card.current_price)}。`,
+  };
+}
 
 export default async function CardDetailPage({
   params,

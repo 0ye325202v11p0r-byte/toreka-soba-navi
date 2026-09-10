@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import WatchlistClient from "@/components/WatchlistClient";
 import SetupNotice from "@/components/SetupNotice";
+
+export const metadata: Metadata = {
+  title: "ウォッチリスト",
+  description: "価格が指定の条件を満たしたら知らせる、監視リストです。",
+};
 
 export default async function WatchlistPage() {
   if (!isSupabaseConfigured()) {

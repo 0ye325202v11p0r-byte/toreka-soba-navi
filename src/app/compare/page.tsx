@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import CompareClient from "@/components/CompareClient";
+
+export const metadata: Metadata = {
+  title: "比較",
+  description: "最大5枚のONE PIECEカードを選んで、価格推移を重ねて比較できます。",
+};
 
 export default async function ComparePage() {
   if (!isSupabaseConfigured()) {

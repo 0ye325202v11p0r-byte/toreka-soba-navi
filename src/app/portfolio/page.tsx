@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -5,6 +6,11 @@ import PortfolioClient from "@/components/PortfolioClient";
 import SetupNotice from "@/components/SetupNotice";
 import { computePnl } from "@/lib/pnl";
 import type { Transaction } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "ポートフォリオ",
+  description: "保有カードの含み損益・実現損益を自動計算します。",
+};
 
 export default async function PortfolioPage() {
   if (!isSupabaseConfigured()) {
