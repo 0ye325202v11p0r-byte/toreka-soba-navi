@@ -96,7 +96,10 @@ export default async function CardDetailPage({
           <span className={`mb-2 inline-block rounded-full px-2 py-0.5 text-xs font-semibold ${judgmentClasses(c.ai_verdict)}`}>
             AI判定：{c.ai_verdict}
           </span>
-          <p className="text-sm">{c.ai_verdict_text}</p>
+          {c.ai_verdict_at && (
+            <span className="ml-2 text-xs text-ink-faint">{c.ai_verdict_at} 生成</span>
+          )}
+          <p className="mt-1 text-sm">{c.ai_verdict_text}</p>
         </div>
       )}
 
