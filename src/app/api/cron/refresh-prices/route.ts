@@ -3,8 +3,20 @@ import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import type { Judgment } from "@/lib/types";
 
-export const maxDuration = 300; // seconds — 345 cards at ~1 req/sec needs headroom
+// Vercel Hobby caps function duration at 60s by default (300s if Fluid
+// Compute is enabled on the project) and Pro at up to 800s. 378 cards at
+// ~1.2s/request takes ~450s, which exceeds even Hobby+Fluid Compute. Rather
+// than assume a paid plan, this route time-boxes itself: it processes cards
+// oldest-updated-first and stops safely before the deadline, so a Hobby
+// deployment still runs correctly (just fewer cards per invocation, with
+// the remainder picked up automatically on the next daily run since it
+// always resumes with whichever cards have gone longest without an
+// update). Bump SAFETY_MARGIN_MS down / maxDuration up once on Vercel Pro
+// to cover more cards per run.
+export const maxDuration = 290; // seconds — stay under Hobby+Fluid Compute's 300s ceiling
 export const dynamic = "force-dynamic";
+
+const TIME_BUDGET_MS = 270_000; // leave ~20s headroom under maxDuration for the final DB writes
 
 // Server-only client with the service_role key (bypasses RLS). Never import
 // this file from client code — it must only run in this route handler.
@@ -72,10 +84,14 @@ export async function GET(request: Request) {
   const limitParam = url.searchParams.get("limit");
   const limit = limitParam ? Number(limitParam) : null;
 
+  // oldest-updated-first: if a single run can't cover every card within
+  // the time budget, the cards it skips this time are exactly the ones
+  // that'll be picked up first on the next run
   let query = supabase
     .from("cards")
     .select("id, name, source_url")
-    .not("source_url", "is", null);
+    .not("source_url", "is", null)
+    .order("updated_at", { ascending: true });
   if (limit) query = query.limit(limit);
   const { data: cards, error: cardsErr } = await query;
 
@@ -84,11 +100,17 @@ export async function GET(request: Request) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const startTime = Date.now();
   let successCount = 0;
   let failCount = 0;
+  let skippedForTime = 0;
   const errorSamples: string[] = [];
 
   for (const card of cards) {
+    if (Date.now() - startTime > TIME_BUDGET_MS) {
+      skippedForTime = cards.length - successCount - failCount;
+      break;
+    }
     try {
       const price = await fetchCurrentPrice(card.source_url as string);
       if (price === null) throw new Error("price pattern not found");
@@ -145,19 +167,29 @@ export async function GET(request: Request) {
     await sleep(1200);
   }
 
+  const errorSample = [
+    ...errorSamples,
+    skippedForTime > 0
+      ? `(time budget reached — ${skippedForTime} card(s) deferred to the next run)`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   await supabase.from("sync_runs").insert({
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     total_count: cards.length,
     success_count: successCount,
     fail_count: failCount,
-    error_sample: errorSamples.join("\n") || null,
+    error_sample: errorSample || null,
   });
 
   return NextResponse.json({
     total: cards.length,
     success: successCount,
     failed: failCount,
+    skippedForTime,
     errorSamples,
   });
 }
