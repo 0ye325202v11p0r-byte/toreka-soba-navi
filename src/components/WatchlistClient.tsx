@@ -59,6 +59,7 @@ export default function WatchlistClient({
   }
 
   async function removeItem(id: string) {
+    if (!window.confirm("このウォッチリスト条件を削除しますか？")) return;
     setErrorMsg(null);
     const { error } = await supabase.from("watchlist_items").delete().eq("id", id);
     if (error) {

@@ -74,6 +74,7 @@ export default function PortfolioClient({
   }
 
   async function removeTransaction(id: string) {
+    if (!window.confirm("この取引記録を削除しますか？この操作は取り消せません。")) return;
     setErrorMsg(null);
     const { error } = await supabase.from("transactions").delete().eq("id", id);
     if (error) {
