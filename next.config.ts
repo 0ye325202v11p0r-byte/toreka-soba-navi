@@ -14,6 +14,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // don't advertise the framework to would-be attackers
+  poweredByHeader: false,
   async headers() {
     return [
       {
