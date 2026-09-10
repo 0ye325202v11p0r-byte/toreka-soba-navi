@@ -50,6 +50,7 @@ const SET_SLUG = {
 };
 
 const RARITY_CODE = {
+  "Cパラレル": "c-p",
   "Dスーパーパラレル": "d-sp",
   "GSP": "gsp",
   "Lパラレル": "l-p",
