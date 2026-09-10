@@ -1,0 +1,194 @@
+-- トレカ相場ナビ — Supabase schema
+-- Run this once in the Supabase SQL editor after creating the project.
+
+create extension if not exists "pgcrypto";
+
+-- ============ cards ============
+create table if not exists public.cards (
+  id text primary key,
+  name text not null,
+  rarity text not null,
+  set_name text,
+  card_number text,
+  source_url text,
+  current_price numeric,
+  avg30 numeric,
+  avg90 numeric,
+  pct_vs_avg30 numeric,
+  pct_vs_avg90 numeric,
+  low30 numeric,
+  change_amt30 numeric,
+  judgment text,
+  trend_direction text,
+  data_quality text, -- 'real' | 'partial' | 'flat'
+  history_is_estimated boolean default true,
+  ai_verdict text,
+  ai_verdict_text text,
+  ai_verdict_at date,
+  source_note text,
+  updated_at timestamptz default now(),
+  created_at timestamptz default now()
+);
+
+create index if not exists cards_set_name_idx on public.cards (set_name);
+create index if not exists cards_updated_at_idx on public.cards (updated_at);
+
+alter table public.cards enable row level security;
+
+create policy "cards are publicly readable"
+  on public.cards for select
+  using (true);
+
+-- writes to cards only via service role (cron job / migration script), not from the browser
+create policy "only service role can write cards"
+  on public.cards for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
+-- ============ price_snapshots ============
+-- normalized, append-only time series (replaces the fixed 90-length array)
+create table if not exists public.price_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  card_id text not null references public.cards(id) on delete cascade,
+  snapshot_date date not null,
+  price numeric not null,
+  created_at timestamptz default now(),
+  unique (card_id, snapshot_date)
+);
+
+create index if not exists price_snapshots_card_id_date_idx
+  on public.price_snapshots (card_id, snapshot_date);
+
+alter table public.price_snapshots enable row level security;
+
+create policy "price snapshots are publicly readable"
+  on public.price_snapshots for select
+  using (true);
+
+create policy "only service role can write price snapshots"
+  on public.price_snapshots for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');
+
+-- ============ profiles ============
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  display_name text,
+  created_at timestamptz default now()
+);
+
+alter table public.profiles enable row level security;
+
+create policy "users can view their own profile"
+  on public.profiles for select
+  using (auth.uid() = id);
+
+create policy "users can update their own profile"
+  on public.profiles for update
+  using (auth.uid() = id);
+
+create policy "users can insert their own profile"
+  on public.profiles for insert
+  with check (auth.uid() = id);
+
+-- auto-create a profile row when a new auth user signs up
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, display_name)
+  values (new.id, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)));
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- ============ portfolio_items ============
+-- per-user holdings — this is what fixes the "shared across all viewers" problem
+create table if not exists public.portfolio_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  card_id text not null references public.cards(id) on delete cascade,
+  quantity integer not null default 1,
+  acquired_price numeric,
+  acquired_date date,
+  note text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create index if not exists portfolio_items_user_id_idx on public.portfolio_items (user_id);
+
+alter table public.portfolio_items enable row level security;
+
+create policy "users can view their own portfolio"
+  on public.portfolio_items for select
+  using (auth.uid() = user_id);
+
+create policy "users can insert into their own portfolio"
+  on public.portfolio_items for insert
+  with check (auth.uid() = user_id);
+
+create policy "users can update their own portfolio"
+  on public.portfolio_items for update
+  using (auth.uid() = user_id);
+
+create policy "users can delete their own portfolio items"
+  on public.portfolio_items for delete
+  using (auth.uid() = user_id);
+
+-- ============ watchlist_items ============
+create table if not exists public.watchlist_items (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  card_id text not null references public.cards(id) on delete cascade,
+  -- alert_rule example: {"type": "pct_vs_avg30", "op": "lte", "value": -15}
+  alert_rule jsonb not null default '{}'::jsonb,
+  last_triggered_at timestamptz,
+  created_at timestamptz default now()
+);
+
+create index if not exists watchlist_items_user_id_idx on public.watchlist_items (user_id);
+
+alter table public.watchlist_items enable row level security;
+
+create policy "users can view their own watchlist"
+  on public.watchlist_items for select
+  using (auth.uid() = user_id);
+
+create policy "users can insert into their own watchlist"
+  on public.watchlist_items for insert
+  with check (auth.uid() = user_id);
+
+create policy "users can update their own watchlist"
+  on public.watchlist_items for update
+  using (auth.uid() = user_id);
+
+create policy "users can delete their own watchlist items"
+  on public.watchlist_items for delete
+  using (auth.uid() = user_id);
+
+-- ============ subscriptions ============
+-- synced from Stripe webhooks (Phase 3)
+create table if not exists public.subscriptions (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  stripe_customer_id text unique,
+  stripe_subscription_id text unique,
+  status text, -- 'active' | 'trialing' | 'past_due' | 'canceled' | ...
+  current_period_end timestamptz,
+  updated_at timestamptz default now()
+);
+
+alter table public.subscriptions enable row level security;
+
+create policy "users can view their own subscription"
+  on public.subscriptions for select
+  using (auth.uid() = user_id);
+
+create policy "only service role can write subscriptions"
+  on public.subscriptions for all
+  using (auth.role() = 'service_role')
+  with check (auth.role() = 'service_role');

@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #efe7d2;
+  --bg-elevated: #fbf7ea;
+  --bg-sunken: #e4d9bc;
+  --ink: #1e2a38;
+  --ink-muted: #63625a;
+  --ink-faint: #6e6858;
+  --border: #d5c7a0;
+  --border-strong: #b8a574;
+  --accent: #a9741f;
+  --accent-strong: #7e5514;
+  --accent-soft: #e7d3a6;
+  --good: #1f6e52;
+  --good-soft: #d9e9dd;
+  --warn: #a2431f;
+  --warn-soft: #f0dacb;
+  --rarity-sp: #7b4fa0;
+  --rarity-r: #2e6da4;
+  --rarity-l: #2e7d5f;
+  --rarity-sr: #b5482f;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-sunken: var(--bg-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-rarity-sp: var(--rarity-sp);
+  --color-rarity-r: var(--rarity-r);
+  --color-rarity-l: var(--rarity-l);
+  --color-rarity-sr: var(--rarity-sr);
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --bg: #14191f;
+    --bg-elevated: #1d2430;
+    --bg-sunken: #10141a;
+    --ink: #ece6d6;
+    --ink-muted: #a9a79a;
+    --ink-faint: #9c9b8e;
+    --border: #333b47;
+    --border-strong: #46505e;
+    --accent: #d9a63d;
+    --accent-strong: #f0be5c;
+    --accent-soft: #3a2f1a;
+    --good: #4fb58b;
+    --good-soft: #1c332b;
+    --warn: #e0794a;
+    --warn-soft: #3a2418;
+    --rarity-sp: #b48cda;
+    --rarity-r: #6fa8dc;
+    --rarity-l: #6fcb9f;
+    --rarity-sr: #e58f6e;
   }
 }
 
+:root[data-theme="dark"] {
+  --bg: #14191f;
+  --bg-elevated: #1d2430;
+  --bg-sunken: #10141a;
+  --ink: #ece6d6;
+  --ink-muted: #a9a79a;
+  --ink-faint: #9c9b8e;
+  --border: #333b47;
+  --border-strong: #46505e;
+  --accent: #d9a63d;
+  --accent-strong: #f0be5c;
+  --accent-soft: #3a2f1a;
+  --good: #4fb58b;
+  --good-soft: #1c332b;
+  --warn: #e0794a;
+  --warn-soft: #3a2418;
+  --rarity-sp: #b48cda;
+  --rarity-r: #6fa8dc;
+  --rarity-l: #6fcb9f;
+  --rarity-sr: #e58f6e;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
 }
