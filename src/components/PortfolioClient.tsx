@@ -102,8 +102,11 @@ export default function PortfolioClient({
       >
         <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">売買</label>
+          <label htmlFor="txn-type" className="mb-1 block text-xs text-ink-muted">
+            売買
+          </label>
           <select
+            id="txn-type"
             value={type}
             onChange={(e) => setType(e.target.value as TransactionType)}
             className="rounded-md border border-border bg-bg px-2 py-1.5"
@@ -113,8 +116,11 @@ export default function PortfolioClient({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">枚数</label>
+          <label htmlFor="txn-quantity" className="mb-1 block text-xs text-ink-muted">
+            枚数
+          </label>
           <input
+            id="txn-quantity"
             type="number"
             min={1}
             value={quantity}
@@ -123,8 +129,11 @@ export default function PortfolioClient({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">単価</label>
+          <label htmlFor="txn-price" className="mb-1 block text-xs text-ink-muted">
+            単価
+          </label>
           <input
+            id="txn-price"
             type="number"
             min={0}
             required
@@ -134,8 +143,11 @@ export default function PortfolioClient({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">日付</label>
+          <label htmlFor="txn-date" className="mb-1 block text-xs text-ink-muted">
+            日付
+          </label>
           <input
+            id="txn-date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}

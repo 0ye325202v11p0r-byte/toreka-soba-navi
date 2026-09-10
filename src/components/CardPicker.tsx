@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 interface CardOption {
   id: string;
@@ -22,6 +22,7 @@ export default function CardPicker({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const inputId = useId();
 
   const selected = cards.find((c) => c.id === value);
 
@@ -33,8 +34,11 @@ export default function CardPicker({
 
   return (
     <div className="relative min-w-40 flex-1">
-      <label className="mb-1 block text-xs text-ink-muted">{label}</label>
+      <label htmlFor={inputId} className="mb-1 block text-xs text-ink-muted">
+        {label}
+      </label>
       <input
+        id={inputId}
         type="text"
         value={open ? query : selected ? `${selected.name}（${selected.rarity}）` : ""}
         onFocus={() => {

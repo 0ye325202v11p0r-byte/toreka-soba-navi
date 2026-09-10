@@ -77,8 +77,11 @@ export default function WatchlistClient({
       <form onSubmit={addItem} className="mb-6 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-bg-elevated p-4">
         <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">条件</label>
+          <label htmlFor="watch-op" className="mb-1 block text-xs text-ink-muted">
+            条件
+          </label>
           <select
+            id="watch-op"
             value={op}
             onChange={(e) => setOp(e.target.value as "lte" | "gte")}
             className="rounded-md border border-border bg-bg px-2 py-1.5"
@@ -88,8 +91,11 @@ export default function WatchlistClient({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-xs text-ink-muted">%値</label>
+          <label htmlFor="watch-value" className="mb-1 block text-xs text-ink-muted">
+            %値
+          </label>
           <input
+            id="watch-value"
             type="number"
             value={value}
             onChange={(e) => setValue(Number(e.target.value))}
