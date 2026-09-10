@@ -38,7 +38,7 @@ export function dataQualityLabel(quality: string | null | undefined): {
     case "real":
       return { label: "実測データ", cls: "bg-good-soft text-good" };
     case "partial":
-      return { label: "ランキング由来", cls: "bg-accent-soft text-accent-strong" };
+      return { label: "1店舗の参考価格", cls: "bg-accent-soft text-accent-strong" };
     default:
       return { label: "参考値", cls: "bg-warn-soft text-warn" };
   }

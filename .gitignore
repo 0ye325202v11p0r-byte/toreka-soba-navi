@@ -46,3 +46,6 @@ migration/new_candidates.json
 migration/sitemap-cards-raw.xml
 migration/sitemap-expansions-raw.xml
 migration/sample_page.html
+migration/yuyutei_*.html
+migration/*_out.txt
+migration/db_check.txt
