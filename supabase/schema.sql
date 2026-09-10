@@ -106,38 +106,42 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- ============ portfolio_items ============
--- per-user holdings — this is what fixes the "shared across all viewers" problem
-create table if not exists public.portfolio_items (
+-- ============ transactions ============
+-- per-user buy/sell ledger — this is the source of truth for holdings AND for
+-- 収支 (realized/unrealized P&L). Current holdings and cost basis are derived
+-- from this table (FIFO), not stored separately, so nothing is lost when a
+-- card is sold — the transaction stays in history for P&L reporting.
+create table if not exists public.transactions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   card_id text not null references public.cards(id) on delete cascade,
-  quantity integer not null default 1,
-  acquired_price numeric,
-  acquired_date date,
+  type text not null check (type in ('buy', 'sell')),
+  quantity integer not null check (quantity > 0),
+  price_per_unit numeric not null check (price_per_unit >= 0),
+  transaction_date date not null default current_date,
   note text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
+  created_at timestamptz default now()
 );
 
-create index if not exists portfolio_items_user_id_idx on public.portfolio_items (user_id);
+create index if not exists transactions_user_id_idx on public.transactions (user_id);
+create index if not exists transactions_user_card_idx on public.transactions (user_id, card_id, transaction_date);
 
-alter table public.portfolio_items enable row level security;
+alter table public.transactions enable row level security;
 
-create policy "users can view their own portfolio"
-  on public.portfolio_items for select
+create policy "users can view their own transactions"
+  on public.transactions for select
   using (auth.uid() = user_id);
 
-create policy "users can insert into their own portfolio"
-  on public.portfolio_items for insert
+create policy "users can insert their own transactions"
+  on public.transactions for insert
   with check (auth.uid() = user_id);
 
-create policy "users can update their own portfolio"
-  on public.portfolio_items for update
+create policy "users can update their own transactions"
+  on public.transactions for update
   using (auth.uid() = user_id);
 
-create policy "users can delete their own portfolio items"
-  on public.portfolio_items for delete
+create policy "users can delete their own transactions"
+  on public.transactions for delete
   using (auth.uid() = user_id);
 
 -- ============ watchlist_items ============

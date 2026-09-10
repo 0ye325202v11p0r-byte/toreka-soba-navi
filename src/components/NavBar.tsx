@@ -17,6 +17,9 @@ export default async function NavBar() {
           <Link href="/" className="text-ink-muted hover:text-ink">
             相場一覧
           </Link>
+          <Link href="/compare" className="text-ink-muted hover:text-ink">
+            比較
+          </Link>
           {!configured ? null : user ? (
             <>
               <Link href="/portfolio" className="text-ink-muted hover:text-ink">

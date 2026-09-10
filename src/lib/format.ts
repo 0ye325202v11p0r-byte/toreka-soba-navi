@@ -1,14 +1,22 @@
 import type { Judgment } from "./types";
 
-export function yen(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return "¥" + Math.round(value).toLocaleString("ja-JP");
+// PostgREST can return Postgres `numeric` columns as JSON strings (to avoid
+// float precision loss), so every value coming from Supabase is typed
+// `number` here but must be coerced defensively before calling
+// Number.prototype methods like toFixed().
+export function yen(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const n = Number(value);
+  if (Number.isNaN(n)) return "—";
+  return "¥" + Math.round(n).toLocaleString("ja-JP");
 }
 
-export function pct(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(1)}%`;
+export function pct(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const n = Number(value);
+  if (Number.isNaN(n)) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}%`;
 }
 
 export function judgmentClasses(judgment: Judgment | null | undefined): string {

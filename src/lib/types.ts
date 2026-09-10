@@ -33,14 +33,31 @@ export interface PriceSnapshot {
   price: number;
 }
 
-export interface PortfolioItem {
+export type TransactionType = "buy" | "sell";
+
+export interface Transaction {
   id: string;
   user_id: string;
   card_id: string;
+  type: TransactionType;
   quantity: number;
-  acquired_price: number | null;
-  acquired_date: string | null;
+  price_per_unit: number;
+  transaction_date: string;
   note: string | null;
+  created_at: string;
+}
+
+export interface HoldingSummary {
+  cardId: string;
+  quantity: number;
+  costBasis: number; // remaining FIFO cost of current holdings
+  avgCost: number; // costBasis / quantity
+}
+
+export interface PnlSummary {
+  holdings: HoldingSummary[];
+  realizedPnl: number; // lifetime realized profit/loss from sells
+  costBasisTotal: number; // total cost basis of current holdings
 }
 
 export interface WatchlistAlertRule {

@@ -4,6 +4,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
 import type { Card } from "@/lib/types";
 import SetupNotice from "@/components/SetupNotice";
+import TodaysPicks from "@/components/TodaysPicks";
+import MoverStrip from "@/components/MoverStrip";
 
 export const revalidate = 60;
 
@@ -45,6 +47,18 @@ export default async function MarketListPage() {
         <div className="rounded-lg bg-accent-soft p-4 text-accent-strong">
           まだカードデータがありません。移行スクリプトでArtifactからデータを取り込んでください。
         </div>
+      )}
+
+      {cards && cards.length > 0 && (
+        <>
+          <TodaysPicks cards={cards as Card[]} />
+          <MoverStrip cards={cards as Card[]} />
+          <div className="mb-3 flex justify-end">
+            <Link href="/compare" className="text-sm text-accent hover:underline">
+              複数カードを比較する →
+            </Link>
+          </div>
+        </>
       )}
 
       {cards && cards.length > 0 && (
