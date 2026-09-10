@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# migration: transient scrape output/logs, regenerate via find_new_candidates.mjs
+migration/*.log
+migration/new_candidates.json
+migration/sitemap-cards-raw.xml
+migration/sitemap-expansions-raw.xml
+migration/sample_page.html
