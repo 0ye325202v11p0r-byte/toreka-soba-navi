@@ -28,4 +28,6 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 | `fix_html_entities.mjs` | `scrape_yuyutei.mjs`の初回実行時（HTMLエンティティのデコード処理を実装する前）に投入されたカード名に残っていた`&amp;`等のエンティティを一括修正した使い捨てスクリプト | 再実行不要（既に実行済み。スクリプト自体は修正済みなので今後は発生しない） |
 | `fix_akaji_variants_real_source.mjs` | c9/c500/c503（印刷バリエーション混同で`data_quality: 'flat'`・未ソースの手動参考値のままだった3件）について、遊々亭に「特別パラレル」という別商品ページ（白文字版とは別のproduct ID）が存在することを発見し、実測ソース付きの`data_quality: 'partial'`に格上げした | 再実行不要（既に実行済み）。同種の「-R」サフィックスの赤文字カードが他にも見つかった場合のテンプレートとして使える |
 
+| `fix_avg_window_bug.mjs` | 2026-09-11発見：avg30/avg90が「直近30/90件のスナップショット」を「直近30/90日」の代わりに使っていたバグ（`src/lib/priceStats.ts`の`computeStats`に集約・修正済み）の、既存カードへの一括再計算。カレンダー日付で日数を判定し直し、`data_quality='real'`の844件のうち438件（うち230件は割安/割高/適正の判定自体が変わっていた）を修正。`--apply`なしはdry-run | 再実行不要（既に実行済み）。同種のバグが再発した場合の修正テンプレートとして使える。`node --experimental-strip-types migration/fix_avg_window_bug.mjs --apply` で実行（`verify_pnl_logic.mjs`と同じNode 24の型ストリッピング機能を使用） |
+
 `cards_export/` は移行元のArtifact DBのスナップショット（379件のJSON）。移行元がもう存在しないため、参考記録として残してある。

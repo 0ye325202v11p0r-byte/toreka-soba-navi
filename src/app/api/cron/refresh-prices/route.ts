@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
-import type { Judgment } from "@/lib/types";
+import { computeStats } from "@/lib/priceStats";
 
 // Vercel Hobby caps function duration at 60s by default (300s if Fluid
 // Compute is enabled on the project) and Pro at up to 800s. 378 cards at
@@ -69,33 +69,6 @@ async function fetchCurrentPrice(url: string, timeoutMs: number): Promise<number
   const match = html.match(PRICE_PATTERN);
   if (!match) return null;
   return Number(match[1].replace(/,/g, ""));
-}
-
-function computeStats(history: { snapshot_date: string; price: number }[]) {
-  const sorted = [...history].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
-  const prices = sorted.map((h) => h.price);
-  const last30 = prices.slice(-30);
-  const last90 = prices.slice(-90);
-  const avg = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-  const avg30 = avg(last30);
-  const avg90 = avg(last90);
-  const current = prices[prices.length - 1];
-  const pctVsAvg30 = Math.round(((current - avg30) / avg30) * 1000) / 10;
-  const pctVsAvg90 = Math.round(((current - avg90) / avg90) * 1000) / 10;
-  const low30 = Math.min(...last30);
-  const judgment: Judgment = pctVsAvg30 > 15 ? "割高" : pctVsAvg30 < -15 ? "割安" : "適正";
-  const trend = pctVsAvg30 > 3 ? "rising" : pctVsAvg30 < -3 ? "declining" : "flat";
-  return {
-    current_price: current,
-    avg30: Math.round(avg30),
-    avg90: Math.round(avg90),
-    pct_vs_avg30: pctVsAvg30,
-    pct_vs_avg90: pctVsAvg90,
-    low30,
-    change_amt30: current - low30,
-    judgment,
-    trend_direction: trend,
-  };
 }
 
 export async function GET(request: Request) {
