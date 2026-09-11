@@ -294,3 +294,10 @@ OGP画像（SNSシェア時のプレビュー画像）を追加しました。`s
 - キーボード利用者向けの「メインコンテンツへスキップ」リンクを追加（`src/app/layout.tsx`）。リンク先`<main>`に`tabIndex={-1}`を付与し、クリック時に実際にフォーカスが移動することを確認済み（アンカーだけだとスクロールはしてもフォーカスは移動しないため）。
 
 いずれもtsc/eslint/build全通過。引き続き`pnl.ts`・`check-watchlist/route.ts`は触れていません。
+
+## Claude Codeより追加報告5（2026-09-11、コミット16c445d〜e2bf72a）
+
+- `CardPicker.tsx`にコンボボックスのARIA属性（role="combobox"/listbox/option、aria-expanded等）を追加。一時ローカルテストページで選択動作に regression がないことを確認済み（このセッション冒頭のキーボードバグ修正時と同じ検証手法）。
+- **相場一覧（`src/app/page.tsx`）の`.select("*")`を、実際に使う8カラムだけに絞り込み**（新設の`MarketListCard`型）。TodaysPicks/MoverStrip/MarketTableはavg30/avg90/ai_verdict_text（カード毎の長文コメント）等を一切使っていないのに、最もアクセスされるこのページだけが全カラム取得のまま残っていた（watchlist/compare等、他のページは既に専用の狭い型を使う設計だった）。ローカル・本番の両方で表示に変化がないことを確認済み。
+
+tsc/eslint/build全通過。
