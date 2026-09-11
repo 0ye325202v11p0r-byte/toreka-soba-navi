@@ -28,7 +28,10 @@ export default async function CardOpengraphImage({ params }: { params: Promise<{
     .single();
 
   const name = card?.name ?? "トレカ相場ナビ";
-  const subtitle = card ? `${card.rarity} ・ ${card.set_name}` : null;
+  // rarity/set_name are non-null for every card today, but the DB schema
+  // allows null — guard so a future gap in either doesn't literally render
+  // the word "null" onto the shared image.
+  const subtitle = card ? [card.rarity, card.set_name].filter(Boolean).join(" ・ ") || null : null;
   const colors = judgmentColor(card?.judgment ?? null);
 
   return new ImageResponse(
