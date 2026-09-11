@@ -124,6 +124,17 @@ export default async function CardDetailPage({
         🏪 上記はカードショップの店頭平均価格です。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。
       </div>
 
+      <a
+        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(
+          `${c.name} の現在価格は${yen(c.current_price)}（30日平均比${pct(c.pct_vs_avg30)}）`
+        )}&url=${encodeURIComponent(`${SITE_URL}/cards/${c.id}`)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mb-4 inline-block text-xs text-accent hover:underline"
+      >
+        𝕏でこの価格をシェア →
+      </a>
+
       {history.length > 1 ? (
         <PriceChart snapshots={history} />
       ) : history.length === 1 ? (
