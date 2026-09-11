@@ -36,7 +36,19 @@ export default function CardPicker({
   }, [cards, query]);
 
   return (
-    <div className="relative min-w-40 flex-1">
+    <div
+      className="relative min-w-40 flex-1"
+      onBlur={(e) => {
+        // close only when focus actually leaves this whole widget (not when
+        // it moves from the input to one of the option buttons below) —
+        // a fixed setTimeout here would fight keyboard Tab navigation,
+        // closing the list out from under a keyboard-only user before they
+        // can reach an option with Tab+Enter
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+    >
       <label htmlFor={inputId} className="mb-1 block text-xs text-ink-muted">
         {label}
       </label>
@@ -49,7 +61,16 @@ export default function CardPicker({
           setQuery("");
         }}
         onChange={(e) => setQuery(e.target.value)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.currentTarget.blur();
+          } else if (e.key === "Enter" && matches.length === 1) {
+            e.preventDefault();
+            onChange(matches[0].id);
+            setOpen(false);
+            e.currentTarget.blur();
+          }
+        }}
         placeholder="カード名で検索"
         className="w-full rounded-md border border-border bg-bg px-2 py-1.5"
       />
@@ -68,7 +89,7 @@ export default function CardPicker({
             <button
               type="button"
               key={c.id}
-              onMouseDown={() => {
+              onClick={() => {
                 onChange(c.id);
                 setOpen(false);
               }}
