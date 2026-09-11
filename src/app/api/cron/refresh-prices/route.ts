@@ -18,6 +18,20 @@ export const dynamic = "force-dynamic";
 
 const TIME_BUDGET_MS = 270_000; // leave ~20s headroom under maxDuration for the final DB writes
 const PER_REQUEST_TIMEOUT_MS = 15_000; // a single stalled fetch must never be able to eat the whole run
+const DB_TIMEOUT_MS = 10_000; // a single stalled Supabase call must never be able to eat the whole run either
+const FINAL_LOG_TIMEOUT_MS = 15_000; // fixed (not budget-relative) — this runs after the budget is already spent
+
+// Supabase/PostgREST errors are typically plain objects (code/message/
+// details/hint), not `instanceof Error` — `String(err)` on one of those
+// prints the unhelpful "[object Object]" instead of the actual message,
+// which is exactly what showed up in errorSamples during review.
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
+    return (err as { message: string }).message;
+  }
+  return String(err);
+}
 
 // Server-only client with the service_role key (bypasses RLS). Never import
 // this file from client code — it must only run in this route handler.
@@ -124,12 +138,13 @@ export async function GET(request: Request) {
     .select("id, name, source_url, history_is_estimated")
     .not("source_url", "is", null)
     .eq("data_quality", "real")
-    .order("updated_at", { ascending: true });
+    .order("updated_at", { ascending: true })
+    .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
   if (limit) query = query.limit(limit);
   const { data: cards, error: cardsErr } = await query;
 
   if (cardsErr || !cards) {
-    return NextResponse.json({ error: cardsErr?.message ?? "no cards" }, { status: 500 });
+    return NextResponse.json({ error: cardsErr ? errorMessage(cardsErr) : "no cards" }, { status: 500 });
   }
 
   const today = new Date().toISOString().slice(0, 10);
@@ -146,8 +161,16 @@ export async function GET(request: Request) {
     }
     try {
       const remainingMs = TIME_BUDGET_MS - elapsed;
-      const timeoutMs = Math.max(1000, Math.min(PER_REQUEST_TIMEOUT_MS, remainingMs));
-      const price = await fetchCurrentPrice(card.source_url as string, timeoutMs);
+      const fetchTimeoutMs = Math.max(1000, Math.min(PER_REQUEST_TIMEOUT_MS, remainingMs));
+      // Same reasoning as the external fetch's timeout: without one, a
+      // single stalled Supabase call (network blip, lock contention) can
+      // block past this loop's own budget check all the way to Vercel's
+      // hard maxDuration kill — moving startTime earlier only makes the
+      // *check* more accurate, it doesn't interrupt an already-in-flight
+      // await. Each DB call gets its own short-lived AbortSignal, capped
+      // by whatever budget is actually left.
+      const dbTimeoutMs = Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs));
+      const price = await fetchCurrentPrice(card.source_url as string, fetchTimeoutMs);
       if (price === null) throw new Error("price pattern not found");
 
       const { error: snapErr } = await supabase
@@ -155,7 +178,8 @@ export async function GET(request: Request) {
         .upsert(
           { card_id: card.id, snapshot_date: today, price },
           { onConflict: "card_id,snapshot_date" }
-        );
+        )
+        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
       if (snapErr) throw snapErr;
 
       const { data: history, error: historyErr } = await supabase
@@ -163,56 +187,64 @@ export async function GET(request: Request) {
         .select("snapshot_date, price")
         .eq("card_id", card.id)
         .order("snapshot_date", { ascending: false })
-        .limit(90);
+        .limit(90)
+        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
       if (historyErr) throw historyErr;
-
-      if (history && history.length > 0) {
-        const stats = computeStats(history);
-        // regenerate the verdict text from the SAME numbers being saved,
-        // so it can never drift out of sync the way it would if left
-        // untouched from card creation time
-        const verdictText = buildVerdictText({
-          name: card.name as string,
-          currentPrice: stats.current_price,
-          avg30: stats.avg30,
-          avg90: stats.avg90,
-          pctVsAvg30: stats.pct_vs_avg30,
-          pctVsAvg90: stats.pct_vs_avg90,
-          judgment: stats.judgment,
-        });
-        // history_is_estimated/source_note describe the OLD migration-era
-        // methodology (2-week-interval snapshots interpolated to daily).
-        // Once this card has a real cron-fetched price, that description is
-        // stale — without this, cards kept showing a "推定値" disclaimer
-        // forever even after weeks of genuine daily tracking, understating
-        // the site's own data quality to users.
-        const estimationFields = card.history_is_estimated
-          ? { history_is_estimated: false, source_note: TRACKED_NOTE }
-          : {};
-
-        const { error: updateErr } = await supabase
-          .from("cards")
-          .update({
-            ...stats,
-            ...estimationFields,
-            ai_verdict: stats.judgment,
-            ai_verdict_text: verdictText,
-            ai_verdict_at: today,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", card.id);
-        // without checking this, a failed update (RLS, network, whatever)
-        // still fell through to successCount++ below — the card's own
-        // stats/judgment/verdict would silently stay stale while the run
-        // reported 100% success
-        if (updateErr) throw updateErr;
+      // history should never legitimately come back empty here — the
+      // upsert just above either created or confirmed today's row. Treating
+      // "empty, but no error" as success anyway (the original behavior)
+      // meant a real inconsistency would silently skip the stats/judgment/
+      // verdict update yet still count as a clean success.
+      if (!history || history.length === 0) {
+        throw new Error("price_snapshots history came back empty after a successful upsert");
       }
+
+      const stats = computeStats(history);
+      // regenerate the verdict text from the SAME numbers being saved,
+      // so it can never drift out of sync the way it would if left
+      // untouched from card creation time
+      const verdictText = buildVerdictText({
+        name: card.name as string,
+        currentPrice: stats.current_price,
+        avg30: stats.avg30,
+        avg90: stats.avg90,
+        pctVsAvg30: stats.pct_vs_avg30,
+        pctVsAvg90: stats.pct_vs_avg90,
+        judgment: stats.judgment,
+      });
+      // history_is_estimated/source_note describe the OLD migration-era
+      // methodology (2-week-interval snapshots interpolated to daily).
+      // Once this card has a real cron-fetched price, that description is
+      // stale — without this, cards kept showing a "推定値" disclaimer
+      // forever even after weeks of genuine daily tracking, understating
+      // the site's own data quality to users.
+      const estimationFields = card.history_is_estimated
+        ? { history_is_estimated: false, source_note: TRACKED_NOTE }
+        : {};
+
+      const { error: updateErr } = await supabase
+        .from("cards")
+        .update({
+          ...stats,
+          ...estimationFields,
+          ai_verdict: stats.judgment,
+          ai_verdict_text: verdictText,
+          ai_verdict_at: today,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", card.id)
+        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
+      // without checking this, a failed update (RLS, network, whatever)
+      // still fell through to successCount++ below — the card's own
+      // stats/judgment/verdict would silently stay stale while the run
+      // reported 100% success
+      if (updateErr) throw updateErr;
 
       successCount++;
     } catch (err) {
       failCount++;
       if (errorSamples.length < 10) {
-        errorSamples.push(`${card.id}: ${err instanceof Error ? err.message : String(err)}`);
+        errorSamples.push(`${card.id}: ${errorMessage(err)}`);
       }
     }
     // polite rate limit — matches the plan's "1-2 seconds per request" commitment
@@ -228,14 +260,21 @@ export async function GET(request: Request) {
     .filter(Boolean)
     .join("\n");
 
-  const { error: syncRunErr } = await supabase.from("sync_runs").insert({
-    started_at: startedAt,
-    finished_at: new Date().toISOString(),
-    total_count: cards.length,
-    success_count: successCount,
-    fail_count: failCount,
-    error_sample: errorSample || null,
-  });
+  // Fixed (not remaining-budget-relative) timeout: by this point the loop
+  // has already spent up to TIME_BUDGET_MS, so "remaining budget" could be
+  // near zero even though there's still slack under maxDuration reserved
+  // specifically for this final write.
+  const { error: syncRunErr } = await supabase
+    .from("sync_runs")
+    .insert({
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+      total_count: cards.length,
+      success_count: successCount,
+      fail_count: failCount,
+      error_sample: errorSample || null,
+    })
+    .abortSignal(AbortSignal.timeout(FINAL_LOG_TIMEOUT_MS));
   // The actual price-refresh work above already happened regardless of
   // whether this log write succeeds, so this still returns 200 (a Vercel
   // Cron retry wouldn't fix a logging failure, and treating the whole run
@@ -251,6 +290,6 @@ export async function GET(request: Request) {
     skippedForTime,
     errorSamples,
     syncRunLogged,
-    ...(syncRunErr ? { syncRunLogError: syncRunErr.message } : {}),
+    ...(syncRunErr ? { syncRunLogError: errorMessage(syncRunErr) } : {}),
   });
 }
