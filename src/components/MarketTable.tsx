@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
-import type { Card } from "@/lib/types";
+import type { MarketListCard } from "@/lib/types";
 
 type SortKey = "name" | "price_desc" | "price_asc" | "pct_desc" | "pct_asc";
 
@@ -13,7 +13,7 @@ type SortKey = "name" | "price_desc" | "price_asc" | "pct_desc" | "pct_asc";
 // scrolls to. Render a page at a time instead; "もっと見る" reveals more.
 const PAGE_SIZE = 150;
 
-const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
+const SORTERS: Record<SortKey, (a: MarketListCard, b: MarketListCard) => number> = {
   name: (a, b) => a.name.localeCompare(b.name, "ja"),
   price_desc: (a, b) => (b.current_price ?? 0) - (a.current_price ?? 0),
   price_asc: (a, b) => (a.current_price ?? 0) - (b.current_price ?? 0),
@@ -23,7 +23,7 @@ const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
 
 type QualityFilter = "all" | "real" | "partial";
 
-export default function MarketTable({ cards }: { cards: Card[] }) {
+export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [qualityFilter, setQualityFilter] = useState<QualityFilter>("all");

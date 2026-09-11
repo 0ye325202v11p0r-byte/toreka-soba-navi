@@ -26,6 +26,24 @@ export interface Card {
   updated_at: string;
 }
 
+// Subset of Card used by the market list page (src/app/page.tsx) and its
+// child components (MarketTable/TodaysPicks/MoverStrip) — none of them
+// touch avg30/avg90/ai_verdict_text/source_url/etc, so the market list
+// query selects only these columns instead of `select("*")`. ai_verdict_text
+// alone is a full paragraph per card; fetching it (and everything else
+// unused) for all ~3,270 cards on every request was pure waste on the
+// highest-traffic page.
+export interface MarketListCard {
+  id: string;
+  name: string;
+  rarity: string;
+  set_name: string | null;
+  current_price: number | null;
+  pct_vs_avg30: number | null;
+  judgment: Judgment | null;
+  data_quality: DataQuality | null;
+}
+
 export interface PriceSnapshot {
   id: string;
   card_id: string;

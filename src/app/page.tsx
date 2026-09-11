@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import type { Card } from "@/lib/types";
+import type { MarketListCard } from "@/lib/types";
 import SetupNotice from "@/components/SetupNotice";
 import TodaysPicks from "@/components/TodaysPicks";
 import MoverStrip from "@/components/MoverStrip";
@@ -29,7 +29,7 @@ export default async function MarketListPage() {
   // an unpaginated or under-limited query here would silently hide most of
   // the catalog from the market list and its client-side search/filter
   // (both operate only on whatever rows this query returns).
-  let cards: Card[] = [];
+  let cards: MarketListCard[] = [];
   let error: { message: string } | null = null;
   {
     const pageSize = 1000;
@@ -37,7 +37,11 @@ export default async function MarketListPage() {
     while (true) {
       const { data, error: pageErr } = await supabase
         .from("cards")
-        .select("*")
+        // TodaysPicks/MoverStrip/MarketTable only ever touch these 8
+        // columns — select("*") was pulling every column (including
+        // ai_verdict_text, a full paragraph per card) for all ~3,270 rows
+        // on every request to the highest-traffic page for no reason.
+        .select("id, name, rarity, set_name, current_price, pct_vs_avg30, judgment, data_quality")
         .order("name", { ascending: true })
         .order("id", { ascending: true }) // deterministic tiebreak for range() pagination
         .range(from, from + pageSize - 1);
@@ -45,7 +49,7 @@ export default async function MarketListPage() {
         error = pageErr;
         break;
       }
-      cards = cards.concat((data ?? []) as Card[]);
+      cards = cards.concat((data ?? []) as MarketListCard[]);
       if (!data || data.length < pageSize) break;
       from += pageSize;
     }
@@ -91,8 +95,8 @@ export default async function MarketListPage() {
 
       {cards && cards.length > 0 && (
         <>
-          <TodaysPicks cards={cards as Card[]} />
-          <MoverStrip cards={cards as Card[]} />
+          <TodaysPicks cards={cards} />
+          <MoverStrip cards={cards} />
           <div className="mb-3 flex justify-end">
             <Link href="/compare" className="text-sm text-accent hover:underline">
               複数カードを比較する →
@@ -101,7 +105,7 @@ export default async function MarketListPage() {
         </>
       )}
 
-      {cards && cards.length > 0 && <MarketTable cards={cards as Card[]} />}
+      {cards && cards.length > 0 && <MarketTable cards={cards} />}
     </div>
   );
 }

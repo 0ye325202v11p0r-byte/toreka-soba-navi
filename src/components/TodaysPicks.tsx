@@ -1,8 +1,8 @@
 import Link from "next/link";
-import type { Card } from "@/lib/types";
+import type { MarketListCard } from "@/lib/types";
 import { yen, pct } from "@/lib/format";
 
-export default function TodaysPicks({ cards }: { cards: Card[] }) {
+export default function TodaysPicks({ cards }: { cards: MarketListCard[] }) {
   const picks = cards
     .filter((c) => c.data_quality === "real" && c.judgment === "割安" && c.pct_vs_avg30 !== null)
     .sort((a, b) => (a.pct_vs_avg30 ?? 0) - (b.pct_vs_avg30 ?? 0))

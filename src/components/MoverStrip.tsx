@@ -1,8 +1,8 @@
 import Link from "next/link";
-import type { Card } from "@/lib/types";
+import type { MarketListCard } from "@/lib/types";
 import { pct } from "@/lib/format";
 
-export default function MoverStrip({ cards }: { cards: Card[] }) {
+export default function MoverStrip({ cards }: { cards: MarketListCard[] }) {
   const withPct = cards.filter((c) => c.pct_vs_avg30 !== null && c.data_quality !== "flat");
 
   const gainers = [...withPct]
@@ -22,7 +22,15 @@ export default function MoverStrip({ cards }: { cards: Card[] }) {
   );
 }
 
-function MoverList({ title, items, tone }: { title: string; items: Card[]; tone: "good" | "warn" }) {
+function MoverList({
+  title,
+  items,
+  tone,
+}: {
+  title: string;
+  items: MarketListCard[];
+  tone: "good" | "warn";
+}) {
   return (
     <div className="rounded-lg border border-border bg-bg-elevated p-3">
       <div className="mb-2 text-xs font-semibold text-ink-muted">{title}</div>
