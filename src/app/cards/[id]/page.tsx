@@ -109,7 +109,15 @@ export default async function CardDetailPage({
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatBox label="現在価格" value={yen(c.current_price)} />
+        <StatBox
+          label="現在価格"
+          value={yen(c.current_price)}
+          hint={
+            c.low30 != null && c.change_amt30 != null && c.change_amt30 > 0
+              ? `30日安値${yen(c.low30)}から+${yen(c.change_amt30)}`
+              : undefined
+          }
+        />
         <StatBox label="30日平均" value={yen(c.avg30)} />
         <StatBox label="90日平均" value={`${yen(c.avg90)}（${pct(c.pct_vs_avg90)}）`} />
         <div className="rounded-lg border border-border bg-bg-elevated p-3">
@@ -176,11 +184,12 @@ export default async function CardDetailPage({
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-lg border border-border bg-bg-elevated p-3">
       <div className="text-xs text-ink-muted">{label}</div>
       <div className="mt-1 font-mono text-lg">{value}</div>
+      {hint && <div className="mt-0.5 text-[11px] text-ink-faint">{hint}</div>}
     </div>
   );
 }
