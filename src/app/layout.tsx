@@ -56,8 +56,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ja" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-bg text-ink">
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-bg-elevated"
+        >
+          メインコンテンツへスキップ
+        </a>
         <NavBar />
-        <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
+        <main id="main-content" tabIndex={-1} className="flex-1 mx-auto w-full max-w-5xl px-4 py-6 outline-none">
+          {children}
+        </main>
         <Footer />
         <Analytics />
       </body>
