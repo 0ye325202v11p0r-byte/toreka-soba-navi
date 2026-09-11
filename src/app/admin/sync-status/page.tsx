@@ -22,7 +22,7 @@ export default async function SyncStatusPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=/admin/sync-status");
 
   const { data: runs, error: runsError } = await supabase
     .from("sync_runs")

@@ -27,7 +27,7 @@ export default async function PortfolioPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=/portfolio");
   const userId = user.id; // narrow once, outside the closures below — TS
   // can't carry the `user` non-null narrowing through a nested function
 

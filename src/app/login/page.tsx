@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SetupNotice from "@/components/SetupNotice";
 
@@ -8,10 +9,19 @@ const configured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
 
-export default function LoginPage() {
+// Only accept a same-site relative path (starts with exactly one "/", never
+// "//..." which browsers treat as protocol-relative — an open-redirect risk
+// if this ever came from an untrusted query param, which `next` is).
+function safeNextPath(raw: string | null): string {
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
+  return raw;
+}
+
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const next = safeNextPath(useSearchParams().get("next"));
 
   if (!configured) return <SetupNotice />;
 
@@ -20,9 +30,13 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
+    // Preserves where the user was trying to go (e.g. /watchlist) before
+    // being sent here — without this, everyone lands on the home page after
+    // clicking the magic link, even if they were redirected here from a
+    // specific protected page.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/` },
+      options: { emailRedirectTo: `${window.location.origin}${next}` },
     });
     if (error) {
       setStatus("error");
@@ -65,5 +79,13 @@ export default function LoginPage() {
         </form>
       )}
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

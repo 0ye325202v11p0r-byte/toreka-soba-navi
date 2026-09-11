@@ -26,7 +26,7 @@ export default async function WatchlistPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
+  if (!user) redirect("/login?next=/watchlist");
 
   // Supabase/PostgREST caps a single select() at 1000 rows by default; the
   // catalog passed 1000 cards in the 2026-09-11 expansion (3,270 total), so
