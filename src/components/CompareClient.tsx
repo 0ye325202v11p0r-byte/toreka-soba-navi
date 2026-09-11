@@ -30,16 +30,33 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
     async function loadMissing() {
       const toLoad = selected.filter((id) => !snapshotsByCard[id]);
       if (toLoad.length === 0) return;
-      const { data } = await supabase
-        .from("price_snapshots")
-        .select("*")
-        .in("card_id", toLoad)
-        .order("snapshot_date", { ascending: true });
-      if (cancelled || !data) return;
+      // Supabase/PostgREST caps a single select() at 1000 rows by default.
+      // At most MAX_SELECTED (5) cards load here, but daily cron snapshots
+      // accumulating over time can push their combined row count past 1000 —
+      // paginate with a fully deterministic order (id as tiebreak, since
+      // multiple cards share the same snapshot_date) so range() pagination
+      // can't skip or duplicate rows.
+      let rows: PriceSnapshot[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("price_snapshots")
+          .select("*")
+          .in("card_id", toLoad)
+          .order("snapshot_date", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (cancelled) return;
+        if (error || !data) break;
+        rows = rows.concat(data as PriceSnapshot[]);
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
       setSnapshotsByCard((prev) => {
         const next = { ...prev };
         for (const id of toLoad) next[id] = [];
-        for (const row of data as PriceSnapshot[]) {
+        for (const row of rows) {
           next[row.card_id] = [...(next[row.card_id] ?? []), row];
         }
         return next;

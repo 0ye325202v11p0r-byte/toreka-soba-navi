@@ -24,11 +24,12 @@ export default async function SyncStatusPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: runs } = await supabase
+  const { data: runs, error: runsError } = await supabase
     .from("sync_runs")
     .select("*")
     .order("started_at", { ascending: false })
     .limit(30);
+  if (runsError) throw runsError;
 
   const latest = runs?.[0];
   const hoursSinceLastRun = latest
