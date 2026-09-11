@@ -134,7 +134,22 @@ export default async function CardDetailPage({
       </div>
 
       <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">
-        🏪 上記はカードショップの店頭平均価格です。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。
+        {/* "平均" only describes data_quality==='real' cards (複数店舗の
+            平均価格, onepiece-card-atari.jp) — this text used to claim it
+            unconditionally for every card, including single-shop
+            'partial'/'flat' cards (yuyu-tei), which is exactly the kind of
+            provenance-overclaiming this review has been finding and fixing
+            elsewhere (found 2026-09-12, following a direct question about
+            whether yuyu-tei being the only second source was disclosed
+            clearly enough). This checks data_quality (the provenance axis)
+            rather than isAutoTracked (the cron-scope axis) — a "real" card
+            is a multi-shop average by how it was sourced, independent of
+            whether the cron can currently re-fetch it. */}
+        {c.data_quality === "real" ? (
+          <>🏪 上記はカードショップの店頭平均価格です。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。</>
+        ) : (
+          <>🏪 上記は単一店舗の店頭価格（参考値）です。複数店舗の平均ではありません。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。</>
+        )}
       </div>
 
       <a
