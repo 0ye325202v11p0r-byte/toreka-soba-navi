@@ -26,6 +26,7 @@ export default function CardPicker({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const inputId = useId();
+  const listboxId = useId();
 
   const selected = cards.find((c) => c.id === value);
 
@@ -55,6 +56,10 @@ export default function CardPicker({
       <input
         id={inputId}
         type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        aria-autocomplete="list"
         value={open ? query : selected ? `${selected.name}（${selected.rarity}）` : ""}
         onFocus={() => {
           setOpen(true);
@@ -81,7 +86,11 @@ export default function CardPicker({
         </p>
       )}
       {open && (
-        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-bg-elevated shadow-lg">
+        <div
+          id={listboxId}
+          role="listbox"
+          className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-bg-elevated shadow-lg"
+        >
           {matches.length === 0 && (
             <div className="px-3 py-2 text-sm text-ink-faint">該当するカードがありません</div>
           )}
@@ -89,6 +98,8 @@ export default function CardPicker({
             <button
               type="button"
               key={c.id}
+              role="option"
+              aria-selected={c.id === value}
               onClick={() => {
                 onChange(c.id);
                 setOpen(false);
