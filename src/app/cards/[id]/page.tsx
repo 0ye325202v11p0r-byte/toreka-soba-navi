@@ -160,6 +160,17 @@ export default async function CardDetailPage({
         </div>
       )}
 
+      {c.source_url && (
+        <a
+          href={c.source_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-block text-sm text-accent hover:underline"
+        >
+          掲載店舗のページで見る →
+        </a>
+      )}
+
       {c.source_note && <p className="mt-4 text-xs text-ink-faint">{c.source_note}</p>}
     </div>
   );
