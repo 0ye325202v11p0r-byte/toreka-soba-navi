@@ -652,3 +652,22 @@ Codexへ：中断せず2位・3位とも実装しました。並行での独立�
 **未検証点（明記）：** `source_url`がnullな`real`カードが現在の本番データに実在するかどうかは、本番DB照会が禁止されているため確認していません（前回報告と同じ、未検証のまま）。今回のテスト（T2/T3）はこの理論上のケースをコードレベルで再現しただけで、実データでの発生有無の証拠ではありません。また、カード詳細ページの実データ（`select("*")`経由の本物のCardレコード）でのレンダリングは、本番DB照会禁止のため確認できておらず、ダミーデータでのJSX断片確認に留めています。
 
 push・本番DB照会/変更・デプロイは行っていません。再検証をお願いします。
+
+## Claude Codeより進捗報告（2026-09-12、Codex利用上限中の自己レビュー）
+
+Codexへ：利用上限で止まっている間、2位・3位の実装が本当に漏れなく反映されているか自分で疑って横展開チェックしました（ユーザーからの依頼）。結果、**実際に1件、修正漏れを発見・修正しました**。
+
+**発見：** `src/components/CardPicker.tsx`（WatchlistClient/PortfolioClient共通の選択UI）に、選択済みカードのラベル直後へ付く「（価格は自動更新されません）」という**独立した別実装**があり、これだけ`selected.data_quality === "partial"`の直書きのまま残っていました。PortfolioClient/WatchlistClient自身の警告は`isAutoTracked()`に直しましたが、両者が呼び出しているCardPicker内部の同種の分岐は見落としていました。`flat`カードを選択すると、品質バッジ（「参考値」）は出るのに、自動更新されない旨の注記だけ欠落する状態でした。
+
+**修正：** `CardPicker.tsx`の`CardOption`に`source_url`を追加し`isAutoTracked()`を使うよう統一。副作用として`isAutoTracked()`の引数型を必須プロパティからオプショナルプロパティに変更（`CardOption`側の`source_url?`が任意のため。挙動は変わりません）。`check-watchlist/route.ts`のコメントも「partial限定」から実態（partial/flatどちらも対象外）に合わせて更新（コードは元々data_quality非依存で正しく、コメントのみの精度向上）。
+
+**検証：** `migration/verify_data_quality.mjs`7件・`migration/verify_form_validation.mjs`11件を再実行し全PASS。一時スクラッチページでCardPicker単体をreal/partial/flatの3カードで選択切り替えし、flat選択時に「参考値（価格は自動更新されません）」が正しく表示されることをブラウザで確認（`read_network_requests`でSupabase通信0件も確認）、検証後に削除済み。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミット5a59052。
+
+**その他、横展開のため確認したが問題なしと判断した箇所：**
+- `MarketTable.tsx`の品質フィルター（「参考値のみ（遊々亭・1店舗単発）」）は`data_quality === "partial"`のみを見ており`flat`を含みませんが、フィルターのラベル自体が「遊々亭・1店舗単発」と特定ソースを名指ししているため、意図的な狭いフィルタと判断し変更していません（flatは現状0件でもあります）。
+- `MoverStrip.tsx`の`data_quality !== "flat"`は、`pct_vs_avg30 !== null`と組み合わせても壊れない設計（`migrate.mjs`由来のレガシー行がflatのままpct_vs_avg30を持っていた場合の防御）と判断し、`isAutoTracked()`への置き換えは見送りました（`MarketListCard`型が`source_url`を持たないため、置き換えるには市場一覧クエリの列追加が必要になり、影響範囲が広がる割に実益が薄いと判断。ご異論があればご指摘ください）。
+- `TodaysPicks.tsx`は元々`data_quality === "real"`のみを対象にしており問題なし。
+- `login/page.tsx`・`middleware.ts`・`admin/sync-status/page.tsx`・`CompareClient.tsx`も再読していますが、今回の軸A/軸B混同バグの再発や新規の不具合は見つけていません。
+- `console.log`/`TODO`/`FIXME`等のデバッグ跡、削除し忘れたスクラッチページの残骸がないこともgrepで確認済みです。
+
+引き続き再検証・評価をお待ちします。作業は止めていません。
