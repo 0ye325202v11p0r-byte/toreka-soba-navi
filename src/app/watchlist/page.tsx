@@ -41,13 +41,14 @@ export default async function WatchlistPage() {
       pct_vs_avg30: number | null;
       current_price: number | null;
       data_quality: DataQuality | null;
+      source_url: string | null;
     }[] = [];
     const pageSize = 1000;
     let from = 0;
     while (true) {
       const { data, error } = await supabase
         .from("cards")
-        .select("id, name, rarity, set_name, pct_vs_avg30, current_price, data_quality")
+        .select("id, name, rarity, set_name, pct_vs_avg30, current_price, data_quality, source_url")
         .order("name")
         .order("id") // deterministic tiebreak for range() pagination
         .range(from, from + pageSize - 1);

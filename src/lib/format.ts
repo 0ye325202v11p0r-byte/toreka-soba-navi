@@ -43,3 +43,40 @@ export function dataQualityLabel(quality: string | null | undefined): {
       return { label: "参考値", cls: "bg-warn-soft text-warn" };
   }
 }
+
+// Whether a card is auto-updated by /api/cron/refresh-prices and carries
+// tracked history (avg30/avg90/judgment). Mirrors that route's actual
+// selection query exactly — `.eq("data_quality", "real")` AND
+// `.not("source_url", "is", null)` (src/app/api/cron/refresh-prices/
+// route.ts) — rather than assuming data_quality alone decides it.
+// data_quality and source_url are set independently at data-entry time
+// (see migration/migrate.mjs), so a "real" card with a null source_url is
+// possible in principle; treating that combination as untracked (the `&&`
+// below) fails safe rather than silently overstating freshness.
+//
+// This is a distinct axis from dataQualityLabel()'s real/partial/flat
+// label: that label answers "is there a verifiable real-world price source
+// at all" (real and partial both qualify; flat, an unsourced manual
+// estimate, does not). isAutoTracked answers "does the daily cron keep
+// this price current" (only real+source_url qualifies; partial and flat
+// are both never auto-updated, for different reasons). Conflating the two
+// previously showed the "not auto-updated" warning only for
+// data_quality==='partial', silently omitting it for 'flat' cards (found
+// in UX review, 2026-09-12).
+//
+// IMPORTANT — this answers only "is this card in scope for the cron", a
+// static/structural question. It does NOT mean: the most recent cron run
+// actually succeeded for this card (a real+source_url card can still have
+// a stale price if recent fetches failed), that the displayed price is
+// fresh as of today, or that a pct_vs_avg30 watch rule is guaranteed to
+// fire — those depend on run history and the card's actual stats being
+// non-null, which callers must still check separately (independent review
+// follow-up, 2026-09-12). UI text built on this function should describe
+// scope ("not auto-updated by design") and avoid claiming success/freshness
+// or an absolute "will never happen" outcome.
+export function isAutoTracked(card: {
+  data_quality: string | null | undefined;
+  source_url: string | null | undefined;
+}): boolean {
+  return card.data_quality === "real" && card.source_url != null;
+}

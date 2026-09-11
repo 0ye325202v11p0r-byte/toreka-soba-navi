@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
+import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked } from "@/lib/format";
 import type { Card, PriceSnapshot } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
 import PriceChart from "@/components/PriceChart";
@@ -102,6 +102,11 @@ export default async function CardDetailPage({
         </div>
         <div className="flex flex-col items-end gap-1">
           <span className={`rounded-full px-2 py-0.5 text-xs ${dq.cls}`}>{dq.label}</span>
+          {!isAutoTracked(c) && (
+            <span className="max-w-[220px] text-right text-[11px] text-ink-faint">
+              自動更新の対象外です。表示中の価格は登録時点のものです。
+            </span>
+          )}
           <span className="text-xs text-ink-faint">
             最終更新：{new Date(c.updated_at).toLocaleString("ja-JP")}
           </span>

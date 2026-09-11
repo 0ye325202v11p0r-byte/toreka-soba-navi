@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { pct, yen, dataQualityLabel } from "@/lib/format";
+import { pct, yen, dataQualityLabel, isAutoTracked } from "@/lib/format";
 import { canSubmitWatchItem } from "@/lib/formValidation";
 import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
@@ -16,6 +16,7 @@ interface CardOption {
   pct_vs_avg30: number | null;
   current_price: number | null;
   data_quality: DataQuality | null;
+  source_url: string | null;
 }
 
 function ruleLabel(rule: WatchlistAlertRule): string {
@@ -51,11 +52,15 @@ export default function WatchlistClient({
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const selectedCard = cardById.get(cardId);
-  // pct_vs_avg30-based conditions need tracked history, which
-  // data_quality: 'partial' cards (single-shop reference price) don't have.
-  // Price-based conditions work for any card since current_price is always
-  // populated, so the warning only applies to the pct_vs_avg30 rule type.
-  const selectedIsUntracked = ruleType === "pct_vs_avg30" && selectedCard?.data_quality === "partial";
+  // pct_vs_avg30-based conditions need tracked history, which only
+  // isAutoTracked() cards (real + non-null source_url) have — not just
+  // "not partial" (a 'flat' card has no tracked history either; see
+  // isAutoTracked() for why data_quality alone isn't the right check,
+  // UX review 2026-09-12). Price-based conditions work for any card since
+  // current_price is always populated, so the warning only applies to the
+  // pct_vs_avg30 rule type.
+  const selectedIsUntracked =
+    ruleType === "pct_vs_avg30" && !!selectedCard && !isAutoTracked(selectedCard);
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
@@ -174,7 +179,7 @@ export default function WatchlistClient({
         {selectedIsUntracked && (
           <p className="mt-2 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">
             ⚠️ {dataQualityLabel(selectedCard?.data_quality ?? null).label}
-            のカードです。1店舗の単発価格のみで自動更新の対象外のため、この条件は現時点では成立しません（判定に使う30日平均比が算出できないため）。
+            のカードです。自動更新の対象外のため、この条件は現時点では成立しません（判定に使う30日平均比が算出できないため）。
           </p>
         )}
       </form>
@@ -186,9 +191,11 @@ export default function WatchlistClient({
         {initialItems.map((item) => {
           const card = cardById.get(item.card_id);
           const isCurrentlyMet = ruleIsMet(item.alert_rule, card);
-          // pct_vs_avg30 rules can't ever fire for a partial-quality card
-          // (no tracked history); price rules work for any card.
-          const cannotFire = item.alert_rule.type === "pct_vs_avg30" && card?.data_quality === "partial";
+          // pct_vs_avg30 rules can't ever fire for a card the cron doesn't
+          // auto-track (no tracked history) — see isAutoTracked(); price
+          // rules work for any card.
+          const cannotFire =
+            item.alert_rule.type === "pct_vs_avg30" && !!card && !isAutoTracked(card);
           return (
             <div
               key={item.id}
@@ -218,7 +225,7 @@ export default function WatchlistClient({
                 )}
                 {cannotFire && (
                   <div className="mt-1 text-xs text-warn">
-                    ⚠️ 自動更新対象外のカードのため、この条件は成立しません
+                    ⚠️ 自動更新対象外のカードのため、この条件は現時点では成立しません
                   </div>
                 )}
               </div>

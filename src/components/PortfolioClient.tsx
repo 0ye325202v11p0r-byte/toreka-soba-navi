@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { yen, dataQualityLabel } from "@/lib/format";
+import { yen, dataQualityLabel, isAutoTracked } from "@/lib/format";
 import { canSubmitTransaction } from "@/lib/formValidation";
 import type { Transaction, TransactionType, PnlSummary, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
@@ -15,6 +15,7 @@ interface CardOption {
   set_name: string | null;
   current_price: number | null;
   data_quality: DataQuality | null;
+  source_url: string | null;
 }
 
 export default function PortfolioClient({
@@ -198,7 +199,11 @@ export default function PortfolioClient({
           const card = cardById.get(h.cardId);
           const value = (card?.current_price ?? 0) * h.quantity;
           const gain = value - h.costBasis;
-          const stale = card?.data_quality === "partial";
+          // Not "partial" specifically — any card the daily cron doesn't
+          // auto-track (partial or flat) needs this warning; see
+          // isAutoTracked() for why data_quality alone isn't the right
+          // check (UX review, 2026-09-12).
+          const stale = card ? !isAutoTracked(card) : false;
           return (
             <div
               key={h.cardId}
@@ -215,7 +220,7 @@ export default function PortfolioClient({
                 </div>
                 <div className="text-xs text-ink-muted">
                   {h.quantity}枚 ・ 平均取得単価 {yen(h.avgCost)} ・ 評価額 {yen(value)}
-                  {stale && "（価格は登録時点の1店舗参考値のまま更新されていません）"}
+                  {stale && "（価格は登録時点のまま自動更新されていません）"}
                 </div>
               </div>
               <span className={gain >= 0 ? "text-good" : "text-warn"}>{yen(gain)}</span>

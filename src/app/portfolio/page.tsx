@@ -49,13 +49,14 @@ export default async function PortfolioPage() {
       set_name: string | null;
       current_price: number | null;
       data_quality: DataQuality | null;
+      source_url: string | null;
     }[] = [];
     const pageSize = 1000;
     let from = 0;
     while (true) {
       const { data, error } = await supabase
         .from("cards")
-        .select("id, name, rarity, set_name, current_price, data_quality")
+        .select("id, name, rarity, set_name, current_price, data_quality, source_url")
         .order("name")
         .order("id")
         .range(from, from + pageSize - 1);
