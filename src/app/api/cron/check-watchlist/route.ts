@@ -79,6 +79,7 @@ export async function GET(request: Request) {
 
   const supabase = adminClient();
   const startTime = Date.now();
+  const budgetExceeded = () => Date.now() - startTime > TIME_BUDGET_MS;
 
   // Supabase/PostgREST caps a single select() at 1000 rows by default (see
   // README.md "カードデータの収録範囲" for the full story on this bug
@@ -88,11 +89,28 @@ export async function GET(request: Request) {
   // alert_rule is typed `unknown` here (not WatchlistAlertRule) on purpose:
   // it's untrusted JSONB from the DB, validated per-item via
   // isValidAlertRule() below before anything reads its fields.
+  //
+  // Both read loops below check the time budget before each DB call, not
+  // just the processing loop after them — a large enough watchlist_items
+  // table or cardIds set could otherwise burn the whole maxDuration just
+  // paging through reads, before the per-item budget check even starts
+  // (found via independent review, 2026-09-12). On a mid-read timeout, this
+  // returns immediately (no further DB calls of any kind — not the next
+  // page/chunk, not cards, not updates) with `incomplete: true` and a
+  // `phase`, rather than proceeding with a partial list while still
+  // reporting `totalItems`/success as though everything was read.
   let items: { id: string; card_id: string; alert_rule: unknown }[] = [];
   {
     const pageSize = 1000;
     let from = 0;
     while (true) {
+      if (budgetExceeded()) {
+        return NextResponse.json({
+          incomplete: true,
+          phase: "reading_watchlist_items",
+          itemsReadSoFar: items.length,
+        });
+      }
       const { data, error } = await supabase
         .from("watchlist_items")
         .select("id, card_id, alert_rule")
@@ -120,6 +138,15 @@ export async function GET(request: Request) {
   {
     const pageSize = 1000; // cardIds is a Set of unique watchlist targets — chunk .in() calls at the same page size for consistency, even though it will rarely exceed one page in practice
     for (let i = 0; i < cardIds.length; i += pageSize) {
+      if (budgetExceeded()) {
+        return NextResponse.json({
+          incomplete: true,
+          phase: "reading_cards",
+          totalItems: items.length,
+          cardsReadSoFar: cardById.size,
+          cardsNeeded: cardIds.length,
+        });
+      }
       const chunk = cardIds.slice(i, i + pageSize);
       const { data, error } = await supabase
         .from("cards")
@@ -144,7 +171,7 @@ export async function GET(request: Request) {
   let invalidRule = 0;
   let skippedForTime = 0;
   for (let i = 0; i < items.length; i++) {
-    if (Date.now() - startTime > TIME_BUDGET_MS) {
+    if (budgetExceeded()) {
       skippedForTime = items.length - i;
       break;
     }
@@ -177,6 +204,8 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
+    incomplete: skippedForTime > 0,
+    ...(skippedForTime > 0 ? { phase: "processing" } : {}),
     totalItems: items.length,
     triggered,
     updateFailed,
