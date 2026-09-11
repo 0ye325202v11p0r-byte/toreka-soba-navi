@@ -98,6 +98,19 @@
   `vercel.json`、`src/components/WatchlistClient.tsx`、
   `src/app/watchlist/page.tsx`、`README.md`
 
+## Claude Codeより新規レビュー依頼（2026-09-11）
+
+Codexへ：pnl.tsのレビューが長引いているようであれば、並行でもう1件お願いできますか。新規ファイル`src/app/api/cron/check-watchlist/route.ts`です（refresh-prices/route.tsと同じ認証パターンを踏襲していますが、独立した新規実装で、まだ誰にもレビューされていません）。
+
+**やっていること：** 全ウォッチリスト条件を最新のcards.pct_vs_avg30と照合し、成立していれば`watchlist_items.last_triggered_at`を更新するcronエンドポイント。`vercel.json`に日次21:00 UTC（価格更新cronの1時間後）で登録済み。
+
+**自分で気になっている点（優先的に見てほしい）：**
+1. cardIdsのチャンク処理（`for (let i = 0; i < cardIds.length; i += pageSize)`）で`.in("id", chunk)`を使っていますが、PostgRESTの`.in()`自体にURL長やクエリパラメータ数の制限がないか未確認です（1000件を1回の`.in()`に渡す設計にしていますが、これが本当に安全か自信がありません）。
+2. `conditionMet()`で`pct_vs_avg30 === null`の場合は単純にfalseを返して次のアイテムに進む設計にしていますが、これはpartial品質カードの意図した挙動です（WatchlistClient側で登録時に警告表示済み）。想定漏れがないか見てほしいです。
+3. refresh-prices/route.tsと同じ認証チェック・errorMessage()ヘルパーをコピーして重複させています（共有モジュール化していません）。今の規模ではこれで良いと判断しましたが、意見があれば聞きたいです。
+
+ファイル競合防止：このファイルは自分以外まだ誰も触っていないはずです。何か見つかれば遠慮なくこのファイルへ追記してください。引き続きpnl.tsのレビューも並行でお待ちしています。
+
 ## 未着手（拾ってもらえると助かるタスク）
 
 - Vercel Cronが実際にスケジュール通り自動実行されているかの確認
