@@ -84,4 +84,54 @@ function assertEqual(actual, expected, label) {
   assertEqual(result.holdings.length, 0, "T5 no negative holdings");
 }
 
+// --- Test 6: same-day tiebreak uses created_at, not input array order ---
+// Two buys share the same transaction_date. Buy A (qty 2 @1000) is listed
+// FIRST in the input array but has the LATER created_at (10:00). Buy B
+// (qty 2 @2000) is listed second but has the EARLIER created_at (09:00).
+// Correct FIFO (sorted by transaction_date, then created_at) must consume
+// B's lot first despite its later array position — a naive implementation
+// that only sorts by transaction_date (a stable sort leaving same-date
+// entries in original array order) would consume A first instead, giving
+// a different, wrong answer. Sell 2 @1800:
+//   correct (B first):  realized = 2*(1800-2000) = -400, A's lot remains
+//   wrong (A first):     realized = 2*(1800-1000) = +1600, B's lot remains
+// This case (2026-09-12, independent review follow-up) was previously
+// untested — only Test 3 exercised multi-lot FIFO, and its two buys have
+// distinct transaction_dates, so it never exercised the created_at
+// tiebreak path at all.
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T10:00:00Z" }, // listed first, created LATER
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 2000, transaction_date: "2026-01-01", created_at: "2026-01-01T09:00:00Z" }, // listed second, created EARLIER
+    { card_id: "c1", type: "sell", quantity: 2, price_per_unit: 1800, transaction_date: "2026-01-02", created_at: "2026-01-02T00:00:00Z" },
+  ]);
+  assertEqual(result.realizedPnl, -400, "T6 same-day tiebreak: created_at (not array order) decides FIFO order");
+  assertEqual(result.holdings[0].quantity, 2, "T6 remaining qty is the later-created (1000-cost) lot");
+  assertEqual(result.holdings[0].costBasis, 2000, "T6 remaining cost basis is 2 units @1000, not @2000");
+}
+
+// --- Test 7: computePnl does not mutate its input ---
+// Server Components / callers may reuse the same transactions array/objects
+// after calling computePnl (e.g. passing it to something else, or React
+// re-rendering with the same props) — a function that mutates its lot
+// tracking in place on the caller's own objects (rather than local copies)
+// would corrupt that data for any subsequent use. Verified via deep
+// equality (JSON) of the input before/after, on a case that includes a
+// partially-consumed lot (Test 3's scenario) — the most likely place an
+// in-place `lot.quantity -=` mutation would leak onto a shared object if
+// the implementation ever stopped copying into fresh Lot objects.
+{
+  const input = [
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 2000, transaction_date: "2026-01-15", created_at: "2026-01-15T00:00:00Z" },
+    { card_id: "c1", type: "sell", quantity: 3, price_per_unit: 1800, transaction_date: "2026-02-01", created_at: "2026-02-01T00:00:00Z" },
+  ];
+  const before = JSON.stringify(input);
+  const inputLengthBefore = input.length;
+  computePnl(input);
+  const after = JSON.stringify(input);
+  assertEqual(after === before, true, "T7 input array/objects are byte-for-byte unchanged after computePnl");
+  assertEqual(input.length, inputLengthBefore, "T7 input array length is unchanged (no push/shift/splice)");
+}
+
 console.log("\nAll pnl.ts logic checks completed.");
