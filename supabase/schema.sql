@@ -18,11 +18,11 @@ create table if not exists public.cards (
   pct_vs_avg90 numeric,
   low30 numeric,
   change_amt30 numeric,
-  judgment text,
-  trend_direction text,
-  data_quality text, -- 'real' | 'partial' | 'flat'
+  judgment text check (judgment is null or judgment in ('割安', '適正', '割高')),
+  trend_direction text check (trend_direction is null or trend_direction in ('rising', 'declining', 'flat')),
+  data_quality text check (data_quality is null or data_quality in ('real', 'partial', 'flat')),
   history_is_estimated boolean default true,
-  ai_verdict text,
+  ai_verdict text check (ai_verdict is null or ai_verdict in ('割安', '適正', '割高')),
   ai_verdict_text text,
   ai_verdict_at date,
   source_note text,
@@ -30,6 +30,16 @@ create table if not exists public.cards (
   created_at timestamptz default now()
 );
 
+-- judgment/trend_direction/data_quality/ai_verdict are enum-like in the app
+-- (src/lib/types.ts's Judgment/DataQuality unions) but were left as plain
+-- `text` with no DB-level constraint — unlike transactions.type below,
+-- which does have one. Added these CHECK constraints during a self-review
+-- (2026-09-12) after hardening the app-side handling of unexpected
+-- data_quality values (isAutoTracked() etc.) made the DB-level gap obvious
+-- by contrast. NOTE: this file only takes effect on a fresh `create table`;
+-- the already-created production table needs a separate `alter table ...
+-- add constraint` to pick these up (not run against production here — see
+-- migration/retrofit_check_constraints.sql, prepared but NOT executed).
 create index if not exists cards_set_name_idx on public.cards (set_name);
 create index if not exists cards_updated_at_idx on public.cards (updated_at);
 
@@ -70,6 +80,13 @@ create policy "price snapshots are publicly readable"
 -- means the browser can never write here; the service_role key bypasses RLS.
 
 -- ============ profiles ============
+-- Not read or written anywhere in src/ as of this self-review (2026-09-12)
+-- — the trigger below populates it on signup, but nothing displays or
+-- edits display_name yet. Left in place rather than dropped: removing a
+-- table + trigger is a production DB change this review doesn't make
+-- unilaterally, and it may still be wanted for a future profile/display-
+-- name feature. Flagging here so it isn't mistaken for something the app
+-- currently depends on.
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   display_name text,
