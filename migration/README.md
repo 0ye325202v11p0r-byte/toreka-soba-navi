@@ -27,9 +27,8 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 | `scrape_yuyutei.mjs` | 第2のデータソース、yuyu-tei.jp（遊々亭）の店頭販売価格を取得。`--sets op01,op02,...`でセットのURLスラッグを指定（1セット=1フェッチで全カードのレアリティ・価格を取得できる効率的な構造）。`--dry-run`で実投入せず件数だけ確認可能。取得したカードは`data_quality: 'partial'`・統計値なし・単発スナップショットとして投入される（詳細はスクリプト冒頭のコメントとREADME.mdの「カードデータの収録範囲」参照）。cross-set（Don!!カード等、別セット由来の番号を持つカード）は誤ったset_name付与を避けるため自動的にスキップする | OP01〜OP17（17主要セット）・ST01〜ST36（全スターターデッキ）・EB01〜EB04（全エクストラブースター）は2026-09-11に実行済み。プロモ（P-XXX）はまだ未実行 — さらに拡充する場合の次の候補 |
 | `fix_html_entities.mjs` | `scrape_yuyutei.mjs`の初回実行時（HTMLエンティティのデコード処理を実装する前）に投入されたカード名に残っていた`&amp;`等のエンティティを一括修正した使い捨てスクリプト | 再実行不要（既に実行済み。スクリプト自体は修正済みなので今後は発生しない） |
 | `fix_akaji_variants_real_source.mjs` | c9/c500/c503（印刷バリエーション混同で`data_quality: 'flat'`・未ソースの手動参考値のままだった3件）について、遊々亭に「特別パラレル」という別商品ページ（白文字版とは別のproduct ID）が存在することを発見し、実測ソース付きの`data_quality: 'partial'`に格上げした | 再実行不要（既に実行済み）。同種の「-R」サフィックスの赤文字カードが他にも見つかった場合のテンプレートとして使える |
-
 | `fix_avg_window_bug.mjs` | 2026-09-11発見：avg30/avg90が「直近30/90件のスナップショット」を「直近30/90日」の代わりに使っていたバグ（`src/lib/priceStats.ts`の`computeStats`に集約・修正済み）の、既存カードへの一括再計算。カレンダー日付で日数を判定し直し、`data_quality='real'`の844件のうち438件（うち230件は割安/割高/適正の判定自体が変わっていた）を修正。`--apply`なしはdry-run | 再実行不要（既に実行済み）。同種のバグが再発した場合の修正テンプレートとして使える。`node --experimental-strip-types migration/fix_avg_window_bug.mjs --apply` で実行（`verify_pnl_logic.mjs`と同じNode 24の型ストリッピング機能を使用） |
-
+| `verify_price_stats.mjs` | `src/lib/priceStats.ts`の`computeStats`本体を直接importする回帰テスト（`verify_pnl_logic.mjs`と同じ方式）。上記`fix_avg_window_bug.mjs`のバグが再発しないよう、密な日次履歴・疎な履歴（bulk import想定）・30日境界のフェンスポスト（29日前は含む・30日前は除く）・判定しきい値の4シナリオ、計13アサーションを検証 | `priceStats.ts`のロジックを変更したら必ず再実行すること（DB接続不要）。`node --experimental-strip-types migration/verify_price_stats.mjs` で実行 |
 | `fix_verdict_wording.mjs` | 2026-09-11発見：`buildVerdictText()`（`src/lib/ai-verdict.ts`）の90日トレンド文の動詞（切り上がって/落ち着いて/安定して）が、90日平均比自体の大きさではなく30日ベースの`judgment`から選ばれていたため、「judgment='適正'だが90日平均比は+44.7%」のようなカードで「価格が安定してきた」という数値と矛盾する文言になっていた。動詞選択を`pctVsAvg90`自体の大きさ基準に修正し、既存844件のai_verdict_textを再生成（204件が変化） | 再実行不要（既に実行済み）。ロジック側は修正済みなので、日次cronの通常実行では常に正しい文言が生成される |
 
 `cards_export/` は移行元のArtifact DBのスナップショット（379件のJSON）。移行元がもう存在しないため、参考記録として残してある。
