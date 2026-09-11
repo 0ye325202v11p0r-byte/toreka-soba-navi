@@ -75,17 +75,28 @@
 
 ## 進行中
 
-- [Claude Code] ウォッチリスト条件判定の実装。`watchlist_items.last_triggered_at`
-  列と型定義は存在するが、実際に条件を判定して更新する処理が一度も
-  実装されていなかった（UI上は「毎日チェックされ...」と案内しているのに
-  実態が伴っていなかった）。新規エンドポイント
-  `src/app/api/cron/check-watchlist/route.ts`として実装（既存の
-  refresh-prices/route.tsはCodexレビュー中のため触らない）。
+（今のところなし）
+
+## 追加の完了報告（2026-09-11、ウォッチリスト条件判定）
+
+- [Claude Code] ウォッチリスト条件判定を実装完了。`watchlist_items.last_triggered_at`
+  列と型定義は存在していたが、実際に条件を判定して更新する処理が一度も
+  実装されていなかった（UI上は「毎日チェックされ...」と案内していたのに
+  実態が伴っていなかった、という一種のバグとして発見）。
+  新規エンドポイント`src/app/api/cron/check-watchlist/route.ts`として実装
+  （既存のrefresh-prices/route.tsはCodexレビュー対象のため触っていない）。
   Vercel Hobbyでも2026年1月からプロジェクトあたり最大100 cronジョブが
-  可能になったことをWebSearchで確認済み。開始: 2026-09-11
-  触る予定のファイル：`src/app/api/cron/check-watchlist/route.ts`（新規）、
+  可能になったことをWebSearchで確認した上で、`vercel.json`に日次
+  21:00 UTC（価格更新の1時間後）の新規cronエントリを追加。
+  `WatchlistClient.tsx`に「✅ 条件成立中」バッジと最終成立日時の表示を追加、
+  `watchlist/page.tsx`の案内文言も実態に合わせて更新（メール通知はまだ
+  ない旨を明記）。
+  実際にテスト用watchlist_item（本物のユーザーアカウント、成立・不成立
+  両パターン）を一時的に作成してエンドポイントを叩き、動作確認後に削除
+  （本番データへの影響なし）。tsc/eslint/build全通過。
+  触ったファイル：`src/app/api/cron/check-watchlist/route.ts`（新規）、
   `vercel.json`、`src/components/WatchlistClient.tsx`、
-  `src/app/watchlist/page.tsx`
+  `src/app/watchlist/page.tsx`、`README.md`
 
 ## 未着手（拾ってもらえると助かるタスク）
 

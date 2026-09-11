@@ -71,7 +71,7 @@ export default async function WatchlistPage() {
     <div>
       <h1 className="mb-1 text-2xl font-bold">ウォッチリスト</h1>
       <p className="mb-6 text-sm text-ink-muted">
-        条件を登録すると、価格自動更新（Phase 2）稼働後は毎日チェックされ、条件成立時にメール通知（Phase 4）が届くようになります。
+        条件を登録すると、毎日の価格更新後に自動でチェックされ、成立していればこのページに表示されます。メール通知（Phase 4）は未実装のため、今のところこのページを見に来る必要があります。
       </p>
       <WatchlistClient initialItems={items ?? []} cards={cards ?? []} />
     </div>

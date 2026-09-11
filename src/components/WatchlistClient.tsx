@@ -129,17 +129,33 @@ export default function WatchlistClient({
         )}
         {initialItems.map((item) => {
           const card = cardById.get(item.card_id);
+          const pctNow = card?.pct_vs_avg30 ?? null;
+          const isCurrentlyMet =
+            pctNow !== null &&
+            (item.alert_rule.op === "lte" ? pctNow <= item.alert_rule.value : pctNow >= item.alert_rule.value);
           return (
             <div
               key={item.id}
               className="flex items-center justify-between rounded-lg border border-border bg-bg-elevated p-3"
             >
               <div>
-                <div className="font-medium">{card?.name ?? item.card_id}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{card?.name ?? item.card_id}</span>
+                  {isCurrentlyMet && (
+                    <span className="rounded-full bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">
+                      ✅ 条件成立中
+                    </span>
+                  )}
+                </div>
                 <div className="text-xs text-ink-muted">
                   条件：30日平均比 {item.alert_rule.op === "lte" ? "以下" : "以上"} {item.alert_rule.value}%
                   （現在 {pct(card?.pct_vs_avg30)}）
                 </div>
+                {item.last_triggered_at && (
+                  <div className="mt-0.5 text-xs text-ink-faint">
+                    最終確認で成立：{new Date(item.last_triggered_at).toLocaleString("ja-JP")}
+                  </div>
+                )}
                 {card?.data_quality === "partial" && (
                   <div className="mt-1 text-xs text-warn">
                     ⚠️ 自動更新対象外のカードのため、この条件は成立しません
