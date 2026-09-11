@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
@@ -7,6 +7,15 @@ import { SITE_URL } from "@/lib/site";
 const SITE_NAME = "トレカ相場ナビ";
 const SITE_DESCRIPTION =
   "ONE PIECEカードゲームの実測相場を毎日追跡。保有カードの含み損益・実現損益を自動計算するポートフォリオ、価格変動を知らせるウォッチリスト、複数カード比較も無料で使えます。";
+
+// tints mobile browser chrome (e.g. Android Chrome's address bar) with the
+// brand color, matching --accent / --bg from globals.css per color scheme
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#efe7d2" },
+    { media: "(prefers-color-scheme: dark)", color: "#14191f" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
