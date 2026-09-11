@@ -69,8 +69,25 @@ export default function CardPicker({
         onKeyDown={(e) => {
           if (e.key === "Escape") {
             e.currentTarget.blur();
-          } else if (e.key === "Enter" && matches.length === 1) {
-            e.preventDefault();
+            return;
+          }
+          if (e.key !== "Enter") return;
+          // An Enter that's confirming an IME composition (finalizing a
+          // kanji conversion, for example) belongs to the IME, not to this
+          // widget — pass it through untouched. isComposing is the
+          // standard check; keyCode 229 is a fallback some older
+          // Safari/WebKit builds still need during composition.
+          if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
+          // Always suppress the browser's implicit form submission for
+          // Enter inside a text input, regardless of match count. Without
+          // this, pressing Enter while the search hadn't narrowed to
+          // exactly one match (0 or 2+ results) submitted whichever form
+          // this picker lives in using the PREVIOUS selection — not the
+          // card being searched for (found via independent review,
+          // 2026-09-12).
+          e.preventDefault();
+          if (matches.length === 1) {
             onChange(matches[0].id);
             setOpen(false);
             e.currentTarget.blur();
