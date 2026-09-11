@@ -89,10 +89,25 @@ export async function GET(request: Request) {
   // oldest-updated-first: if a single run can't cover every card within
   // the time budget, the cards it skips this time are exactly the ones
   // that'll be picked up first on the next run
+  //
+  // data_quality='real' only: the 2026-09-11 yuyu-tei expansion added 2,423
+  // 'partial' cards that also carry a non-null source_url (pointing at
+  // yuyu-tei.jp, not onepiece-card-atari.jp), which this route's
+  // PRICE_PATTERN regex can never match. Without this filter every cron run
+  // was quietly burning its time budget attempting ~2,400 fetches destined
+  // to fail (each logged as a real fetch failure in sync_runs, and each a
+  // real HTTP request against yuyu-tei.jp with no benefit), starving the
+  // 844 cards this route can actually update. Tracking yuyu-tei prices on a
+  // recurring daily basis is a separate, not-yet-decided project (see
+  // COORDINATION.md / README.md "遊々亭ソースの法務リスクについて" — running
+  // a permanent daily scraper against a live third-party shop is a bigger
+  // commitment than the one-time bulk import already done, and needs the
+  // user's own sign-off given the unresolved legal-risk question there).
   let query = supabase
     .from("cards")
     .select("id, name, source_url, history_is_estimated")
     .not("source_url", "is", null)
+    .eq("data_quality", "real")
     .order("updated_at", { ascending: true });
   if (limit) query = query.limit(limit);
   const { data: cards, error: cardsErr } = await query;

@@ -19,13 +19,21 @@
 
 ## 進行中
 
-- [Claude Code] 遊々亭ソース（2,423件、data_quality='partial'）を日次cronに
-  組み込むかの設計・実装検討。対象ファイル: `src/app/api/cron/refresh-prices/route.ts`
-  または新規エンドポイント（未定、検討中）。開始: 2026-09-11
+（今のところなし）
 
 ## 完了
 
-（まだなし）
+- [Claude Code] 遊々亭ソース（2,423件、data_quality='partial'）を日次cronに
+  組み込むかを検討 → **まだ組み込まない方針**（README.md「遊々亭ソースの
+  法務リスクについて」が未解決のため、恒常的な日次スクレイピングへの
+  格上げはユーザーの明示判断が必要と判断）。
+  ただし検討中に**実害のあるバグを発見・修正**：これらのカードも
+  `source_url`を持っていた（yuyu-tei.jpのURL）ため、既存のcronの
+  `.not("source_url", "is", null)`フィルターに引っかかり、毎回2,423件分
+  無駄なfetchを試みて失敗していた（onepiece-card-atari.jp用の価格パターン
+  はyuyu-tei.jpのページには存在しないため）。`.eq("data_quality", "real")`
+  を追加して除外。`src/app/api/cron/refresh-prices/route.ts`
+  コミット: af4bf45 の次のコミット参照
 
 ## 未着手（拾ってもらえると助かるタスク）
 
