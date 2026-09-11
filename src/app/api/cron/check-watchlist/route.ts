@@ -2,13 +2,18 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { WatchlistAlertRule } from "@/lib/types";
 
-// This route only reads/writes Supabase (no external HTTP fetches like
-// refresh-prices does), so it should finish in well under a minute even
-// with a large watchlist — no special time-boxing needed here.
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const DB_TIMEOUT_MS = 10_000;
+// Per-call timeouts alone don't bound the total run time: this route
+// updates one row per triggered item, sequentially, and a large enough
+// batch of triggers (e.g. a market-wide move tripping many rules at once)
+// could add up past maxDuration even with no single call ever timing out.
+// Leaves ~15s headroom under maxDuration=60s for whatever's mid-flight when
+// the budget check fires, plus the final response (found via independent
+// review, 2026-09-11/12 — see COORDINATION.md).
+const TIME_BUDGET_MS = 45_000;
 
 function adminClient() {
   return createClient(
@@ -27,6 +32,22 @@ function errorMessage(err: unknown): string {
     return (err as { message: string }).message;
   }
   return String(err);
+}
+
+// alert_rule is stored as JSONB with no schema-level constraint — the
+// WatchlistAlertRule TypeScript type is only a compile-time promise, not a
+// DB-enforced one. A single row with a malformed/null value (JSON null is
+// valid JSONB) would otherwise reach conditionMet() below and throw
+// (`Cannot read properties of null`) with no per-item isolation in the
+// loop, taking down the whole run — every other user's watchlist item in
+// that batch — over one bad row (found via independent review, 2026-09-12).
+function isValidAlertRule(rule: unknown): rule is WatchlistAlertRule {
+  if (!rule || typeof rule !== "object") return false;
+  const r = rule as Record<string, unknown>;
+  if (r.type !== "pct_vs_avg30" && r.type !== "price") return false;
+  if (r.op !== "lte" && r.op !== "gte") return false;
+  if (typeof r.value !== "number" || !Number.isFinite(r.value)) return false;
+  return true;
 }
 
 function conditionMet(
@@ -57,12 +78,17 @@ export async function GET(request: Request) {
   }
 
   const supabase = adminClient();
+  const startTime = Date.now();
 
   // Supabase/PostgREST caps a single select() at 1000 rows by default (see
   // README.md "カードデータの収録範囲" for the full story on this bug
   // class) — page through watchlist_items rather than assume the whole
   // table fits in one request.
-  let items: { id: string; card_id: string; alert_rule: WatchlistAlertRule }[] = [];
+  //
+  // alert_rule is typed `unknown` here (not WatchlistAlertRule) on purpose:
+  // it's untrusted JSONB from the DB, validated per-item via
+  // isValidAlertRule() below before anything reads its fields.
+  let items: { id: string; card_id: string; alert_rule: unknown }[] = [];
   {
     const pageSize = 1000;
     let from = 0;
@@ -115,7 +141,20 @@ export async function GET(request: Request) {
   const now = new Date().toISOString();
   let triggered = 0;
   let updateFailed = 0;
-  for (const item of items) {
+  let invalidRule = 0;
+  let skippedForTime = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (Date.now() - startTime > TIME_BUDGET_MS) {
+      skippedForTime = items.length - i;
+      break;
+    }
+    const item = items[i];
+
+    if (!isValidAlertRule(item.alert_rule)) {
+      invalidRule++;
+      continue;
+    }
+
     const card = cardById.get(item.card_id) ?? { pctVsAvg30: null, currentPrice: null };
     if (!conditionMet(item.alert_rule, card)) continue;
 
@@ -141,6 +180,8 @@ export async function GET(request: Request) {
     totalItems: items.length,
     triggered,
     updateFailed,
+    invalidRule,
+    skippedForTime,
     checkedAt: now,
   });
 }
