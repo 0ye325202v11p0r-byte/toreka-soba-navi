@@ -40,11 +40,13 @@ export default async function ComparePage() {
     const pageSize = 1000;
     let from = 0;
     while (true) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("cards")
         .select("id, name, rarity, set_name, current_price, pct_vs_avg30, judgment, data_quality")
         .order("name")
+        .order("id") // deterministic tiebreak for range() pagination
         .range(from, from + pageSize - 1);
+      if (error) throw error;
       cards = cards.concat(data ?? []);
       if (!data || data.length < pageSize) break;
       from += pageSize;

@@ -26,10 +26,19 @@ async function fetchAllCardIds() {
   const pageSize = 1000;
   let from = 0;
   while (true) {
-    const { data } = await supabase
+    // .order() is required, not optional: without any ORDER BY, Postgres
+    // makes no guarantee of consistent row order between the separate
+    // range() calls this loop issues, so pages could skip or repeat rows.
+    // Throwing on error (rather than silently breaking as if this page
+    // were the last one) matters here too — the caller's try/catch falls
+    // back to a static-only sitemap, which is a real fallback only if this
+    // actually throws instead of returning a quietly-truncated card list.
+    const { data, error } = await supabase
       .from("cards")
       .select("id, updated_at")
+      .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
+    if (error) throw error;
     all = all.concat(data ?? []);
     if (!data || data.length < pageSize) break;
     from += pageSize;

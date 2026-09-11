@@ -44,11 +44,13 @@ export default async function WatchlistPage() {
     const pageSize = 1000;
     let from = 0;
     while (true) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("cards")
         .select("id, name, rarity, set_name, pct_vs_avg30, data_quality")
         .order("name")
+        .order("id") // deterministic tiebreak for range() pagination
         .range(from, from + pageSize - 1);
+      if (error) throw error;
       all = all.concat(data ?? []);
       if (!data || data.length < pageSize) break;
       from += pageSize;

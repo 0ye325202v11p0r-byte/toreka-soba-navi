@@ -39,6 +39,7 @@ export default async function MarketListPage() {
         .from("cards")
         .select("*")
         .order("name", { ascending: true })
+        .order("id", { ascending: true }) // deterministic tiebreak for range() pagination
         .range(from, from + pageSize - 1);
       if (pageErr) {
         error = pageErr;

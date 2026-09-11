@@ -2,57 +2,18 @@
 // calculated expected values. Not a full test suite (no framework added to
 // keep dependencies minimal), but enough to catch a logic regression before
 // it reaches real users' money-adjacent numbers.
-
-// Re-implement the same algorithm here (copy, not import, since pnl.ts is
-// TS and this is a quick standalone .mjs check) to cross-verify by hand.
-function computePnl(transactions) {
-  const byCard = new Map();
-  for (const t of transactions) {
-    const list = byCard.get(t.card_id) ?? [];
-    list.push(t);
-    byCard.set(t.card_id, list);
-  }
-
-  const holdings = [];
-  let realizedPnl = 0;
-  let costBasisTotal = 0;
-
-  for (const [cardId, txns] of byCard) {
-    const sorted = [...txns].sort((a, b) => {
-      const d = new Date(a.transaction_date) - new Date(b.transaction_date);
-      if (d !== 0) return d;
-      return new Date(a.created_at) - new Date(b.created_at);
-    });
-
-    const lots = [];
-    for (const t of sorted) {
-      const quantity = Number(t.quantity);
-      const pricePerUnit = Number(t.price_per_unit);
-      if (t.type === "buy") {
-        lots.push({ quantity, pricePerUnit });
-        continue;
-      }
-      let remaining = quantity;
-      while (remaining > 0 && lots.length > 0) {
-        const lot = lots[0];
-        const consumed = Math.min(lot.quantity, remaining);
-        realizedPnl += consumed * (pricePerUnit - lot.pricePerUnit);
-        lot.quantity -= consumed;
-        remaining -= consumed;
-        if (lot.quantity === 0) lots.shift();
-      }
-    }
-
-    const quantity = lots.reduce((s, l) => s + l.quantity, 0);
-    const costBasis = lots.reduce((s, l) => s + l.quantity * l.pricePerUnit, 0);
-    if (quantity > 0) {
-      holdings.push({ cardId, quantity, costBasis, avgCost: costBasis / quantity });
-      costBasisTotal += costBasis;
-    }
-  }
-
-  return { holdings, realizedPnl, costBasisTotal };
-}
+//
+// Imports the REAL src/lib/pnl.ts (not a hand-copied reimplementation —
+// that was the original approach here, but an independent review
+// (2026-09-11) correctly pointed out a copy can silently drift from the
+// real implementation and this test would then verify nothing real).
+// Requires Node's type-stripping ESM loader (available unflagged as of
+// Node 24 for this file's plain type-only annotations — no enums/
+// decorators/namespaces): `node --experimental-strip-types
+// migration/verify_pnl_logic.mjs`. A MODULE_TYPELESS_PACKAGE_JSON warning
+// on stderr is expected and harmless (this project's package.json has no
+// "type" field); it does not affect the exit code or test results.
+import { computePnl } from "../src/lib/pnl.ts";
 
 function assertEqual(actual, expected, label) {
   const ok =

@@ -17,6 +17,7 @@ export const maxDuration = 290; // seconds — stay under Hobby+Fluid Compute's 
 export const dynamic = "force-dynamic";
 
 const TIME_BUDGET_MS = 270_000; // leave ~20s headroom under maxDuration for the final DB writes
+const PER_REQUEST_TIMEOUT_MS = 15_000; // a single stalled fetch must never be able to eat the whole run
 
 // Server-only client with the service_role key (bypasses RLS). Never import
 // this file from client code — it must only run in this route handler.
@@ -37,8 +38,18 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchCurrentPrice(url: string): Promise<number | null> {
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+async function fetchCurrentPrice(url: string, timeoutMs: number): Promise<number | null> {
+  // Without a signal, a single stalled connection could block past this
+  // route's own time budget (the budget is only re-checked at the top of
+  // each loop iteration) all the way to Vercel's hard maxDuration kill,
+  // losing the final sync_runs write for the whole run — not just skipping
+  // this one card. AbortSignal.timeout() covers both the connection and the
+  // body read (res.text()), since the same signal stays attached to the
+  // in-flight request.
+  const res = await fetch(url, {
+    headers: { "User-Agent": USER_AGENT },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   if (!res.ok) return null;
   const html = await res.text();
   const match = html.match(PRICE_PATTERN);
@@ -74,13 +85,18 @@ function computeStats(history: { snapshot_date: string; price: number }[]) {
 }
 
 export async function GET(request: Request) {
+  // Fail closed if CRON_SECRET isn't configured — comparing against
+  // `Bearer ${undefined}` would otherwise accept a literal
+  // "Authorization: Bearer undefined" header from anyone.
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const supabase = adminClient();
   const startedAt = new Date().toISOString();
+  const startTime = Date.now(); // before any DB/network I/O, so the budget covers all of it
 
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
@@ -117,19 +133,21 @@ export async function GET(request: Request) {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const startTime = Date.now();
   let successCount = 0;
   let failCount = 0;
   let skippedForTime = 0;
   const errorSamples: string[] = [];
 
   for (const card of cards) {
-    if (Date.now() - startTime > TIME_BUDGET_MS) {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > TIME_BUDGET_MS) {
       skippedForTime = cards.length - successCount - failCount;
       break;
     }
     try {
-      const price = await fetchCurrentPrice(card.source_url as string);
+      const remainingMs = TIME_BUDGET_MS - elapsed;
+      const timeoutMs = Math.max(1000, Math.min(PER_REQUEST_TIMEOUT_MS, remainingMs));
+      const price = await fetchCurrentPrice(card.source_url as string, timeoutMs);
       if (price === null) throw new Error("price pattern not found");
 
       const { error: snapErr } = await supabase
@@ -140,12 +158,13 @@ export async function GET(request: Request) {
         );
       if (snapErr) throw snapErr;
 
-      const { data: history } = await supabase
+      const { data: history, error: historyErr } = await supabase
         .from("price_snapshots")
         .select("snapshot_date, price")
         .eq("card_id", card.id)
         .order("snapshot_date", { ascending: false })
         .limit(90);
+      if (historyErr) throw historyErr;
 
       if (history && history.length > 0) {
         const stats = computeStats(history);
@@ -171,7 +190,7 @@ export async function GET(request: Request) {
           ? { history_is_estimated: false, source_note: TRACKED_NOTE }
           : {};
 
-        await supabase
+        const { error: updateErr } = await supabase
           .from("cards")
           .update({
             ...stats,
@@ -182,6 +201,11 @@ export async function GET(request: Request) {
             updated_at: new Date().toISOString(),
           })
           .eq("id", card.id);
+        // without checking this, a failed update (RLS, network, whatever)
+        // still fell through to successCount++ below — the card's own
+        // stats/judgment/verdict would silently stay stale while the run
+        // reported 100% success
+        if (updateErr) throw updateErr;
       }
 
       successCount++;
@@ -204,7 +228,7 @@ export async function GET(request: Request) {
     .filter(Boolean)
     .join("\n");
 
-  await supabase.from("sync_runs").insert({
+  const { error: syncRunErr } = await supabase.from("sync_runs").insert({
     started_at: startedAt,
     finished_at: new Date().toISOString(),
     total_count: cards.length,
@@ -212,6 +236,13 @@ export async function GET(request: Request) {
     fail_count: failCount,
     error_sample: errorSample || null,
   });
+  // The actual price-refresh work above already happened regardless of
+  // whether this log write succeeds, so this still returns 200 (a Vercel
+  // Cron retry wouldn't fix a logging failure, and treating the whole run
+  // as failed would be misleading). But silently swallowing this error
+  // meant /admin/sync-status could go dark with zero indication anywhere
+  // that monitoring itself broke — surface it in the response instead.
+  const syncRunLogged = !syncRunErr;
 
   return NextResponse.json({
     total: cards.length,
@@ -219,5 +250,7 @@ export async function GET(request: Request) {
     failed: failCount,
     skippedForTime,
     errorSamples,
+    syncRunLogged,
+    ...(syncRunErr ? { syncRunLogError: syncRunErr.message } : {}),
   });
 }
