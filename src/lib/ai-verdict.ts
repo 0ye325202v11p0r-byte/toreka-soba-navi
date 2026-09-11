@@ -23,8 +23,15 @@ export function buildVerdictText(params: {
 
   const sameDirection =
     (pctVsAvg30 >= 0 && pctVsAvg90 >= 0) || (pctVsAvg30 <= 0 && pctVsAvg90 <= 0);
+  // Describes the 90-day trend by pctVsAvg90's OWN magnitude, not by the
+  // 30-day-based `judgment` — a card can be judgment="適正" (30-day change
+  // under the threshold) while still having moved substantially over 90
+  // days; borrowing judgment here previously said "価格が安定してきた"
+  // (has stabilized) even when pctVsAvg90 was e.g. +44.7%, which reads as
+  // contradicting the number right next to it.
+  const trend90Verb = pctVsAvg90 > 15 ? "切り上がって" : pctVsAvg90 < -15 ? "落ち着いて" : "安定して";
   const trendSentence = sameDirection
-    ? `90日平均比でも${pctVsAvg90 > 0 ? "+" : ""}${pctVsAvg90.toFixed(1)}%と同様に${pctVsAvg90 >= 0 ? "プラス" : "マイナス"}方向で推移しており、短期的な一時的な動きというより、ある程度の期間をかけて価格が${judgment === "割高" ? "切り上がって" : judgment === "割安" ? "落ち着いて" : "安定して"}きた可能性があります。`
+    ? `90日平均比でも${pctVsAvg90 > 0 ? "+" : ""}${pctVsAvg90.toFixed(1)}%と同様に${pctVsAvg90 >= 0 ? "プラス" : "マイナス"}方向で推移しており、短期的な一時的な動きというより、ある程度の期間をかけて価格が${trend90Verb}きた可能性があります。`
     : `一方で90日平均比では${pctVsAvg90 > 0 ? "+" : ""}${pctVsAvg90.toFixed(1)}%と逆方向になっており、直近の値動きと中期的なトレンドの方向感が一致していません。短期的な変動の可能性もあるため注意が必要です。`;
 
   const advice =

@@ -30,4 +30,6 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 
 | `fix_avg_window_bug.mjs` | 2026-09-11発見：avg30/avg90が「直近30/90件のスナップショット」を「直近30/90日」の代わりに使っていたバグ（`src/lib/priceStats.ts`の`computeStats`に集約・修正済み）の、既存カードへの一括再計算。カレンダー日付で日数を判定し直し、`data_quality='real'`の844件のうち438件（うち230件は割安/割高/適正の判定自体が変わっていた）を修正。`--apply`なしはdry-run | 再実行不要（既に実行済み）。同種のバグが再発した場合の修正テンプレートとして使える。`node --experimental-strip-types migration/fix_avg_window_bug.mjs --apply` で実行（`verify_pnl_logic.mjs`と同じNode 24の型ストリッピング機能を使用） |
 
+| `fix_verdict_wording.mjs` | 2026-09-11発見：`buildVerdictText()`（`src/lib/ai-verdict.ts`）の90日トレンド文の動詞（切り上がって/落ち着いて/安定して）が、90日平均比自体の大きさではなく30日ベースの`judgment`から選ばれていたため、「judgment='適正'だが90日平均比は+44.7%」のようなカードで「価格が安定してきた」という数値と矛盾する文言になっていた。動詞選択を`pctVsAvg90`自体の大きさ基準に修正し、既存844件のai_verdict_textを再生成（204件が変化） | 再実行不要（既に実行済み）。ロジック側は修正済みなので、日次cronの通常実行では常に正しい文言が生成される |
+
 `cards_export/` は移行元のArtifact DBのスナップショット（379件のJSON）。移行元がもう存在しないため、参考記録として残してある。
