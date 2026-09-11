@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import CompareClient from "@/components/CompareClient";
+import type { Judgment, DataQuality } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "比較",
@@ -20,10 +21,35 @@ export default async function ComparePage() {
   }
 
   const supabase = await createClient();
-  const { data: cards } = await supabase
-    .from("cards")
-    .select("id, name, rarity, set_name, current_price, pct_vs_avg30, judgment")
-    .order("name");
+
+  // Supabase/PostgREST caps a single select() at 1000 rows by default; the
+  // catalog passed 1000 cards in the 2026-09-11 expansion (3,270 total), so
+  // this must page through results or the comparison picker silently loses
+  // roughly two-thirds of the catalog.
+  let cards: {
+    id: string;
+    name: string;
+    rarity: string;
+    set_name: string | null;
+    current_price: number | null;
+    pct_vs_avg30: number | null;
+    judgment: Judgment | null;
+    data_quality: DataQuality | null;
+  }[] = [];
+  {
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("cards")
+        .select("id, name, rarity, set_name, current_price, pct_vs_avg30, judgment, data_quality")
+        .order("name")
+        .range(from, from + pageSize - 1);
+      cards = cards.concat(data ?? []);
+      if (!data || data.length < pageSize) break;
+      from += pageSize;
+    }
+  }
 
   return (
     <div>

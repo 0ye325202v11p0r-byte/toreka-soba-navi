@@ -31,9 +31,8 @@ export default async function SyncStatusPage() {
     .limit(30);
 
   const latest = runs?.[0];
-  const now = Date.now();
   const hoursSinceLastRun = latest
-    ? (now - new Date(latest.started_at).getTime()) / 1000 / 60 / 60
+    ? (new Date().getTime() - new Date(latest.started_at).getTime()) / 1000 / 60 / 60
     : null;
   const isStale = hoursSinceLastRun !== null && hoursSinceLastRun > 30; // daily job, allow slack
 

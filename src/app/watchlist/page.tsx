@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import WatchlistClient from "@/components/WatchlistClient";
 import SetupNotice from "@/components/SetupNotice";
+import type { DataQuality } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "ウォッチリスト",
@@ -27,13 +28,41 @@ export default async function WatchlistPage() {
 
   if (!user) redirect("/login");
 
-  const [{ data: items }, { data: cards }] = await Promise.all([
+  // Supabase/PostgREST caps a single select() at 1000 rows by default; the
+  // catalog passed 1000 cards in the 2026-09-11 expansion (3,270 total), so
+  // the cards list must page through results or the picker silently loses
+  // roughly two-thirds of the catalog.
+  async function fetchAllCards() {
+    let all: {
+      id: string;
+      name: string;
+      rarity: string;
+      set_name: string | null;
+      pct_vs_avg30: number | null;
+      data_quality: DataQuality | null;
+    }[] = [];
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data } = await supabase
+        .from("cards")
+        .select("id, name, rarity, set_name, pct_vs_avg30, data_quality")
+        .order("name")
+        .range(from, from + pageSize - 1);
+      all = all.concat(data ?? []);
+      if (!data || data.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }
+
+  const [{ data: items }, cards] = await Promise.all([
     supabase
       .from("watchlist_items")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
-    supabase.from("cards").select("id, name, rarity, set_name, pct_vs_avg30").order("name"),
+    fetchAllCards(),
   ]);
 
   return (

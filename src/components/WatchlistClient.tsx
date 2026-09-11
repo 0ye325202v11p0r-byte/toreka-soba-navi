@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { pct } from "@/lib/format";
-import type { WatchlistItem } from "@/lib/types";
+import { pct, dataQualityLabel } from "@/lib/format";
+import type { WatchlistItem, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
 interface CardOption {
@@ -13,6 +13,7 @@ interface CardOption {
   rarity: string;
   set_name: string | null;
   pct_vs_avg30: number | null;
+  data_quality: DataQuality | null;
 }
 
 export default function WatchlistClient({
@@ -31,6 +32,8 @@ export default function WatchlistClient({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
+  const selectedCard = cardById.get(cardId);
+  const selectedIsUntracked = selectedCard?.data_quality === "partial";
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
@@ -75,41 +78,49 @@ export default function WatchlistClient({
         <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
       )}
 
-      <form onSubmit={addItem} className="mb-6 flex flex-wrap items-end gap-2 rounded-lg border border-border bg-bg-elevated p-4">
-        <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
-        <div>
-          <label htmlFor="watch-op" className="mb-1 block text-xs text-ink-muted">
-            条件
-          </label>
-          <select
-            id="watch-op"
-            value={op}
-            onChange={(e) => setOp(e.target.value as "lte" | "gte")}
-            className="rounded-md border border-border bg-bg px-2 py-1.5"
+      <form onSubmit={addItem} className="mb-6 rounded-lg border border-border bg-bg-elevated p-4">
+        <div className="flex flex-wrap items-end gap-2">
+          <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
+          <div>
+            <label htmlFor="watch-op" className="mb-1 block text-xs text-ink-muted">
+              条件
+            </label>
+            <select
+              id="watch-op"
+              value={op}
+              onChange={(e) => setOp(e.target.value as "lte" | "gte")}
+              className="rounded-md border border-border bg-bg px-2 py-1.5"
+            >
+              <option value="lte">30日平均比 以下</option>
+              <option value="gte">30日平均比 以上</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="watch-value" className="mb-1 block text-xs text-ink-muted">
+              %値
+            </label>
+            <input
+              id="watch-value"
+              type="number"
+              value={value}
+              onChange={(e) => setValue(Number(e.target.value))}
+              className="w-24 rounded-md border border-border bg-bg px-2 py-1.5"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
           >
-            <option value="lte">30日平均比 以下</option>
-            <option value="gte">30日平均比 以上</option>
-          </select>
+            追加
+          </button>
         </div>
-        <div>
-          <label htmlFor="watch-value" className="mb-1 block text-xs text-ink-muted">
-            %値
-          </label>
-          <input
-            id="watch-value"
-            type="number"
-            value={value}
-            onChange={(e) => setValue(Number(e.target.value))}
-            className="w-24 rounded-md border border-border bg-bg px-2 py-1.5"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
-        >
-          追加
-        </button>
+        {selectedIsUntracked && (
+          <p className="mt-2 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">
+            ⚠️ {dataQualityLabel(selectedCard?.data_quality ?? null).label}
+            のカードです。1店舗の単発価格のみで自動更新の対象外のため、この条件は現時点では成立しません（判定に使う30日平均比が算出できないため）。
+          </p>
+        )}
       </form>
 
       <div className="space-y-2">
@@ -129,6 +140,11 @@ export default function WatchlistClient({
                   条件：30日平均比 {item.alert_rule.op === "lte" ? "以下" : "以上"} {item.alert_rule.value}%
                   （現在 {pct(card?.pct_vs_avg30)}）
                 </div>
+                {card?.data_quality === "partial" && (
+                  <div className="mt-1 text-xs text-warn">
+                    ⚠️ 自動更新対象外のカードのため、この条件は成立しません
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => removeItem(item.id)}

@@ -1,12 +1,15 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
+import { dataQualityLabel } from "@/lib/format";
+import type { DataQuality } from "@/lib/types";
 
 interface CardOption {
   id: string;
   name: string;
   rarity: string;
   set_name?: string | null;
+  data_quality?: DataQuality | null;
 }
 
 export default function CardPicker({
@@ -50,6 +53,12 @@ export default function CardPicker({
         placeholder="カード名で検索"
         className="w-full rounded-md border border-border bg-bg px-2 py-1.5"
       />
+      {!open && selected && selected.data_quality && selected.data_quality !== "real" && (
+        <p className={`mt-1 rounded px-1.5 py-0.5 text-[11px] ${dataQualityLabel(selected.data_quality).cls}`}>
+          {dataQualityLabel(selected.data_quality).label}
+          {selected.data_quality === "partial" && "（価格は自動更新されません）"}
+        </p>
+      )}
       {open && (
         <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-border bg-bg-elevated shadow-lg">
           {matches.length === 0 && (
@@ -63,9 +72,16 @@ export default function CardPicker({
                 onChange(c.id);
                 setOpen(false);
               }}
-              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-bg-sunken"
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-bg-sunken"
             >
-              {c.name}（{c.rarity}・{c.set_name}）
+              <span className="flex-1">
+                {c.name}（{c.rarity}・{c.set_name}）
+              </span>
+              {c.data_quality && c.data_quality !== "real" && (
+                <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${dataQualityLabel(c.data_quality).cls}`}>
+                  {dataQualityLabel(c.data_quality).label}
+                </span>
+              )}
             </button>
           ))}
         </div>

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { yen, pct, judgmentClasses } from "@/lib/format";
-import type { PriceSnapshot, Judgment } from "@/lib/types";
+import { yen, pct, judgmentClasses, dataQualityLabel } from "@/lib/format";
+import type { PriceSnapshot, Judgment, DataQuality } from "@/lib/types";
 
 interface CardOption {
   id: string;
@@ -13,6 +13,7 @@ interface CardOption {
   current_price: number | null;
   pct_vs_avg30: number | null;
   judgment: Judgment | null;
+  data_quality: DataQuality | null;
 }
 
 const LINE_COLORS = ["#a9741f", "#2e6da4", "#1f6e52", "#a2431f", "#7b4fa0"];
@@ -104,6 +105,11 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
             <span className="flex-1">
               {c.name}（{c.rarity}・{c.set_name}）
             </span>
+            {c.data_quality !== "real" && (
+              <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${dataQualityLabel(c.data_quality).cls}`}>
+                {dataQualityLabel(c.data_quality).label}
+              </span>
+            )}
             <span className="font-mono text-ink-muted">{yen(c.current_price)}</span>
           </label>
         ))}

@@ -15,9 +15,12 @@ const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
   pct_asc: (a, b) => (a.pct_vs_avg30 ?? 0) - (b.pct_vs_avg30 ?? 0),
 };
 
+type QualityFilter = "all" | "real" | "partial";
+
 export default function MarketTable({ cards }: { cards: Card[] }) {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [qualityFilter, setQualityFilter] = useState<QualityFilter>("all");
 
   const setNames = useMemo(
     () => Array.from(new Set(cards.map((c) => c.set_name).filter(Boolean))).sort((a, b) =>
@@ -36,8 +39,13 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
     if (setFilter) {
       list = list.filter((c) => c.set_name === setFilter);
     }
+    if (qualityFilter === "real") {
+      list = list.filter((c) => c.data_quality === "real");
+    } else if (qualityFilter === "partial") {
+      list = list.filter((c) => c.data_quality === "partial");
+    }
     return [...list].sort(SORTERS[sortKey]);
-  }, [cards, query, setFilter, sortKey]);
+  }, [cards, query, setFilter, sortKey, qualityFilter]);
 
   return (
     <div>
@@ -75,9 +83,26 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
           <option value="pct_desc">30日平均比が高い順（急騰順）</option>
           <option value="pct_asc">30日平均比が低い順（急落順）</option>
         </select>
+        <select
+          aria-label="データ品質で絞り込み"
+          value={qualityFilter}
+          onChange={(e) => setQualityFilter(e.target.value as QualityFilter)}
+          className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm"
+        >
+          <option value="all">データ品質：すべて</option>
+          <option value="real">実測データのみ（判定・平均あり）</option>
+          <option value="partial">参考値のみ（遊々亭・1店舗単発）</option>
+        </select>
       </div>
 
-      <div className="mb-2 text-xs text-ink-faint">{visible.length}件表示</div>
+      <div className="mb-2 text-xs text-ink-faint">
+        {visible.length}件表示
+        {qualityFilter === "all" && (
+          <span className="ml-1">
+            （うち実測データ{visible.filter((c) => c.data_quality === "real").length}件）
+          </span>
+        )}
+      </div>
 
       {/* mobile: stacked cards (a 6-column table doesn't fit a phone screen) */}
       <div className="space-y-2 sm:hidden">
