@@ -75,8 +75,8 @@ export function dataQualityLabel(quality: string | null | undefined): {
 // scope ("not auto-updated by design") and avoid claiming success/freshness
 // or an absolute "will never happen" outcome.
 export function isAutoTracked(card: {
-  data_quality: string | null | undefined;
-  source_url: string | null | undefined;
+  data_quality?: string | null;
+  source_url?: string | null;
 }): boolean {
   return card.data_quality === "real" && card.source_url != null;
 }

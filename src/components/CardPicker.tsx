@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { dataQualityLabel } from "@/lib/format";
+import { dataQualityLabel, isAutoTracked } from "@/lib/format";
 import type { DataQuality } from "@/lib/types";
 
 interface CardOption {
@@ -10,6 +10,7 @@ interface CardOption {
   rarity: string;
   set_name?: string | null;
   data_quality?: DataQuality | null;
+  source_url?: string | null;
 }
 
 export default function CardPicker({
@@ -99,7 +100,14 @@ export default function CardPicker({
       {!open && selected && selected.data_quality && selected.data_quality !== "real" && (
         <p className={`mt-1 rounded px-1.5 py-0.5 text-[11px] ${dataQualityLabel(selected.data_quality).cls}`}>
           {dataQualityLabel(selected.data_quality).label}
-          {selected.data_quality === "partial" && "（価格は自動更新されません）"}
+          {/* Not "=== 'partial'" — any non-auto-tracked card (partial OR
+              flat) never gets its price refreshed. Checking only "partial"
+              here silently dropped this note for 'flat' cards, the same
+              bug class fixed in PortfolioClient/WatchlistClient's own
+              warnings (UX review follow-up, 2026-09-12) — caught late
+              because this component has its own separate copy of the
+              check. */}
+          {!isAutoTracked(selected) && "（価格は自動更新されません）"}
         </p>
       )}
       {open && (

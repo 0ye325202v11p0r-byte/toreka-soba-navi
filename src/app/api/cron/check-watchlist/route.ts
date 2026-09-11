@@ -55,10 +55,15 @@ function conditionMet(
   card: { pctVsAvg30: number | null; currentPrice: number | null }
 ): boolean {
   if (rule.type === "pct_vs_avg30") {
-    // partial-quality cards (single-shop reference price, no tracked
-    // history) never have a pct_vs_avg30 — there is nothing to evaluate the
-    // condition against, so it simply never fires for those. This mirrors
-    // the warning already shown in WatchlistClient when registering one.
+    // Cards the daily refresh-prices cron doesn't auto-track (data_quality
+    // 'partial' or 'flat' — see isAutoTracked() in src/lib/format.ts) never
+    // have a pct_vs_avg30 computed, regardless of which of those two
+    // applies. Checking the actual value's nullness here (rather than
+    // re-deriving "is this trackable" from data_quality) means this
+    // doesn't need to enumerate every quality tier to stay correct — there
+    // is simply nothing to evaluate the condition against, so it never
+    // fires. This mirrors the warning already shown in WatchlistClient
+    // when registering one.
     if (card.pctVsAvg30 === null) return false;
     return rule.op === "lte" ? card.pctVsAvg30 <= rule.value : card.pctVsAvg30 >= rule.value;
   }
