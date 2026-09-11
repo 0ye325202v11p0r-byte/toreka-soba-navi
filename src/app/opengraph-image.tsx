@@ -36,8 +36,11 @@ export default function OpengraphImage() {
           ¥
         </div>
         <div style={{ display: "flex", fontSize: 64, fontWeight: 700, color: "#1e2a38" }}>トレカ相場ナビ</div>
+        {/* see layout.tsx's SITE_DESCRIPTION comment: "実測相場を毎日追跡"
+            overclaimed for the 74% single-shop/never-updated part of the
+            catalog (fixed 2026-09-12) */}
         <div style={{ display: "flex", fontSize: 32, color: "#63625a", marginTop: 16 }}>
-          ONE PIECEカードゲームの実測相場を毎日追跡
+          ONE PIECEカードゲームの価格情報サイト
         </div>
       </div>
     ),

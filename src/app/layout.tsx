@@ -6,8 +6,14 @@ import Footer from "@/components/Footer";
 import { SITE_URL } from "@/lib/site";
 
 const SITE_NAME = "トレカ相場ナビ";
+// "実測相場を毎日追跡" (previously here, and in manifest.ts /
+// opengraph-image.tsx) overclaimed for the 74% of the catalog that's a
+// single-shop reference price, never auto-updated — not a multi-shop
+// average tracked daily. Fixed everywhere that phrase appeared after a
+// direct question about whether it was honest (2026-09-12); see
+// COORDINATION.md for the full audit.
 const SITE_DESCRIPTION =
-  "ONE PIECEカードゲームの実測相場を毎日追跡。保有カードの含み損益・実現損益を自動計算するポートフォリオ、価格変動を知らせるウォッチリスト、複数カード比較も無料で使えます。";
+  "ONE PIECEカードゲームの価格情報サイト。複数店舗の平均価格を毎日追跡する実測データと、店頭の参考価格をデータ品質表示付きで掲載。保有カードの含み損益・実現損益を自動計算するポートフォリオ、価格変動を知らせるウォッチリスト、複数カード比較も無料で使えます。";
 
 // tints mobile browser chrome (e.g. Android Chrome's address bar) with the
 // brand color, matching --accent / --bg from globals.css per color scheme

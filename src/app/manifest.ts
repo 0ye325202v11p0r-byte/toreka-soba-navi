@@ -4,7 +4,10 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "トレカ相場ナビ",
     short_name: "トレカ相場ナビ",
-    description: "ONE PIECEカードゲームの実測相場を毎日追跡。",
+    // see layout.tsx's SITE_DESCRIPTION comment: "実測相場を毎日追跡"
+    // overclaimed for the 74% single-shop/never-updated part of the
+    // catalog (fixed 2026-09-12)
+    description: "ONE PIECEカードゲームの価格情報サイト（実測データと参考価格をデータ品質表示付きで掲載）。",
     start_url: "/",
     display: "standalone",
     background_color: "#efe7d2",
