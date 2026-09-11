@@ -139,14 +139,35 @@ async function fetchCard(url) {
   return { ok: true, ...parsed };
 }
 
+// Supabase/PostgREST caps a single select() at 1000 rows by default. Once
+// the catalog passed 1000 cards, an unpaginated fetch here would silently
+// return only a subset of existing rows, corrupting both the dedup check
+// and the next-id counter (see the identical bug fixed in
+// scrape_yuyutei.mjs on 2026-09-11 for the full story).
+async function fetchAllCards() {
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select("id, card_number, rarity")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 async function main() {
   const raw = readFileSync(new URL("./new_candidates.json", import.meta.url), "utf-8").replace(/^﻿/, "");
   const allCandidates = JSON.parse(raw);
   const candidates = allCandidates.slice(START, START + LIMIT);
   log(`starting run: ${candidates.length} candidates (start=${START}, limit=${LIMIT}), total in file=${allCandidates.length}`);
 
-  const { data: existing, error: idErr } = await supabase.from("cards").select("id, card_number, rarity");
-  if (idErr) throw idErr;
+  const existing = await fetchAllCards();
   const nums = existing.map((c) => parseInt(c.id.replace("c", ""), 10)).filter((n) => !isNaN(n));
   let nextId = Math.max(...nums) + 1;
   const existingKeys = new Set(existing.map((c) => `${(c.card_number ?? "").toUpperCase()}|${c.rarity}`));

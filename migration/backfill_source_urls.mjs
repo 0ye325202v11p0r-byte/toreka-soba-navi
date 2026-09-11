@@ -73,11 +73,28 @@ const RARITY_CODE = {
 // extra trailing suffix ("-R", "-G", "-TEAM", "-1", ...) is skipped.
 const STANDARD_CARD_NUMBER = /^[A-Z]{1,4}\d{1,3}-\d{2,3}$/;
 
+// Supabase/PostgREST caps a single select() at 1000 rows by default; the
+// catalog passed 1000 cards in the 2026-09-11 expansion, so this must
+// paginate or it will silently skip real cards past row 1000.
+async function fetchAllCards() {
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select("id, set_name, rarity, card_number")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 async function main() {
-  const { data: cards, error } = await supabase
-    .from("cards")
-    .select("id, set_name, rarity, card_number");
-  if (error) throw error;
+  const cards = await fetchAllCards();
 
   let updated = 0;
   let skippedNoSlug = 0;

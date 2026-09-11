@@ -23,11 +23,32 @@ export default async function MarketListPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const { data: cards, error } = await supabase
-    .from("cards")
-    .select("*")
-    .order("name", { ascending: true })
-    .limit(500);
+
+  // Supabase/PostgREST caps a single select() at 1000 rows by default. The
+  // catalog passed 1000 cards in the 2026-09-11 expansion (2,622 total) —
+  // an unpaginated or under-limited query here would silently hide most of
+  // the catalog from the market list and its client-side search/filter
+  // (both operate only on whatever rows this query returns).
+  let cards: Card[] = [];
+  let error: { message: string } | null = null;
+  {
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error: pageErr } = await supabase
+        .from("cards")
+        .select("*")
+        .order("name", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (pageErr) {
+        error = pageErr;
+        break;
+      }
+      cards = cards.concat((data ?? []) as Card[]);
+      if (!data || data.length < pageSize) break;
+      from += pageSize;
+    }
+  }
 
   return (
     <div>

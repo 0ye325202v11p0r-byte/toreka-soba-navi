@@ -70,12 +70,29 @@ while ((m = re.exec(xml))) {
 }
 console.error(`total sitemap card URLs: ${allUrls.length}`);
 
+// Supabase/PostgREST caps a single select() at 1000 rows by default; the
+// catalog passed 1000 cards during this exact expansion, so this must
+// paginate or it will silently miss real existing cards past row 1000.
+async function fetchAllExisting() {
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select("card_number, rarity")
+      .not("card_number", "is", null)
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 async function main() {
-  const { data: existing, error } = await supabase
-    .from("cards")
-    .select("card_number, rarity")
-    .not("card_number", "is", null);
-  if (error) throw error;
+  const existing = await fetchAllExisting();
   const existingSet = new Set(existing.map((c) => `${c.card_number.toUpperCase()}|${c.rarity}`));
 
   const candidates = [];

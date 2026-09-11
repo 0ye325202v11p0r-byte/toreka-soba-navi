@@ -66,6 +66,31 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Supabase/PostgREST caps a single select() at 1000 rows by default. Once
+// the catalog passed 1000 cards (during this exact expansion), an
+// unpaginated fetch here silently returned only a subset of existing
+// (id, card_number, rarity) rows — corrupting both the dedup check (missed
+// real duplicates) and the next-id counter (collided with real ids),
+// causing an entire scrape run to fail every single insert on a primary-key
+// conflict. Postgres's PK constraint rejected every bad write, so no data
+// was corrupted, but paginate properly so future runs actually insert.
+async function fetchAllCards() {
+  const pageSize = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("cards")
+      .select("id, card_number, rarity")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 function decodeHtmlEntities(str) {
   return str
     .replace(/&amp;/g, "&")
@@ -132,8 +157,7 @@ function parseSetPage(html) {
 async function main() {
   log(`starting yuyu-tei scrape: sets=${SETS.join(",")} dry-run=${DRY_RUN}`);
 
-  const { data: existing, error: idErr } = await supabase.from("cards").select("id, card_number, rarity");
-  if (idErr) throw idErr;
+  const existing = await fetchAllCards();
   const nums = existing.map((c) => parseInt(c.id.replace("c", ""), 10)).filter((n) => !isNaN(n));
   let nextId = Math.max(...nums) + 1;
   const existingKeys = new Set(existing.map((c) => `${(c.card_number ?? "").toUpperCase()}|${c.rarity}`));
