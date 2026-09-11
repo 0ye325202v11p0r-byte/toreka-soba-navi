@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { pct, yen, dataQualityLabel } from "@/lib/format";
+import { canSubmitWatchItem } from "@/lib/formValidation";
 import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -39,7 +40,9 @@ export default function WatchlistClient({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [cardId, setCardId] = useState(cards[0]?.id ?? "");
+  // Starts unselected (not cards[0]) — see PortfolioClient.tsx's cardId
+  // for the same fix and rationale (UX review, 2026-09-12).
+  const [cardId, setCardId] = useState("");
   const [ruleType, setRuleType] = useState<WatchlistAlertRule["type"]>("pct_vs_avg30");
   const [op, setOp] = useState<"lte" | "gte">("lte");
   const [value, setValue] = useState(-15);
@@ -56,7 +59,17 @@ export default function WatchlistClient({
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!cardId) return;
+    // Re-checks the same rule the submit button's disabled= already
+    // enforces — belt and suspenders against implicit form submission
+    // bypassing a disabled button.
+    if (!cardId) {
+      setErrorMsg("カードを選択してください。");
+      return;
+    }
+    if (!cardById.has(cardId)) {
+      setErrorMsg("選択したカードが見つかりません。カードを選択し直してください。");
+      return;
+    }
     setBusy(true);
     setErrorMsg(null);
     const {
@@ -149,12 +162,15 @@ export default function WatchlistClient({
           </div>
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !canSubmitWatchItem({ cardId, isKnownCard: cardById.has(cardId) })}
             className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
           >
             追加
           </button>
         </div>
+        {!cardId && (
+          <p className="mt-2 text-xs text-ink-faint">まずカードを選択してください。</p>
+        )}
         {selectedIsUntracked && (
           <p className="mt-2 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">
             ⚠️ {dataQualityLabel(selectedCard?.data_quality ?? null).label}

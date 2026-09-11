@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { yen, dataQualityLabel } from "@/lib/format";
+import { canSubmitTransaction } from "@/lib/formValidation";
 import type { Transaction, TransactionType, PnlSummary, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -27,7 +28,12 @@ export default function PortfolioClient({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [cardId, setCardId] = useState(cards[0]?.id ?? "");
+  // Starts unselected (not cards[0]) — defaulting to an arbitrary real card
+  // let a user who never touched the CardPicker submit a transaction for a
+  // card they never chose, since the closed picker showed that card's name
+  // indistinguishably from a deliberate selection (found in UX review,
+  // 2026-09-12).
+  const [cardId, setCardId] = useState("");
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState(1);
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
@@ -46,7 +52,19 @@ export default function PortfolioClient({
 
   async function addTransaction(e: React.FormEvent) {
     e.preventDefault();
-    if (!cardId || pricePerUnit === "" || quantity < 1) return;
+    // Re-checks the same rule the submit button's disabled= already
+    // enforces — belt and suspenders against implicit form submission
+    // (e.g. Enter in the quantity/price/date fields) bypassing a disabled
+    // button.
+    if (!cardId) {
+      setErrorMsg("カードを選択してください。");
+      return;
+    }
+    if (!cardById.has(cardId)) {
+      setErrorMsg("選択したカードが見つかりません。カードを選択し直してください。");
+      return;
+    }
+    if (!canSubmitTransaction({ cardId, isKnownCard: true, pricePerUnit, quantity })) return;
     setBusy(true);
     setErrorMsg(null);
     const {
@@ -158,11 +176,17 @@ export default function PortfolioClient({
         </div>
         <button
           type="submit"
-          disabled={busy}
+          disabled={
+            busy ||
+            !canSubmitTransaction({ cardId, isKnownCard: cardById.has(cardId), pricePerUnit, quantity })
+          }
           className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
         >
           記録する
         </button>
+        {!cardId && (
+          <p className="w-full text-xs text-ink-faint">まずカードを選択してください。</p>
+        )}
       </form>
 
       <h2 className="mb-2 text-sm font-semibold text-ink-muted">保有中</h2>
