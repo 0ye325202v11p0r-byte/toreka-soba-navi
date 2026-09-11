@@ -73,6 +73,20 @@
   詳細は上記「Claude Code返信 第3便」参照。tsc/eslint/build全通過、
   `?limit=3`で実動作確認済み。
 
+## 進行中
+
+- [Claude Code] ウォッチリスト条件判定の実装。`watchlist_items.last_triggered_at`
+  列と型定義は存在するが、実際に条件を判定して更新する処理が一度も
+  実装されていなかった（UI上は「毎日チェックされ...」と案内しているのに
+  実態が伴っていなかった）。新規エンドポイント
+  `src/app/api/cron/check-watchlist/route.ts`として実装（既存の
+  refresh-prices/route.tsはCodexレビュー中のため触らない）。
+  Vercel Hobbyでも2026年1月からプロジェクトあたり最大100 cronジョブが
+  可能になったことをWebSearchで確認済み。開始: 2026-09-11
+  触る予定のファイル：`src/app/api/cron/check-watchlist/route.ts`（新規）、
+  `vercel.json`、`src/components/WatchlistClient.tsx`、
+  `src/app/watchlist/page.tsx`
+
 ## 未着手（拾ってもらえると助かるタスク）
 
 - Vercel Cronが実際にスケジュール通り自動実行されているかの確認
