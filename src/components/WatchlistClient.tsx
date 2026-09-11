@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { pct, dataQualityLabel } from "@/lib/format";
-import type { WatchlistItem, DataQuality } from "@/lib/types";
+import { pct, yen, dataQualityLabel } from "@/lib/format";
+import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
 interface CardOption {
@@ -13,7 +13,21 @@ interface CardOption {
   rarity: string;
   set_name: string | null;
   pct_vs_avg30: number | null;
+  current_price: number | null;
   data_quality: DataQuality | null;
+}
+
+function ruleLabel(rule: WatchlistAlertRule): string {
+  const opLabel = rule.op === "lte" ? "以下" : "以上";
+  return rule.type === "pct_vs_avg30"
+    ? `30日平均比 ${opLabel} ${rule.value}%`
+    : `価格 ${opLabel} ${yen(rule.value)}`;
+}
+
+function ruleIsMet(rule: WatchlistAlertRule, card: CardOption | undefined): boolean {
+  const current = rule.type === "pct_vs_avg30" ? card?.pct_vs_avg30 : card?.current_price;
+  if (current === null || current === undefined) return false;
+  return rule.op === "lte" ? current <= rule.value : current >= rule.value;
 }
 
 export default function WatchlistClient({
@@ -26,6 +40,7 @@ export default function WatchlistClient({
   const router = useRouter();
   const supabase = createClient();
   const [cardId, setCardId] = useState(cards[0]?.id ?? "");
+  const [ruleType, setRuleType] = useState<WatchlistAlertRule["type"]>("pct_vs_avg30");
   const [op, setOp] = useState<"lte" | "gte">("lte");
   const [value, setValue] = useState(-15);
   const [busy, setBusy] = useState(false);
@@ -33,7 +48,11 @@ export default function WatchlistClient({
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const selectedCard = cardById.get(cardId);
-  const selectedIsUntracked = selectedCard?.data_quality === "partial";
+  // pct_vs_avg30-based conditions need tracked history, which
+  // data_quality: 'partial' cards (single-shop reference price) don't have.
+  // Price-based conditions work for any card since current_price is always
+  // populated, so the warning only applies to the pct_vs_avg30 rule type.
+  const selectedIsUntracked = ruleType === "pct_vs_avg30" && selectedCard?.data_quality === "partial";
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
@@ -51,7 +70,7 @@ export default function WatchlistClient({
     const { error } = await supabase.from("watchlist_items").insert({
       user_id: user.id,
       card_id: cardId,
-      alert_rule: { type: "pct_vs_avg30", op, value },
+      alert_rule: { type: ruleType, op, value } as WatchlistAlertRule,
     });
     setBusy(false);
     if (error) {
@@ -82,6 +101,27 @@ export default function WatchlistClient({
         <div className="flex flex-wrap items-end gap-2">
           <CardPicker cards={cards} value={cardId} onChange={setCardId} label="カード" />
           <div>
+            <label htmlFor="watch-type" className="mb-1 block text-xs text-ink-muted">
+              基準
+            </label>
+            <select
+              id="watch-type"
+              value={ruleType}
+              onChange={(e) => {
+                const next = e.target.value as WatchlistAlertRule["type"];
+                setRuleType(next);
+                // -15(%) is a sane default for pct_vs_avg30 but not for a yen
+                // amount — reset to the selected card's current price so
+                // switching to "価格" doesn't leave a nonsense value behind.
+                setValue(next === "price" ? selectedCard?.current_price ?? 0 : -15);
+              }}
+              className="rounded-md border border-border bg-bg px-2 py-1.5"
+            >
+              <option value="pct_vs_avg30">30日平均比</option>
+              <option value="price">価格</option>
+            </select>
+          </div>
+          <div>
             <label htmlFor="watch-op" className="mb-1 block text-xs text-ink-muted">
               条件
             </label>
@@ -91,13 +131,13 @@ export default function WatchlistClient({
               onChange={(e) => setOp(e.target.value as "lte" | "gte")}
               className="rounded-md border border-border bg-bg px-2 py-1.5"
             >
-              <option value="lte">30日平均比 以下</option>
-              <option value="gte">30日平均比 以上</option>
+              <option value="lte">以下</option>
+              <option value="gte">以上</option>
             </select>
           </div>
           <div>
             <label htmlFor="watch-value" className="mb-1 block text-xs text-ink-muted">
-              %値
+              {ruleType === "price" ? "価格（円）" : "%値"}
             </label>
             <input
               id="watch-value"
@@ -129,10 +169,10 @@ export default function WatchlistClient({
         )}
         {initialItems.map((item) => {
           const card = cardById.get(item.card_id);
-          const pctNow = card?.pct_vs_avg30 ?? null;
-          const isCurrentlyMet =
-            pctNow !== null &&
-            (item.alert_rule.op === "lte" ? pctNow <= item.alert_rule.value : pctNow >= item.alert_rule.value);
+          const isCurrentlyMet = ruleIsMet(item.alert_rule, card);
+          // pct_vs_avg30 rules can't ever fire for a partial-quality card
+          // (no tracked history); price rules work for any card.
+          const cannotFire = item.alert_rule.type === "pct_vs_avg30" && card?.data_quality === "partial";
           return (
             <div
               key={item.id}
@@ -148,15 +188,19 @@ export default function WatchlistClient({
                   )}
                 </div>
                 <div className="text-xs text-ink-muted">
-                  条件：30日平均比 {item.alert_rule.op === "lte" ? "以下" : "以上"} {item.alert_rule.value}%
-                  （現在 {pct(card?.pct_vs_avg30)}）
+                  条件：{ruleLabel(item.alert_rule)}
+                  （現在
+                  {item.alert_rule.type === "pct_vs_avg30"
+                    ? ` ${pct(card?.pct_vs_avg30)}`
+                    : ` ${yen(card?.current_price)}`}
+                  ）
                 </div>
                 {item.last_triggered_at && (
                   <div className="mt-0.5 text-xs text-ink-faint">
                     最終確認で成立：{new Date(item.last_triggered_at).toLocaleString("ja-JP")}
                   </div>
                 )}
-                {card?.data_quality === "partial" && (
+                {cannotFire && (
                   <div className="mt-1 text-xs text-warn">
                     ⚠️ 自動更新対象外のカードのため、この条件は成立しません
                   </div>

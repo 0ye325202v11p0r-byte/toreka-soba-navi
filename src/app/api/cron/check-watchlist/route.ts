@@ -29,14 +29,24 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
-function conditionMet(rule: WatchlistAlertRule, pctVsAvg30: number | null): boolean {
-  // partial-quality cards (single-shop reference price, no tracked
-  // history) never have a pct_vs_avg30 — there is nothing to evaluate the
-  // condition against, so it simply never fires for those. This mirrors
-  // the warning already shown in WatchlistClient when registering one.
-  if (pctVsAvg30 === null) return false;
-  if (rule.type !== "pct_vs_avg30") return false;
-  return rule.op === "lte" ? pctVsAvg30 <= rule.value : pctVsAvg30 >= rule.value;
+function conditionMet(
+  rule: WatchlistAlertRule,
+  card: { pctVsAvg30: number | null; currentPrice: number | null }
+): boolean {
+  if (rule.type === "pct_vs_avg30") {
+    // partial-quality cards (single-shop reference price, no tracked
+    // history) never have a pct_vs_avg30 — there is nothing to evaluate the
+    // condition against, so it simply never fires for those. This mirrors
+    // the warning already shown in WatchlistClient when registering one.
+    if (card.pctVsAvg30 === null) return false;
+    return rule.op === "lte" ? card.pctVsAvg30 <= rule.value : card.pctVsAvg30 >= rule.value;
+  }
+  // "price": works for every card regardless of data_quality, since
+  // current_price is always populated (even partial-quality cards have a
+  // single reference price) — unlike pct_vs_avg30 this doesn't need
+  // tracked history.
+  if (card.currentPrice === null) return false;
+  return rule.op === "lte" ? card.currentPrice <= rule.value : card.currentPrice >= rule.value;
 }
 
 export async function GET(request: Request) {
@@ -80,21 +90,24 @@ export async function GET(request: Request) {
   // the whole cards table — a watchlist realistically references far fewer
   // cards than the full catalog.
   const cardIds = Array.from(new Set(items.map((i) => i.card_id)));
-  const pctByCardId = new Map<string, number | null>();
+  const cardById = new Map<string, { pctVsAvg30: number | null; currentPrice: number | null }>();
   {
     const pageSize = 1000; // cardIds is a Set of unique watchlist targets — chunk .in() calls at the same page size for consistency, even though it will rarely exceed one page in practice
     for (let i = 0; i < cardIds.length; i += pageSize) {
       const chunk = cardIds.slice(i, i + pageSize);
       const { data, error } = await supabase
         .from("cards")
-        .select("id, pct_vs_avg30")
+        .select("id, pct_vs_avg30, current_price")
         .in("id", chunk)
         .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
       if (error) {
         return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
       }
       for (const c of data ?? []) {
-        pctByCardId.set(c.id, c.pct_vs_avg30 === null ? null : Number(c.pct_vs_avg30));
+        cardById.set(c.id, {
+          pctVsAvg30: c.pct_vs_avg30 === null ? null : Number(c.pct_vs_avg30),
+          currentPrice: c.current_price === null ? null : Number(c.current_price),
+        });
       }
     }
   }
@@ -103,8 +116,8 @@ export async function GET(request: Request) {
   let triggered = 0;
   let updateFailed = 0;
   for (const item of items) {
-    const pct = pctByCardId.get(item.card_id) ?? null;
-    if (!conditionMet(item.alert_rule, pct)) continue;
+    const card = cardById.get(item.card_id) ?? { pctVsAvg30: null, currentPrice: null };
+    if (!conditionMet(item.alert_rule, card)) continue;
 
     // Records "this condition was true as of this check" — kept simple
     // (no transition/dedup tracking) since there's no notification step

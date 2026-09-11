@@ -60,11 +60,9 @@ export interface PnlSummary {
   costBasisTotal: number; // total cost basis of current holdings
 }
 
-export interface WatchlistAlertRule {
-  type: "pct_vs_avg30";
-  op: "lte" | "gte";
-  value: number;
-}
+export type WatchlistAlertRule =
+  | { type: "pct_vs_avg30"; op: "lte" | "gte"; value: number }
+  | { type: "price"; op: "lte" | "gte"; value: number };
 
 export interface WatchlistItem {
   id: string;
