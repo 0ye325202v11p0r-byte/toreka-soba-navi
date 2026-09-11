@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
+import Footer from "@/components/Footer";
 import { SITE_URL } from "@/lib/site";
 
 const SITE_NAME = "トレカ相場ナビ";
@@ -57,6 +58,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-bg text-ink">
         <NavBar />
         <main className="flex-1 mx-auto w-full max-w-5xl px-4 py-6">{children}</main>
+        <Footer />
         <Analytics />
       </body>
     </html>
