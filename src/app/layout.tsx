@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
+import { SITE_URL } from "@/lib/site";
 
 const SITE_NAME = "トレカ相場ナビ";
 const SITE_DESCRIPTION =
   "ONE PIECEカードゲームの実測相場を毎日追跡。保有カードの含み損益・実現損益を自動計算するポートフォリオ、価格変動を知らせるウォッチリスト、複数カード比較も無料で使えます。";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://toreka-soba-navi.vercel.app"),
+  metadataBase: new URL(SITE_URL),
   title: {
     default: SITE_NAME,
     template: `%s | ${SITE_NAME}`,

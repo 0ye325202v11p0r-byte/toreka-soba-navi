@@ -7,6 +7,12 @@ import type { Card } from "@/lib/types";
 
 type SortKey = "name" | "price_desc" | "price_asc" | "pct_desc" | "pct_asc";
 
+// Rendering all ~3,000+ cards at once (even though the underlying array is
+// already in memory for instant client-side search) makes the initial page
+// do a lot of unnecessary DOM/hydration work for rows almost nobody
+// scrolls to. Render a page at a time instead; "もっと見る" reveals more.
+const PAGE_SIZE = 150;
+
 const SORTERS: Record<SortKey, (a: Card, b: Card) => number> = {
   name: (a, b) => a.name.localeCompare(b.name, "ja"),
   price_desc: (a, b) => (b.current_price ?? 0) - (a.current_price ?? 0),
@@ -46,6 +52,22 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
     }
     return [...list].sort(SORTERS[sortKey]);
   }, [cards, query, setFilter, sortKey, qualityFilter]);
+
+  const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
+  // any change that redefines "visible" should reset back to page 1 —
+  // otherwise e.g. a new search could stay stuck at a huge displayCount
+  // from before, or a fresh page of results could get hidden below the fold.
+  // Resetting during render (the "adjusting state when props change" React
+  // pattern) rather than in a useEffect avoids an extra cascading render.
+  const filterKey = `${query}|${setFilter}|${sortKey}|${qualityFilter}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
+    setDisplayCount(PAGE_SIZE);
+  }
+
+  const displayed = visible.slice(0, displayCount);
+  const hasMore = visible.length > displayCount;
 
   return (
     <div>
@@ -106,7 +128,7 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
 
       {/* mobile: stacked cards (a 6-column table doesn't fit a phone screen) */}
       <div className="space-y-2 sm:hidden">
-        {visible.map((c) => {
+        {displayed.map((c) => {
           const dq = dataQualityLabel(c.data_quality);
           return (
             <Link
@@ -156,7 +178,7 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((c) => {
+            {displayed.map((c) => {
               const dq = dataQualityLabel(c.data_quality);
               return (
                 <tr key={c.id} className="border-t border-border hover:bg-bg-elevated">
@@ -190,6 +212,18 @@ export default function MarketTable({ cards }: { cards: Card[] }) {
           </tbody>
         </table>
       </div>
+
+      {hasMore && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setDisplayCount((n) => n + PAGE_SIZE)}
+            className="rounded-md border border-border bg-bg-elevated px-4 py-2 text-sm font-semibold hover:bg-bg-sunken"
+          >
+            もっと見る（残り{(visible.length - displayCount).toLocaleString("ja-JP")}件）
+          </button>
+        </div>
+      )}
     </div>
   );
 }

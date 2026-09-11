@@ -90,6 +90,11 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
         className="mb-3 w-full rounded-md border border-border bg-bg-elevated px-3 py-2"
       />
 
+      <p className="mb-1 text-xs text-ink-faint">
+        {filtered.length > 100
+          ? `${filtered.length.toLocaleString("ja-JP")}件中、先頭100件を表示（検索して絞り込めます）`
+          : `${filtered.length.toLocaleString("ja-JP")}件`}
+      </p>
       <div className="mb-4 max-h-56 overflow-y-auto rounded-lg border border-border">
         {filtered.slice(0, 100).map((c) => (
           <label

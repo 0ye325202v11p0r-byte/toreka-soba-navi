@@ -82,8 +82,12 @@ export default async function CardDetailPage({
         🏪 上記はカードショップの店頭平均価格です。メルカリ等の個人間フリマの実売価格はこれより低いことがあります。
       </div>
 
-      {history.length > 0 ? (
+      {history.length > 1 ? (
         <PriceChart snapshots={history} />
+      ) : history.length === 1 ? (
+        <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-faint">
+          {history[0].snapshot_date} に記録された{yen(history[0].price)}が唯一のデータです。推移を表示するにはもう数回分の記録が必要です。
+        </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-faint">
           価格履歴データがまだありません（移行前、またはこのカードは新規追加分です）。

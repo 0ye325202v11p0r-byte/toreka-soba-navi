@@ -28,6 +28,8 @@ function adminClient() {
 }
 
 const PRICE_PATTERN = /本日の販売平均額は([\d,]+)円です/;
+const TRACKED_NOTE =
+  "現在は日次でonepiece-card-atari.jpの実測価格を自動取得しています。過去の一部期間（自動追跡が始まる前）は約2週間おきの実測値を日次に補完した推定値を含みます。";
 const USER_AGENT =
   "TorekaSobaNaviBot/1.0 (+https://github.com/; daily price sync for a personal One Piece TCG tracker; respects robots.txt)";
 
@@ -89,7 +91,7 @@ export async function GET(request: Request) {
   // that'll be picked up first on the next run
   let query = supabase
     .from("cards")
-    .select("id, name, source_url")
+    .select("id, name, source_url, history_is_estimated")
     .not("source_url", "is", null)
     .order("updated_at", { ascending: true });
   if (limit) query = query.limit(limit);
@@ -144,10 +146,21 @@ export async function GET(request: Request) {
           pctVsAvg90: stats.pct_vs_avg90,
           judgment: stats.judgment,
         });
+        // history_is_estimated/source_note describe the OLD migration-era
+        // methodology (2-week-interval snapshots interpolated to daily).
+        // Once this card has a real cron-fetched price, that description is
+        // stale — without this, cards kept showing a "推定値" disclaimer
+        // forever even after weeks of genuine daily tracking, understating
+        // the site's own data quality to users.
+        const estimationFields = card.history_is_estimated
+          ? { history_is_estimated: false, source_note: TRACKED_NOTE }
+          : {};
+
         await supabase
           .from("cards")
           .update({
             ...stats,
+            ...estimationFields,
             ai_verdict: stats.judgment,
             ai_verdict_text: verdictText,
             ai_verdict_at: today,

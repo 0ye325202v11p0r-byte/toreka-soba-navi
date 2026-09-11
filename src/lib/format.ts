@@ -7,14 +7,14 @@ import type { Judgment } from "./types";
 export function yen(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "—";
   const n = Number(value);
-  if (Number.isNaN(n)) return "—";
+  if (!Number.isFinite(n)) return "—";
   return "¥" + Math.round(n).toLocaleString("ja-JP");
 }
 
 export function pct(value: number | string | null | undefined): string {
   if (value === null || value === undefined) return "—";
   const n = Number(value);
-  if (Number.isNaN(n)) return "—";
+  if (!Number.isFinite(n)) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(1)}%`;
 }
