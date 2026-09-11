@@ -133,35 +133,46 @@ export async function GET(request: Request) {
       break;
     }
     try {
-      const remainingMs = TIME_BUDGET_MS - elapsed;
-      const fetchTimeoutMs = Math.max(1000, Math.min(PER_REQUEST_TIMEOUT_MS, remainingMs));
-      // Same reasoning as the external fetch's timeout: without one, a
-      // single stalled Supabase call (network blip, lock contention) can
-      // block past this loop's own budget check all the way to Vercel's
-      // hard maxDuration kill — moving startTime earlier only makes the
-      // *check* more accurate, it doesn't interrupt an already-in-flight
-      // await. Each DB call gets its own short-lived AbortSignal, capped
-      // by whatever budget is actually left.
-      const dbTimeoutMs = Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs));
+      // Recomputed fresh before every await in this iteration (not once at
+      // the top) — reusing a single remainingMs/dbTimeoutMs for the fetch
+      // AND all 3 DB calls meant a slow fetch (up to PER_REQUEST_TIMEOUT_MS)
+      // didn't reduce the budget handed to the DB calls that followed it,
+      // and each DB call's own Math.max(1000, ...) floor meant they could
+      // each independently take up to ~10s regardless of how much of this
+      // iteration's budget was already spent. In the worst case one card
+      // could burn fetchTimeoutMs + 3×dbTimeoutMs (tens of seconds) despite
+      // the outer loop only re-checking the overall budget at the *next*
+      // iteration's top — risking TIME_BUDGET_MS + FINAL_LOG_TIMEOUT_MS
+      // together exceeding maxDuration and losing the final sync_runs write
+      // to Vercel's hard kill (found via independent review, 2026-09-11).
+      const remainingMs = () => TIME_BUDGET_MS - (Date.now() - startTime);
+
+      const fetchTimeoutMs = Math.max(1000, Math.min(PER_REQUEST_TIMEOUT_MS, remainingMs()));
       const price = await fetchCurrentPrice(card.source_url as string, fetchTimeoutMs);
       if (price === null) throw new Error("price pattern not found");
 
+      // If the fetch alone already exhausted this card's share of the
+      // budget, don't start another DB call for it — fail this card
+      // cleanly (caught below) so time is preserved for the final log write
+      // instead of forcing at least one more ~1s-minimum DB round trip.
+      if (remainingMs() <= 0) throw new Error("time budget exhausted before DB writes");
       const { error: snapErr } = await supabase
         .from("price_snapshots")
         .upsert(
           { card_id: card.id, snapshot_date: today, price },
           { onConflict: "card_id,snapshot_date" }
         )
-        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
+        .abortSignal(AbortSignal.timeout(Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs()))));
       if (snapErr) throw snapErr;
 
+      if (remainingMs() <= 0) throw new Error("time budget exhausted before history read");
       const { data: history, error: historyErr } = await supabase
         .from("price_snapshots")
         .select("snapshot_date, price")
         .eq("card_id", card.id)
         .order("snapshot_date", { ascending: false })
         .limit(90)
-        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
+        .abortSignal(AbortSignal.timeout(Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs()))));
       if (historyErr) throw historyErr;
       // history should never legitimately come back empty here — the
       // upsert just above either created or confirmed today's row. Treating
@@ -195,6 +206,7 @@ export async function GET(request: Request) {
         ? { history_is_estimated: false, source_note: TRACKED_NOTE }
         : {};
 
+      if (remainingMs() <= 0) throw new Error("time budget exhausted before card update");
       const { error: updateErr } = await supabase
         .from("cards")
         .update({
@@ -206,7 +218,7 @@ export async function GET(request: Request) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", card.id)
-        .abortSignal(AbortSignal.timeout(dbTimeoutMs));
+        .abortSignal(AbortSignal.timeout(Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs()))));
       // without checking this, a failed update (RLS, network, whatever)
       // still fell through to successCount++ below — the card's own
       // stats/judgment/verdict would silently stay stale while the run
