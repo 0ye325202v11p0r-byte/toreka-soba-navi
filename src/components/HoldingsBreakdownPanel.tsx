@@ -39,7 +39,8 @@ function BreakdownBox({ title, groups }: { title: string; groups: BreakdownGroup
               </span>
               <span className="ml-2 shrink-0 font-mono">
                 {yen(g.value)}
-                {total > 0 && (
+                {g.hasUnknownValue && <span className="ml-1 text-xs text-ink-faint">+価格未取得あり</span>}
+                {total > 0 && !g.hasUnknownValue && (
                   <span className="ml-1 text-xs text-ink-faint">{Math.round((g.value / total) * 100)}%</span>
                 )}
               </span>

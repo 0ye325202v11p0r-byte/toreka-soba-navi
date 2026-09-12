@@ -168,5 +168,40 @@ function watchItem(id, cardId, rule) {
   assertEqual(s.realizedPnl, 400, "S4: realizedPnl correctly reflects the completed round-trip (2*(1200-1000))");
 }
 
+// Scenario 5 (Codex independent review, 2026-09-13 — reproduction: a held
+// card with current_price:null showed 保有評価額¥0・含み損益-原価全額,
+// a confident-looking 100% loss that was actually just "price unknown").
+// One held card has a real price and a real gain; a second held card's
+// current_price is null. currentValue/unrealizedPnl must reflect ONLY the
+// priced card, and unpricedHoldingsCount must flag the other one — never
+// silently folding it in as a fabricated ¥0.
+{
+  const cards = [
+    card("priced", { current_price: 1200 }), // bought at 1000 — +200 gain
+    card("unpriced", { current_price: null }),
+  ];
+  const transactions = [
+    txn("priced", "buy", 1, 1000, "2026-01-01"),
+    txn("unpriced", "buy", 1, 10000, "2026-01-01"),
+  ];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(s.currentValue, 1200, "S5: currentValue counts only the priced holding (1200), not a fabricated 0 for the unpriced one");
+  assertEqual(s.unrealizedPnl, 200, "S5: unrealizedPnl is +200 (the priced holding's real gain), NOT -10000 from charging the unpriced holding's cost basis against a 0 value");
+  assertEqual(s.unpricedHoldingsCount, 1, "S5: exactly 1 held card is flagged as unpriced");
+  assertEqual(s.holdingsCount, 2, "S5: holdingsCount still counts both held cards (this is a display-total concern, not a holdings-count concern)");
+}
+
+// Scenario 6: a card's current_price is a genuine ¥0 — must be treated as a
+// KNOWN value (unpricedHoldingsCount 0), distinct from null, per Codex's
+// explicit callout ("実測0円は0円で正しいがnullとは区別が必要").
+{
+  const cards = [card("c1", { current_price: 0 })];
+  const transactions = [txn("c1", "buy", 5, 100, "2026-01-01")];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(s.currentValue, 0, "S6: currentValue is 0 (a real value)");
+  assertEqual(s.unrealizedPnl, -500, "S6: unrealizedPnl is a real -500 loss, computed against the known 0 price");
+  assertEqual(s.unpricedHoldingsCount, 0, "S6: a genuine ¥0 price is NOT counted as unpriced");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

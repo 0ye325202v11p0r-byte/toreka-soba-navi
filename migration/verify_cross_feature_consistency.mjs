@@ -22,6 +22,7 @@ register("./_test_mocks/loader.mjs", import.meta.url);
 const { computePnl } = await import("../src/lib/pnl.ts");
 const { buildDashboardSummary } = await import("../src/lib/dashboardSummary.ts");
 const { buildPortfolioValueHistory } = await import("../src/lib/portfolioHistory.ts");
+const { buildHoldingsBreakdown } = await import("../src/lib/holdingsBreakdown.ts");
 
 let pass = 0;
 let fail = 0;
@@ -98,6 +99,36 @@ assertEqual(lastPoint.date, "2026-03-01", "history's last point is at the last t
 // value here is what actually proves the snapshot-lookup logic, not a
 // coincidental equality with the dashboard's number.
 assertEqual(lastPoint.value, 3 * 1200 + 2 * 700, "history's last point value matches independent hand calculation using only price_snapshots as of that date");
+
+// Codex independent review (2026-09-13): dashboardSummary.ts and
+// holdingsBreakdown.ts were fixed independently (same day, separate call
+// sites) to stop treating a null current_price as a fabricated 0 — this
+// section proves the two agree with each other on a shared scenario, not
+// just each with their own unit tests. c1 has a known price; c2's
+// current_price is null (e.g. added to the catalog before its first price
+// scrape). Both modules must exclude c2 from any evaluated-value total
+// while still accounting for it as "held" (holdingsCount / cardCount /
+// quantity), and must agree on the exact value contributed by c1 alone.
+{
+  const cardsWithUnpriced = [
+    { id: "c1", name: "c1", rarity: "SR", set_name: "setX", current_price: 1300, pct_vs_avg30: 10, data_quality: "real", source_url: "x" },
+    { id: "c2", name: "c2", rarity: "R", set_name: "setX", current_price: null, pct_vs_avg30: null, data_quality: "real", source_url: "x" },
+  ];
+  const pnl2 = computePnl(transactions);
+  const summary2 = buildDashboardSummary(transactions, [], cardsWithUnpriced);
+  const breakdown2 = buildHoldingsBreakdown(pnl2.holdings, cardsWithUnpriced);
+
+  const c1Holding = pnl2.holdings.find((h) => h.cardId === "c1");
+  const expectedC1Value = 1300 * c1Holding.quantity; // 1300 * 3 = 3900
+
+  assertEqual(summary2.currentValue, expectedC1Value, "dashboard currentValue counts only c1 (known price), excluding c2 (null)");
+  assertEqual(summary2.unpricedHoldingsCount, 1, "dashboard flags exactly 1 unpriced holding (c2)");
+
+  const totalBreakdownValue = breakdown2.byRarity.reduce((sum, g) => sum + g.value, 0);
+  assertEqual(totalBreakdownValue, expectedC1Value, "holdingsBreakdown's total value across rarity groups agrees with dashboard's currentValue (both exclude c2)");
+  const rGroup = breakdown2.byRarity.find((g) => g.label === "R");
+  assertEqual(rGroup.hasUnknownValue, true, "holdingsBreakdown flags the R group (c2) as having an unknown value, not a silent 0");
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

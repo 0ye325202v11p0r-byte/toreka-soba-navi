@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { yen, dataQualityLabel, isAutoTracked, todayInTokyo } from "@/lib/format";
 import { canSubmitTransaction } from "@/lib/formValidation";
 import { buildTransactionsCsv } from "@/lib/transactionsCsv";
+import { computePortfolioValuation, cardHoldingValue } from "@/lib/portfolioValuation";
 import type { Transaction, TransactionType, PnlSummary, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -53,11 +54,16 @@ export default function PortfolioClient({
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
 
-  const currentValue = pnl.holdings.reduce((sum, h) => {
-    const price = cardById.get(h.cardId)?.current_price ?? 0;
-    return sum + price * h.quantity;
-  }, 0);
-  const unrealizedPnl = currentValue - pnl.costBasisTotal;
+  // Codex independent review (2026-09-13): current_price is nullable (a
+  // card can exist before its first price scrape), and the old `?? 0` here
+  // showed a confident 保有評価額¥0 and a 100%-of-cost 含み損益 for such a
+  // holding — indistinguishable from an actually-confirmed total loss.
+  // computePortfolioValuation() excludes such holdings instead and reports
+  // how many via unpricedHoldingsCount so the UI can show an honest caveat.
+  const priceById = new Map(cards.map((c) => [c.id, c.current_price]));
+  const valuation = computePortfolioValuation(pnl.holdings, priceById);
+  const currentValue = valuation.currentValue;
+  const unrealizedPnl = valuation.unrealizedPnl;
   const totalPnl = unrealizedPnl + pnl.realizedPnl;
 
   async function addTransaction(e: React.FormEvent) {
@@ -198,6 +204,12 @@ export default function PortfolioClient({
         <StatBox label="合計損益" value={yen(totalPnl)} tone={totalPnl} emphasize />
       </div>
 
+      {valuation.unpricedHoldingsCount > 0 && (
+        <p className="mb-4 text-xs text-ink-faint">
+          ⚠️ 保有カードのうち{valuation.unpricedHoldingsCount}件は現在価格が未取得のため、上記の保有評価額・含み損益・合計損益の集計に含まれていません（実現損益は影響を受けません）。
+        </p>
+      )}
+
       {errorMsg && (
         <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
       )}
@@ -297,8 +309,8 @@ export default function PortfolioClient({
         )}
         {pnl.holdings.map((h) => {
           const card = cardById.get(h.cardId);
-          const value = (card?.current_price ?? 0) * h.quantity;
-          const gain = value - h.costBasis;
+          const value = cardHoldingValue(card?.current_price, h.quantity);
+          const gain = value === null ? null : value - h.costBasis;
           // Not "partial" specifically — any card the daily cron doesn't
           // auto-track (partial or flat) needs this warning; see
           // isAutoTracked() for why data_quality alone isn't the right
@@ -319,11 +331,14 @@ export default function PortfolioClient({
                   )}
                 </div>
                 <div className="text-xs text-ink-muted">
-                  {h.quantity}枚 ・ 平均取得単価 {yen(h.avgCost)} ・ 評価額 {yen(value)}
+                  {h.quantity}枚 ・ 平均取得単価 {yen(h.avgCost)} ・ 評価額{" "}
+                  {value === null ? "算出不可(現在価格未取得)" : yen(value)}
                   {stale && "（価格は登録時点のまま自動更新されていません）"}
                 </div>
               </div>
-              <span className={gain >= 0 ? "text-good" : "text-warn"}>{yen(gain)}</span>
+              <span className={gain === null ? "text-ink-faint" : gain >= 0 ? "text-good" : "text-warn"}>
+                {gain === null ? "算出不可" : yen(gain)}
+              </span>
             </div>
           );
         })}

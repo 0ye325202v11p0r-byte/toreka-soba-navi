@@ -1,3 +1,4 @@
+import { cardHoldingValue } from "./portfolioValuation";
 import type { HoldingSummary } from "./types";
 
 /**
@@ -12,7 +13,15 @@ export interface BreakdownGroup {
   label: string;
   cardCount: number; // distinct cards in this group
   quantity: number; // total held quantity in this group
-  value: number; // quantity * current_price summed (0 for cards with no price)
+  // Sum of quantity * current_price over ONLY the cards in this group with a
+  // known current_price — see portfolioValuation.ts. Never a fabricated 0
+  // for the rest; check hasUnknownValue to know whether this is partial.
+  value: number;
+  // True if at least one card in this group has no known current_price
+  // (null, or the card row wasn't found) — Codex independent review,
+  // 2026-09-13: `value` alone would otherwise look like a complete,
+  // confident total even when it silently excludes such cards.
+  hasUnknownValue: boolean;
 }
 
 export interface HoldingsBreakdown {
@@ -39,11 +48,16 @@ function groupBy(
     // is still real money the user holds — group it under an explicit
     // fallback rather than silently dropping it from the total.
     const key = card ? keyOf(card) : "不明";
-    const price = card?.current_price ?? 0;
-    const existing = groups.get(key) ?? { label: key, cardCount: 0, quantity: 0, value: 0 };
+    const value = cardHoldingValue(card?.current_price, h.quantity);
+    const existing =
+      groups.get(key) ?? { label: key, cardCount: 0, quantity: 0, value: 0, hasUnknownValue: false };
     existing.cardCount += 1;
     existing.quantity += h.quantity;
-    existing.value += price * h.quantity;
+    if (value === null) {
+      existing.hasUnknownValue = true;
+    } else {
+      existing.value += value;
+    }
     groups.set(key, existing);
   }
   return [...groups.values()].sort((a, b) => b.value - a.value);

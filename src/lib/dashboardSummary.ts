@@ -1,6 +1,7 @@
 import { computePnl } from "./pnl";
 import { conditionMet } from "./watchlistRule";
 import { isAutoTracked } from "./format";
+import { computePortfolioValuation } from "./portfolioValuation";
 import type { Transaction, WatchlistItem, DashboardCardInfo } from "./types";
 
 /**
@@ -39,6 +40,12 @@ export interface DashboardSummary {
   // (isAutoTracked() false) — folds in the "make data freshness/gaps
   // explicit" concern into one line rather than a separate feature.
   untrackedCount: number;
+  // How many currently-held cards have no known current_price (null, or
+  // the card row wasn't found) — see portfolioValuation.ts. currentValue/
+  // unrealizedPnl/totalPnl above cover only the OTHER holdings; the caller
+  // must show a caveat rather than presenting those totals as complete
+  // whenever this is > 0 (Codex independent review, 2026-09-13).
+  unpricedHoldingsCount: number;
   hasNothing: boolean;
 }
 
@@ -50,11 +57,21 @@ export function buildDashboardSummary(
   const pnl = computePnl(transactions);
   const cardById = new Map(cards.map((c) => [c.id, c]));
 
-  const currentValue = pnl.holdings.reduce((sum, h) => {
-    const price = cardById.get(h.cardId)?.current_price ?? 0;
-    return sum + price * h.quantity;
-  }, 0);
-  const unrealizedPnl = currentValue - pnl.costBasisTotal;
+  // Codex independent review (2026-09-13): a held card whose current_price
+  // is null (a real, nullable DB column — a card can exist before its first
+  // price scrape) used to fall back to `?? 0`, showing a confident 保有評価額
+  // ¥0 and a 100%-of-cost 含み損益, indistinguishable from an actually-
+  // confirmed total loss. computePortfolioValuation() instead excludes such
+  // holdings from currentValue/unrealizedPnl and reports how many were
+  // excluded via unpricedHoldingsCount, so the dashboard can show an honest
+  // "N銘柄は集計対象外" caveat instead of a wrong number.
+  const priceById = new Map(cards.map((c) => [c.id, c.current_price]));
+  const valuation = computePortfolioValuation(pnl.holdings, priceById);
+  const currentValue = valuation.currentValue;
+  const unrealizedPnl = valuation.unrealizedPnl;
+  // realizedPnl depends only on historical buy/sell prices (computePnl), so
+  // it's always fully known regardless of unpriced holdings — totalPnl adds
+  // it to the (necessarily partial, if unpricedHoldingsCount > 0) unrealizedPnl.
   const totalPnl = unrealizedPnl + pnl.realizedPnl;
 
   const triggeredItems: DashboardSummary["triggeredItems"] = [];
@@ -90,6 +107,7 @@ export function buildDashboardSummary(
     gainers,
     losers,
     untrackedCount,
+    unpricedHoldingsCount: valuation.unpricedHoldingsCount,
     // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
     // 2026-09-13, found while re-checking this feature without Codex's
     // parallel verification): a user who bought and later fully sold

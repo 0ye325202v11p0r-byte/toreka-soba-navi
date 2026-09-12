@@ -7,6 +7,7 @@ import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked, safeJsonLdS
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 import { computePnl } from "@/lib/pnl";
 import { conditionMet } from "@/lib/watchlistRule";
+import { cardHoldingValue } from "@/lib/portfolioValuation";
 import type { Card, PriceSnapshot, Transaction, WatchlistItem } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
 import PriceChart from "@/components/PriceChart";
@@ -171,21 +172,27 @@ export default async function CardDetailPage({
         <div className="mb-6 rounded-lg border border-accent bg-accent-soft p-4">
           <div className="mb-1 text-xs font-semibold text-accent-strong">👤 あなたの状況</div>
           <div className="space-y-1 text-sm">
-            {myHolding && (
-              <p>
-                保有中：{myHolding.quantity}枚・平均取得単価 {yen(myHolding.avgCost)}・評価額{" "}
-                {yen((c.current_price ?? 0) * myHolding.quantity)}・含み損益{" "}
-                <span
-                  className={
-                    (c.current_price ?? 0) * myHolding.quantity - myHolding.costBasis >= 0
-                      ? "text-good"
-                      : "text-warn"
-                  }
-                >
-                  {yen((c.current_price ?? 0) * myHolding.quantity - myHolding.costBasis)}
-                </span>
-              </p>
-            )}
+            {myHolding && (() => {
+              // current_price is nullable (a card can exist before its first
+              // price scrape) — cardHoldingValue returns null rather than a
+              // fabricated 0, so this panel shows an honest "算出不可" instead
+              // of a confident-looking 100%-of-cost 含み損益 (Codex
+              // independent review, 2026-09-13).
+              const value = cardHoldingValue(c.current_price, myHolding.quantity);
+              const gain = value === null ? null : value - myHolding.costBasis;
+              return (
+                <p>
+                  保有中：{myHolding.quantity}枚・平均取得単価 {yen(myHolding.avgCost)}・評価額{" "}
+                  {value === null ? "算出不可(現在価格未取得)" : yen(value)}
+                  {value !== null && (
+                    <>
+                      ・含み損益{" "}
+                      <span className={gain! >= 0 ? "text-good" : "text-warn"}>{yen(gain!)}</span>
+                    </>
+                  )}
+                </p>
+              );
+            })()}
             {myRealizedPnl !== 0 && (
               <p>
                 このカードの確定損益（実現損益）：{" "}

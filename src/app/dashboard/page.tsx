@@ -133,6 +133,12 @@ export default async function DashboardPage() {
             </div>
           )}
 
+          {summary.unpricedHoldingsCount > 0 && (
+            <p className="mb-6 text-xs text-ink-faint">
+              ⚠️ 保有カードのうち{summary.unpricedHoldingsCount}件は現在価格が未取得のため、上記の保有評価額・含み損益・合計損益の集計に含まれていません（実現損益は影響を受けません）。
+            </p>
+          )}
+
           {summary.triggeredItems.length > 0 && (
             <div className="mb-6 rounded-lg border border-good bg-good-soft p-4">
               <h2 className="mb-2 text-sm font-bold text-good">
