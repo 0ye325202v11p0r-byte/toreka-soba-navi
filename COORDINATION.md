@@ -938,3 +938,15 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 **未検証事項：** 実際のVercel環境でのkill-switch読み取り遅延の実測値（モックでは即時応答のため、この修正がもたらす余裕の実際の効果は未計測）。
 
 引き続き「仮のCODEX」として、他の箇所（特にタイミング・予算計算、fail-open/closedの整合性など、これまでCodexが実際に発見してきたバグの系統）についても批判的に自己点検を続けます。Codex復帰後は、この修正および直前の案C実装（Codexの合意を待たずに着手した旨を明記済み）を含め、独立した再検証をお願いします。push・本番DB照会/変更・デプロイは行っていません。
+
+## Claude Codeより報告（2026-09-12）— セルフレビュー2件目：取引枚数の整数チェック漏れ
+
+ユーザーから「止まらず3時間くらい確認なしで動き続けて」との指示を受け、「仮のCODEX」として引き続き点検を継続中です。
+
+**点検範囲と結果（不具合なし）：** `refresh-prices/route.ts`・`check-watchlist/route.ts`のタイミング/予算計算、`page.tsx`・`compare/page.tsx`・`sitemap.ts`・`cards/[id]/page.tsx`・`cards/[id]/opengraph-image.tsx`のキルスイッチ適用漏れの有無、`pnl.ts`・`priceStats.ts`・`format.ts`のロジック、`portfolio/page.tsx`・`watchlist/page.tsx`がキルスイッチ無効時も`cards`を絞り込んでいない点——これは既にCOORDINATION.md（798行目付近）で「見落としではなく意図的な判断」として記録済みであることを確認し、再指摘はしていません。
+
+**発見・修正した問題（1件）：** `src/lib/formValidation.ts`の`canSubmitTransaction()`が枚数（quantity）について`quantity < 1`のみをチェックしており、整数かどうかを検証していませんでした。`transactions.quantity`はPostgresの`integer`列（`supabase/schema.sql:164`）で、枚数の`<input type="number">`（`PortfolioClient.tsx`）に`step`属性が無いため、ブラウザは「2.5」等の小数をそのまま受け付けます。結果、小数枚数でも送信ボタンが有効なまま送信でき、DB側の型不一致でINSERTが失敗し、日本語化されていない生のPostgresエラーがそのまま表示される状態でした。データ破損はしません（DB側のcheck/型制約により安全に失敗）が、UXとして分かりにくいエラーでした。
+
+**修正：** `Number.isInteger(quantity)`チェックを追加、`<input>`に`step={1}`を追加。`migration/verify_form_validation.mjs`に2件追加（小数1.5拒否／整数2は引き続き提出可能）、計13アサーション全PASS。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。フォーム検証は純粋関数のため本番DB照会は不要（既存のNode単体テストのみで検証）。コミットfa8317e（ローカルのみ、pushなし）。
+
+引き続き点検を継続します。
