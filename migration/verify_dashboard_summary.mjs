@@ -203,5 +203,23 @@ function watchItem(id, cardId, rule) {
   assertEqual(s.unpricedHoldingsCount, 0, "S6: a genuine ¥0 price is NOT counted as unpriced");
 }
 
+// Scenario 7 (Codex's explicit "全件欠測" case): every held card is
+// unpriced, not just one among several. currentValue/unrealizedPnl must
+// both read 0 without crashing, unpricedHoldingsCount must cover every
+// holding, and hasNothing must stay false (this user has real transactions,
+// unlike the brand-new-user empty state from Scenario 1).
+{
+  const cards = [card("c1", { current_price: null }), card("c2", { current_price: null })];
+  const transactions = [
+    txn("c1", "buy", 1, 1000, "2026-01-01"),
+    txn("c2", "buy", 2, 2000, "2026-01-01"),
+  ];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(s.currentValue, 0, "S7: currentValue is 0 when every holding is unpriced (not a crash, not a fabricated total)");
+  assertEqual(s.unrealizedPnl, 0, "S7: unrealizedPnl is 0, not a confident total loss of the full cost basis");
+  assertEqual(s.unpricedHoldingsCount, 2, "S7: both held cards are flagged as unpriced");
+  assertEqual(s.hasNothing, false, "S7: this user has real transactions, so it's not the brand-new-user empty state");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

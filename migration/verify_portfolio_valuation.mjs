@@ -106,6 +106,24 @@ function holding(cardId, quantity, costBasis) {
   );
 }
 
+// T5b (Codex's explicit "全件欠測" case — every held card unpriced, not
+// just one among several): currentValue/unrealizedPnl must both be 0 (not
+// crash, not fabricate a loss), and unpricedHoldingsCount must equal the
+// full holdings count.
+{
+  const holdings = [holding("c1", 1, 1000), holding("c2", 2, 4000)];
+  const prices = new Map([
+    ["c1", null],
+    ["c2", undefined],
+  ]);
+  const v = computePortfolioValuation(holdings, prices);
+  assertEqual(
+    v,
+    { currentValue: 0, unrealizedPnl: 0, unpricedHoldingsCount: 2 },
+    "T5b: every held card unpriced (全件欠測) — currentValue/unrealizedPnl both 0, unpricedHoldingsCount covers all holdings"
+  );
+}
+
 // T6: empty portfolio — no crash, all zeros.
 {
   const v = computePortfolioValuation([], new Map());
