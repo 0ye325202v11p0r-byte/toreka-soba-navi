@@ -83,7 +83,7 @@ async function fetchAllCards() {
   while (true) {
     const { data, error } = await supabase
       .from("cards")
-      .select("id, set_name, rarity, card_number")
+      .select("id, set_name, rarity, card_number, data_quality, source_url")
       .range(from, from + pageSize - 1);
     if (error) throw error;
     all = all.concat(data);
@@ -101,6 +101,7 @@ async function main() {
   let skippedNoCode = 0;
   let skippedNoNumber = 0;
   let skippedNonStandard = 0;
+  let skippedOtherSource = 0;
   const updates = [];
 
   for (const c of cards) {
@@ -108,6 +109,30 @@ async function main() {
     const code = RARITY_CODE[c.rarity];
     if (!c.card_number) {
       skippedNoNumber++;
+      continue;
+    }
+    // 'partial' cards are exclusively this project's other data source
+    // (yuyu-tei.jp, see scrape_yuyutei.mjs) — never onepiece-card-atari.jp.
+    // Without this check, a yuyu-tei card whose set_name (taken from
+    // yuyu-tei's own page title) or rarity (yuyu-tei's parallel labels
+    // like "Rパラレル"/"SRパラレル" use the exact same strings this
+    // script's SET_SLUG/RARITY_CODE maps were built for) happens to
+    // collide with one of these maps, plus a card_number matching
+    // STANDARD_CARD_NUMBER (e.g. "OP06-114"), would silently get its
+    // correct yuyu-tei source_url overwritten with a fabricated
+    // onepiece-card-atari.jp URL — permanently dropping that card out of
+    // refresh-yuyutei-prices' tracking (todayPriceByUrl would no longer
+    // have an entry under the corrupted URL) with no error anywhere.
+    // Checking the existing source_url's host too (not just data_quality)
+    // is redundant right now but cheap defense-in-depth if 'partial' is
+    // ever reused for a third source later. Found via self-review,
+    // 2026-09-12 — not confirmed to have actually happened in production
+    // (git history shows no re-run of this script since the yuyu-tei
+    // expansion), but this script is explicitly documented as safe to
+    // re-run when new cards are added, so the collision risk is real for
+    // any future run.
+    if (c.data_quality === "partial" || c.source_url?.includes("yuyu-tei.jp")) {
+      skippedOtherSource++;
       continue;
     }
     if (!slug) {
@@ -129,7 +154,7 @@ async function main() {
   console.log(`total cards: ${cards.length}`);
   console.log(`will update: ${updates.length}`);
   console.log(
-    `skipped — no set slug: ${skippedNoSlug}, no rarity code: ${skippedNoCode}, no card_number: ${skippedNoNumber}, non-standard card_number: ${skippedNonStandard}`
+    `skipped — no set slug: ${skippedNoSlug}, no rarity code: ${skippedNoCode}, no card_number: ${skippedNoNumber}, non-standard card_number: ${skippedNonStandard}, other source (yuyu-tei etc.): ${skippedOtherSource}`
   );
 
   for (let i = 0; i < updates.length; i += 100) {

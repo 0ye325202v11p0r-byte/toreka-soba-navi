@@ -71,7 +71,7 @@ update public.app_settings set value = 'false'::jsonb
 | ファイル | 役割 | 再実行の必要性 |
 |---|---|---|
 | `migrate.mjs` | Claude Artifact DBのエクスポート（`cards_export/`）をSupabaseへ一括投入する初回移行スクリプト | 実行済み。再実行は基本不要（冪等・upsert） |
-| `backfill_source_urls.mjs` | 各カードの `card_number`+`set_name`+`rarity` から onepiece-card-atari.jp のURLを自動生成し `source_url` を埋める（Phase 2の自動更新に必須） | 新しくカードを追加した時に再実行すると便利 |
+| `backfill_source_urls.mjs` | 各カードの `card_number`+`set_name`+`rarity` から onepiece-card-atari.jp のURLを自動生成し `source_url` を埋める（Phase 2の自動更新に必須）。2026-09-12セルフレビューで追加：`data_quality === 'partial'`（yuyu-tei由来）または既存`source_url`が`yuyu-tei.jp`を含むカードを明示的にスキップするよう修正——yuyu-tei由来カードのset_name（yuyu-teiのページタイトルから取得）やパラレルレアリティ表記（「Rパラレル」等）が、このスクリプトのSET_SLUG/RARITY_CODEマップ（元々onepiece-card-atari.jp用）と偶然一致するケースがあり、修正前は再実行時にyuyu-tei由来カードの正しいsource_urlを誤ったonepiece-card-atari.jp URLで上書きしてしまう可能性があった（本番での実害は未確認——git履歴上、yuyu-tei拡充後にこのスクリプトが再実行された形跡はない） | 新しくカードを追加した時に再実行すると便利 |
 | `fix_c2.mjs` / `fix_null_cardnumbers.mjs` | データ品質監査で見つかった個別カードの誤りを直した使い捨てスクリプト（詳細はgitログ参照） | 再実行不要（履歴として残してあるだけ） |
 | `audit_supabase_data.mjs` | 重複・極端値・欠落フィールド・スナップショット0件のカードなどを検出する統計的異常検知 | 大量にカードを追加/更新した後に実行すると良い |
 | `test_rls.mjs` | anon（公開）キーだけを使い、RLS/権限設定が意図通り機能しているかを検証するセキュリティテスト。2026-09-12、`app_settings`（anon読み取り可・書き込み不可——書き込み可だと誰でも緊急停止スイッチを操作できてしまう）・`yuyutei_sync_runs`（anonからは空）のチェックを追加（項目6-9）。同日、`sync_runs`/`yuyutei_sync_runs`のポリシーを「authenticated全員」から「管理者のみ」に修正した際、項目8のコメントも更新——**anonキーだけのテストでは、この2つのポリシーの違い（authenticated全員 vs 管理者のみ）を区別できない**（anonはどちらでも0件）ため、「ログイン済みだが管理者ではない」ユーザーが実際にブロックされることの検証は、このスクリプトではまだ行えていない | スキーマやRLSポリシーを変更した後は必ず再実行すること。**本番DB照会禁止の期間中は実行していない**（`app_settings`/`yuyutei_sync_runs`テーブルがまだ本番に存在しないため、項目6-9は現状エラーになる想定——テーブル作成後、本番アクセスが許可されたタイミングで実行すること） |
