@@ -221,8 +221,8 @@ function assert(cond, label) {
 }
 
 const twoMatchingCards = [
-  { id: "c1", source_url: FIXTURE_URL_1, history_is_estimated: true },
-  { id: "c2", source_url: FIXTURE_URL_2, history_is_estimated: true },
+  { id: "c1", name: "テストカード1", source_url: FIXTURE_URL_1, history_is_estimated: true },
+  { id: "c2", name: "テストカード2", source_url: FIXTURE_URL_2, history_is_estimated: true },
 ];
 
 // Control: everything fast, both cards' source_url are found in the
@@ -328,7 +328,7 @@ const twoMatchingCards = [
 {
   const cardsWithOneMissing = [
     ...twoMatchingCards,
-    { id: "c3", source_url: "https://yuyu-tei.jp/sell/opc/card/op99/99999", history_is_estimated: true },
+    { id: "c3", name: "テストカード3", source_url: "https://yuyu-tei.jp/sell/opc/card/op99/99999", history_is_estimated: true },
   ];
   const { body, threw, calls } = await run("a card's price wasn't found in this run's fetch results", {
     allCards: cardsWithOneMissing,

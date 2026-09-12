@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { computeStats } from "@/lib/priceStats";
+import { buildVerdictText } from "@/lib/ai-verdict";
 import { parseSetPage, ALL_YUYUTEI_SETS, YUYUTEI_USER_AGENT } from "@/lib/yuyuteiParser";
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
@@ -10,7 +11,9 @@ import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 // added) and never touched again — current_price frozen forever, avg30/
 // avg90/judgment permanently null. This route re-scrapes the same yuyu-tei
 // set-list pages daily and accumulates real, calendar-day-based history for
-// them via the same computeStats() the primary "real" cron uses.
+// them via the same computeStats() (and buildVerdictText()) the primary
+// "real" cron uses, so a tracked yuyu-tei card gets the same avg30/90,
+// judgment, and AI verdict comment a 'real' card does.
 //
 // data_quality stays 'partial' even once a card is tracked by this route —
 // it describes single-shop vs multi-shop provenance (an axis that never
@@ -133,7 +136,7 @@ export async function GET(request: Request) {
   // from check-watchlist/route.ts (an independent review finding,
   // 2026-09-12) — a large enough cards table could otherwise burn the
   // whole budget just paging through reads before any card gets updated.
-  let cards: { id: string; source_url: string | null; history_is_estimated: boolean | null }[] = [];
+  let cards: { id: string; name: string; source_url: string | null; history_is_estimated: boolean | null }[] = [];
   {
     const pageSize = 1000;
     let from = 0;
@@ -141,7 +144,7 @@ export async function GET(request: Request) {
       if (remainingMs() <= 0) break;
       let query = supabase
         .from("cards")
-        .select("id, source_url, history_is_estimated")
+        .select("id, name, source_url, history_is_estimated")
         .eq("data_quality", "partial")
         .not("source_url", "is", null)
         .order("updated_at", { ascending: true })
@@ -201,6 +204,21 @@ export async function GET(request: Request) {
       }
 
       const stats = computeStats(history);
+      // Same regenerate-from-the-same-numbers approach as refresh-prices/
+      // route.ts, so the verdict text can never drift out of sync with the
+      // avg30/pct_vs_avg30/judgment shown next to it — including for a
+      // card on day one of tracking (a single snapshot), which is the same
+      // "not very informative yet, but not wrong either" state a newly
+      // added 'real' card already starts in.
+      const verdictText = buildVerdictText({
+        name: card.name,
+        currentPrice: stats.current_price,
+        avg30: stats.avg30,
+        avg90: stats.avg90,
+        pctVsAvg30: stats.pct_vs_avg30,
+        pctVsAvg90: stats.pct_vs_avg90,
+        judgment: stats.judgment,
+      });
       const estimationFields = card.history_is_estimated
         ? { history_is_estimated: false, source_note: YUYUTEI_TRACKED_NOTE }
         : {};
@@ -211,6 +229,9 @@ export async function GET(request: Request) {
         .update({
           ...stats,
           ...estimationFields,
+          ai_verdict: stats.judgment,
+          ai_verdict_text: verdictText,
+          ai_verdict_at: today,
           updated_at: new Date().toISOString(),
         })
         .eq("id", card.id)
