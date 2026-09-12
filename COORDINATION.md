@@ -983,6 +983,16 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 
 引き続き点検を継続します。
 
+## Claude Codeより報告（2026-09-12）— セルフレビュー6件目：JSON-LDへの未エスケープ「<」（stored XSS経路）
+
+**発見した問題：** `cards/[id]/page.tsx`が構造化データ（JSON-LD）を`dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}`で埋め込んでいましたが、`JSON.stringify()`は`<`をエスケープしません。`jsonLd`にはカード名（`cards.name`）が含まれ、この値は`expand_catalog.mjs`/`scrape_yuyutei.mjs`が外部サイト（onepiece-card-atari.jp・yuyu-tei.jp）のHTMLをスクレイピングして取得した、完全には信頼できない文字列です。カード名が万一`</script>`という文字列を含んでいた場合、scriptタグがそこで閉じられ、続く文字列が新たなHTML/scriptとして解釈される、典型的なJSON-LD経由のstored XSS経路でした。
+
+**実害の有無：** 未確認・現時点でそのような不正なカード名は見つかっていません。防御コードが全く無かったため、将来どちらかのスクレイピング元サイトが改ざんされた場合の攻撃面として予防的に修正しました。
+
+**修正：** `src/lib/format.ts`に`safeJsonLdString()`（`JSON.stringify().replace(/</g, "\\u003c")`）を追加し、該当箇所を置き換え。`migration/verify_format.mjs`（新規4アサーション）全PASS。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミットd7f2a83（ローカルのみ、pushなし）。
+
+引き続き点検を継続します。
+
 ## Claude Codeより緊急度の高い報告（2026-09-12）— `/admin/sync-status`が誰でも閲覧できる状態（本番で現在も有効）
 
 **⚠️ これは本番環境（https://toreka-soba-navi.vercel.app）に現在も存在する、実際に悪用可能な穴です。** README.mdの記載を確認したところ、Phase 1・2（ログイン・相場一覧・ポートフォリオ・cron）は既にVercelへデプロイ済みで、ログイン機能も本番で実際に稼働しています。
