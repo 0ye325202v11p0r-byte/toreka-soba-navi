@@ -144,6 +144,7 @@ export default function PortfolioClient({
             id="txn-quantity"
             type="number"
             min={1}
+            step={1}
             value={quantity}
             onChange={(e) => setQuantity(Number(e.target.value))}
             className="w-20 rounded-md border border-border bg-bg px-2 py-1.5"

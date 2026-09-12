@@ -80,6 +80,23 @@ assertEqual(
   "T6 quantity 0 blocks submission"
 );
 
+// Fractional quantity blocks submission — transactions.quantity is a
+// Postgres `integer` column (supabase/schema.sql) with no client-side
+// enforcement elsewhere (the quantity <input> has no `step`, so a browser
+// accepts "2.5" as typed text). Before this check, a fractional quantity
+// passed this gate and the insert failed with a raw, untranslated Postgres
+// error instead of a friendly validation message (self-review, 2026-09-12).
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 1.5 }),
+  false,
+  "T6b fractional quantity (1.5) blocks submission"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2 }),
+  true,
+  "T6c whole-number quantity (2) is still submittable"
+);
+
 // --- canSubmitWatchItem ---
 
 assertEqual(

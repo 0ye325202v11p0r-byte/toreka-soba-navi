@@ -20,7 +20,15 @@ export function canSubmitTransaction(params: {
   const { cardId, isKnownCard, pricePerUnit, quantity } = params;
   if (!cardId || !isKnownCard) return false;
   if (pricePerUnit === "" || !Number.isFinite(pricePerUnit)) return false;
-  if (!Number.isFinite(quantity) || quantity < 1) return false;
+  // transactions.quantity is a Postgres `integer` column (supabase/schema.sql)
+  // with no client-side enforcement of its own — the <input type="number">
+  // in PortfolioClient.tsx has no `step`, so a browser happily accepts "2.5"
+  // and this function used to let it through (quantity < 1 was the only
+  // check). The insert then failed with a raw, untranslated Postgres error
+  // ("invalid input syntax for type integer") surfaced verbatim to the user
+  // instead of a Japanese validation message — found via self-review,
+  // 2026-09-12.
+  if (!Number.isInteger(quantity) || quantity < 1) return false;
   return true;
 }
 
