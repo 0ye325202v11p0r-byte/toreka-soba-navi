@@ -17,11 +17,21 @@ export async function generateMetadata({
   if (!isSupabaseConfigured()) return { title: "カード詳細" };
   const { id } = await params;
   const supabase = await createClient();
-  const { data: card } = await supabase
+  const { data: rawCard } = await supabase
     .from("cards")
-    .select("name, rarity, set_name, current_price")
+    .select("name, rarity, set_name, current_price, data_quality")
     .eq("id", id)
     .single();
+  // Emergency kill-switch (see src/lib/appSettings.ts) — generateMetadata()
+  // is a separate code path from the page component below (Next.js calls
+  // both independently; the page body's notFound() doesn't retroactively
+  // stop this function from having already put the card's name/price into
+  // <title>/<meta description>/OGP tags). A disabled yuyu-tei-sourced card
+  // must 404 here too, not just in the visible page body.
+  const card =
+    rawCard && rawCard.data_quality === "partial" && !(await isYuyuteiSourceEnabled(supabase))
+      ? null
+      : rawCard;
   if (!card) return { title: "カード詳細" };
   const title = card.name;
   const description = `${card.name}（${card.rarity}・${card.set_name}）の価格推移。現在価格 ${yen(card.current_price)}。`;
