@@ -296,7 +296,7 @@ export default async function CardDetailPage({
       </a>
 
       {history.length > 1 ? (
-        <PriceChart snapshots={history} />
+        <PriceChart snapshots={history} avgCost={myHolding?.avgCost} />
       ) : history.length === 1 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-faint">
           {history[0].snapshot_date} に記録された{yen(history[0].price)}が唯一のデータです。推移を表示するにはもう数回分の記録が必要です。
