@@ -289,9 +289,29 @@ alter table public.sync_runs enable row level security;
 -- migration/retrofit_admin_only_sync_runs.sql for the ALTER needed on the
 -- already-created production table (this schema.sql definition only
 -- applies to a fresh `create table`).
+--
+-- lower(trim(...)) on BOTH sides (Codex independent review, 2026-09-13) —
+-- src/lib/adminAuth.ts's isAdminUser() already trims and lowercases before
+-- comparing, but this policy originally did a bare `=`. With the same
+-- ADMIN_EMAIL value typed differently in two places (a capitalized email
+-- as Supabase actually stored it vs. a lowercase literal pasted here, or a
+-- stray trailing space in either), the app-side page gate could pass while
+-- this DB-side policy silently returned zero rows — not a security leak
+-- (the failure mode is MORE restrictive, denying the rightful owner, not
+-- granting anyone else access), but a confusing self-lockout where
+-- /admin/sync-status renders yet shows "no run history" even though rows
+-- exist. Wrapping both sides the same way here makes the two checks apply
+-- the identical normalization instead of relying on typing it consistently
+-- by hand in two unrelated files.
+--
+-- drop-before-create (Codex, 2026-09-13) makes this block safely re-runnable
+-- if you ever rotate the admin email — `create policy` alone errors with
+-- "policy already exists" on a second run since Postgres has no
+-- `create policy if not exists`.
+drop policy if exists "only admin can view sync runs" on public.sync_runs;
 create policy "only admin can view sync runs"
   on public.sync_runs for select
-  using ((auth.jwt() ->> 'email') = 'REPLACE_WITH_YOUR_ADMIN_EMAIL');
+  using (lower(trim(auth.jwt() ->> 'email')) = lower(trim('REPLACE_WITH_YOUR_ADMIN_EMAIL')));
 
 -- no write policy for anon/authenticated: only the cron job (service_role)
 -- writes here.
@@ -324,14 +344,17 @@ alter table public.yuyutei_sync_runs enable row level security;
 
 -- Owner-only, same reasoning and same email literal as sync_runs' policy
 -- above (self-review, 2026-09-12) — see that comment for why
--- `auth.role() = 'authenticated'` alone was not real access control.
+-- `auth.role() = 'authenticated'` alone was not real access control, and
+-- for why both sides are wrapped in lower(trim(...)) and the policy is
+-- dropped before being recreated (Codex independent review, 2026-09-13).
 -- Unlike sync_runs, this table has not been created in production yet, so
 -- (as long as you create it via this schema.sql block, not a copy made
 -- before this fix) no separate retrofit ALTER is needed here — just
 -- replace the email literal before running.
+drop policy if exists "only admin can view yuyutei sync runs" on public.yuyutei_sync_runs;
 create policy "only admin can view yuyutei sync runs"
   on public.yuyutei_sync_runs for select
-  using ((auth.jwt() ->> 'email') = 'REPLACE_WITH_YOUR_ADMIN_EMAIL');
+  using (lower(trim(auth.jwt() ->> 'email')) = lower(trim('REPLACE_WITH_YOUR_ADMIN_EMAIL')));
 
 -- no write policy for anon/authenticated: only the cron job (service_role)
 -- writes here.
