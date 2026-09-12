@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { WatchlistAlertRule } from "@/lib/types";
+import { errorMessage } from "@/lib/errorMessage";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -22,17 +23,6 @@ function adminClient() {
   );
 }
 
-// Same shape as the equivalent helper in refresh-prices/route.ts — kept
-// duplicated rather than shared for now, since these two routes were built
-// independently and neither is large enough yet to justify a shared
-// lib/cron-helpers.ts module.
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
-    return (err as { message: string }).message;
-  }
-  return String(err);
-}
 
 // alert_rule is stored as JSONB with no schema-level constraint — the
 // WatchlistAlertRule TypeScript type is only a compile-time promise, not a

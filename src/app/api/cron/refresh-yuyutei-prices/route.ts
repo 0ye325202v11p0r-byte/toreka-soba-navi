@@ -4,6 +4,7 @@ import { computeStats } from "@/lib/priceStats";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { parseSetPage, ALL_YUYUTEI_SETS, YUYUTEI_USER_AGENT } from "@/lib/yuyuteiParser";
 import { readYuyuteiSourceState } from "@/lib/appSettings";
+import { errorMessage } from "@/lib/errorMessage";
 
 // Daily price tracking for the 2,426 yuyu-tei-sourced (data_quality='partial')
 // cards added by migration/scrape_yuyutei.mjs. Until this route existed,
@@ -45,14 +46,6 @@ const SET_FETCH_SLEEP_MS = 1500;
 
 const YUYUTEI_TRACKED_NOTE =
   "現在は日次で遊々亭（1店舗）の店頭販売価格を自動取得しています。onepiece-card-atari.jpの実測データとは異なり、複数店舗の平均ではなく単一店舗の価格の推移です。";
-
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
-    return (err as { message: string }).message;
-  }
-  return String(err);
-}
 
 function adminClient() {
   return createClient(

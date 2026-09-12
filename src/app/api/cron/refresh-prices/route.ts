@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { computeStats } from "@/lib/priceStats";
+import { errorMessage } from "@/lib/errorMessage";
 
 // Vercel Hobby caps function duration at 60s by default (300s if Fluid
 // Compute is enabled on the project) and Pro at up to 800s. 378 cards at
@@ -20,18 +21,6 @@ const TIME_BUDGET_MS = 270_000; // leave ~20s headroom under maxDuration for the
 const PER_REQUEST_TIMEOUT_MS = 15_000; // a single stalled fetch must never be able to eat the whole run
 const DB_TIMEOUT_MS = 10_000; // a single stalled Supabase call must never be able to eat the whole run either
 const FINAL_LOG_TIMEOUT_MS = 15_000; // fixed (not budget-relative) — this runs after the budget is already spent
-
-// Supabase/PostgREST errors are typically plain objects (code/message/
-// details/hint), not `instanceof Error` — `String(err)` on one of those
-// prints the unhelpful "[object Object]" instead of the actual message,
-// which is exactly what showed up in errorSamples during review.
-function errorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (err && typeof err === "object" && "message" in err && typeof (err as { message: unknown }).message === "string") {
-    return (err as { message: string }).message;
-  }
-  return String(err);
-}
 
 // Server-only client with the service_role key (bypasses RLS). Never import
 // this file from client code — it must only run in this route handler.
