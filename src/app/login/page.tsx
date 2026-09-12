@@ -30,18 +30,32 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
+    // Trimmed before sending, not just relied on the browser's <input
+    // type="email"> to have already done it — a leading/trailing space
+    // (e.g. pasted from an email signature) would otherwise let Supabase
+    // treat "owner@example.com" and " owner@example.com" as two different
+    // accounts, silently splitting one person's login across two rows and,
+    // for whoever's meant to be the site admin, breaking the exact-match
+    // (case-insensitive but not whitespace-tolerant on this side)
+    // comparison in isAdminUser() (self-review, 2026-09-12).
+    const trimmedEmail = email.trim();
     // Preserves where the user was trying to go (e.g. /watchlist) before
     // being sent here — without this, everyone lands on the home page after
     // clicking the magic link, even if they were redirected here from a
     // specific protected page.
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: trimmedEmail,
       options: { emailRedirectTo: `${window.location.origin}${next}` },
     });
     if (error) {
       setStatus("error");
       setErrorMsg(error.message);
     } else {
+      // Reflects the same trimmed value actually sent to Supabase, so the
+      // confirmation message below never shows a different string (e.g.
+      // with a stray trailing space) than what the OTP was really issued
+      // for.
+      setEmail(trimmedEmail);
       setStatus("sent");
     }
   }
