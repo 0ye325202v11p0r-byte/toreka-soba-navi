@@ -963,6 +963,18 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 
 引き続き点検を継続します。
 
+## Claude Codeより報告（2026-09-12）— セルフレビュー4件目：computeStats()のNumber()防御漏れ（実際に再現して確認）
+
+**発見した問題：** `src/lib/priceStats.ts`の`computeStats()`が、`price_snapshots.price`（Postgresの`numeric`列）を一切`Number()`変換せずに使っていました。このコードベース自身が`format.ts`（`yen()`/`pct()`）と`pnl.ts`（`price_per_unit`/`quantity`）の両方で既に明記・対応済みの通り、PostgRESTはnumeric列をJSON文字列として返す可能性があります——`computeStats()`だけがこの防御を欠いていました。
+
+**実際に再現：** 文字列型price（"1000"/"1200"/"1100"）を実際に与えたところ、`s + v`が数値加算ではなく文字列連結になり、avg30=6000550・avg90=33337333700という明らかに荒唐無稽な値が返ることを確認しました。
+
+**本番での実害の有無：未確認、ただし発生している可能性は低いと判断します。** もし本番で実際にこの現象が起きていれば、既存のavg30/90暦日バグ監査（`fix_avg_window_bug.mjs`、438/844件の詳細監査）で桁違いに巨大な数値として容易に気づかれていたはずで、その監査では発見されていません。防御コードが無い状態自体を、将来のSupabase/PostgRESTの挙動変化に備えて予防的に修正しました。
+
+**修正：** `computeStats()`冒頭で各`price`を`Number()`で明示的に変換。`migration/verify_price_stats.mjs`に回帰テスト追加（計15アサーション）。全10ファイルの回帰テスト・`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミット57a225a（ローカルのみ、pushなし）。
+
+引き続き点検を継続します。
+
 ## Claude Codeより緊急度の高い報告（2026-09-12）— `/admin/sync-status`が誰でも閲覧できる状態（本番で現在も有効）
 
 **⚠️ これは本番環境（https://toreka-soba-navi.vercel.app）に現在も存在する、実際に悪用可能な穴です。** README.mdの記載を確認したところ、Phase 1・2（ログイン・相場一覧・ポートフォリオ・cron）は既にVercelへデプロイ済みで、ログイン機能も本番で実際に稼働しています。
