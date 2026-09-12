@@ -3,9 +3,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import PortfolioClient from "@/components/PortfolioClient";
+import PortfolioValueChart from "@/components/PortfolioValueChart";
 import SetupNotice from "@/components/SetupNotice";
 import { computePnl } from "@/lib/pnl";
-import type { Transaction, DataQuality } from "@/lib/types";
+import { buildPortfolioValueHistory } from "@/lib/portfolioHistory";
+import type { Transaction, DataQuality, PriceSnapshot } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "ポートフォリオ",
@@ -108,12 +110,52 @@ export default async function PortfolioPage() {
 
   const pnl = computePnl(transactions);
 
+  // Evaluated-value history (added 2026-09-13) needs price data for every
+  // card this user has EVER transacted, not just currently-held ones — a
+  // past evaluation date can need the price of a card that's since been
+  // fully sold. Scoped to exactly this user's own transacted card ids
+  // (never the full ~3,270-card catalog), same reasoning as the
+  // dashboard's own targeted queries.
+  const transactedCardIds = Array.from(new Set(transactions.map((t) => t.card_id)));
+  const snapshotsByCard = new Map<string, PriceSnapshot[]>();
+  if (transactedCardIds.length > 0) {
+    // Standard 1000-row PostgREST pagination — a single popular card could
+    // accumulate hundreds of daily snapshots over time, and this queries
+    // ALL of them across potentially several cards at once.
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from("price_snapshots")
+        .select("*")
+        .in("card_id", transactedCardIds)
+        .order("snapshot_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) throw error;
+      for (const row of (data ?? []) as PriceSnapshot[]) {
+        const list = snapshotsByCard.get(row.card_id) ?? [];
+        list.push(row);
+        snapshotsByCard.set(row.card_id, list);
+      }
+      if (!data || data.length < pageSize) break;
+      from += pageSize;
+    }
+  }
+  const valueHistory = buildPortfolioValueHistory(transactions, snapshotsByCard);
+
   return (
     <div>
       <h1 className="mb-1 text-2xl font-bold">ポートフォリオ</h1>
       <p className="mb-6 text-sm text-ink-muted">
         ここに表示される内容はあなた専用です（Row Level Securityにより他のユーザーからは見えません）。売買を記録すると、確定損益（実現損益）として履歴に残り続けます。
       </p>
+      {valueHistory.length > 1 && (
+        <div className="mb-6">
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">評価額の推移</h2>
+          <PortfolioValueChart points={valueHistory} />
+        </div>
+      )}
       <PortfolioClient transactions={transactions} cards={cards} pnl={pnl} />
     </div>
   );
