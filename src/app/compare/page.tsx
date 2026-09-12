@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import CompareClient from "@/components/CompareClient";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 import type { Judgment, DataQuality } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -51,6 +52,17 @@ export default async function ComparePage() {
       if (!data || data.length < pageSize) break;
       from += pageSize;
     }
+  }
+
+  // Emergency kill-switch (see src/lib/appSettings.ts) — same "stop
+  // republishing their data" filter applied in src/app/page.tsx and
+  // src/app/cards/[id]/page.tsx. /compare is a separate public page with
+  // its own independent data fetch, so it needs its own check rather than
+  // inheriting the market list's (found during a broader pass after
+  // shipping the kill-switch — the same "did I actually reach every public
+  // surface" question the earlier CardPicker fix came out of).
+  if (!(await isYuyuteiSourceEnabled(supabase))) {
+    cards = cards.filter((c) => c.data_quality !== "partial");
   }
 
   return (

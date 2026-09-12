@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createClient } from "@supabase/supabase-js";
 import { SITE_URL } from "@/lib/site";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
 // Without this, Next prerenders sitemap.xml once at build time and it never
 // changes until the next deploy — newly-added cards (via migration scripts,
@@ -22,7 +23,7 @@ function publicClient() {
 // README.md's "カードデータの収録範囲" for the full story on this bug class).
 async function fetchAllCardIds() {
   const supabase = publicClient();
-  let all: { id: string; updated_at: string }[] = [];
+  let all: { id: string; updated_at: string; data_quality: string | null }[] = [];
   const pageSize = 1000;
   let from = 0;
   while (true) {
@@ -35,13 +36,21 @@ async function fetchAllCardIds() {
     // actually throws instead of returning a quietly-truncated card list.
     const { data, error } = await supabase
       .from("cards")
-      .select("id, updated_at")
+      .select("id, updated_at, data_quality")
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (error) throw error;
     all = all.concat(data ?? []);
     if (!data || data.length < pageSize) break;
     from += pageSize;
+  }
+  // Emergency kill-switch (see src/lib/appSettings.ts) — a sitemap entry is
+  // itself a form of publishing a URL, so a disabled yuyu-tei-sourced card
+  // (data_quality='partial') shouldn't be announced here even though the
+  // page itself already 404s (cards/[id]/page.tsx) — this just keeps
+  // crawlers from being pointed at a URL that will 404, on top of that.
+  if (!(await isYuyuteiSourceEnabled(supabase))) {
+    all = all.filter((c) => c.data_quality !== "partial");
   }
   return all;
 }
