@@ -91,17 +91,39 @@ export default function PortfolioClient({
         setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
         return;
       }
-      const { error } = await supabase.from("transactions").insert({
+      const basePayload = {
         user_id: user.id,
         card_id: cardId,
         type,
         quantity,
         price_per_unit: pricePerUnit,
-        // "" (not entered) becomes 0 here, matching the DB column's own
-        // `not null default 0` — an omitted fee IS a fee of 0, not unknown.
-        fee: fee === "" ? 0 : fee,
         transaction_date: date,
-      });
+      };
+      // "" (not entered) becomes 0 here, matching the DB column's own
+      // `not null default 0` — an omitted fee IS a fee of 0, not unknown.
+      const feeValue = fee === "" ? 0 : fee;
+      let { error } = await supabase.from("transactions").insert({ ...basePayload, fee: feeValue });
+      // Self-review, 2026-09-13: `fee` is a NEW column (schema.sql +
+      // migration/retrofit_add_transaction_fee.sql, not yet applied to
+      // production). If this code is ever deployed before that migration
+      // runs, every insert above would fail outright with PostgREST's
+      // "could not find the 'fee' column" error (PGRST204) — silently
+      // breaking the core "record a transaction" feature for every user,
+      // not degrading gracefully the way this project's other schema-ahead-
+      // of-deploy features do (e.g. yuyutei_sync_runs logging failure is
+      // caught and reported without blocking the actual price refresh).
+      // Falling back to an insert without `fee` on that specific error
+      // means a deploy-before-migration ordering mistake loses only the
+      // fee value (recoverable — the user can re-enter it once the column
+      // exists) rather than the whole transaction record.
+      if (error?.code === "PGRST204") {
+        ({ error } = await supabase.from("transactions").insert(basePayload));
+        if (!error && feeValue !== 0) {
+          setErrorMsg(
+            "取引は記録されましたが、手数料の保存にはまだ対応していません（準備中）。手数料以外は正しく反映されています。"
+          );
+        }
+      }
       if (error) {
         setErrorMsg(`記録に失敗しました：${error.message}`);
         return;
