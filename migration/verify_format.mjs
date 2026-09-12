@@ -9,7 +9,7 @@
 // Imports the REAL src/lib/format.ts. Run: `node --experimental-strip-types
 // migration/verify_format.mjs`. A MODULE_TYPELESS_PACKAGE_JSON warning on
 // stderr is expected and harmless.
-import { safeJsonLdString } from "../src/lib/format.ts";
+import { safeJsonLdString, formatDateTime } from "../src/lib/format.ts";
 
 function assertEqual(actual, expected, label) {
   const ok = actual === expected;
@@ -54,4 +54,26 @@ function assertEqual(actual, expected, label) {
   assertEqual((out.match(/</g) ?? []).length, 0, "T4 every '<' occurrence is escaped, not just the first");
 }
 
-console.log("\nAll format.ts (safeJsonLdString) checks completed.");
+// formatDateTime: must produce the SAME string regardless of the process's
+// own local timezone, since WatchlistClient.tsx (a "use client" component)
+// renders it both server-side (Vercel = UTC) and client-side (the
+// visitor's browser, typically JST) during hydration — a plain
+// `toLocaleString("ja-JP")` with no explicit timeZone would differ between
+// those two environments and trigger a React hydration mismatch (self-
+// review, 2026-09-12). Faking a non-UTC TZ via process.env.TZ (Node reads
+// this at Date/Intl call time on most platforms) to prove the output is
+// pinned to Asia/Tokyo regardless.
+{
+  const fixedInstant = "2026-01-15T03:00:00.000Z"; // 2026-01-15 12:00 JST
+  const originalTZ = process.env.TZ;
+  process.env.TZ = "America/New_York"; // UTC-5 in January — a real, different offset
+  const nyResult = formatDateTime(fixedInstant);
+  process.env.TZ = "UTC";
+  const utcResult = formatDateTime(fixedInstant);
+  if (originalTZ === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTZ;
+  assertEqual(nyResult, utcResult, "T5 formatDateTime is identical regardless of the process's local TZ (pinned to Asia/Tokyo)");
+  assertEqual(nyResult.includes("12:00"), true, "T5b formatDateTime renders the correct JST wall-clock time (12:00 for 03:00 UTC)");
+}
+
+console.log("\nAll format.ts (safeJsonLdString, formatDateTime) checks completed.");

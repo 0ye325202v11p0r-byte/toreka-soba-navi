@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isAdminUser } from "@/lib/adminAuth";
+import { formatDateTime } from "@/lib/format";
 import SetupNotice from "@/components/SetupNotice";
 
 export const metadata: Metadata = {
@@ -113,7 +114,7 @@ export default async function SyncStatusPage() {
             {(runs ?? []).map((r) => (
               <tr key={r.id} className="border-t border-border">
                 <td className="px-3 py-2 whitespace-nowrap">
-                  {new Date(r.started_at).toLocaleString("ja-JP")}
+                  {formatDateTime(r.started_at)}
                 </td>
                 <td className="px-3 py-2 text-right font-mono">{r.total_count}</td>
                 <td className="px-3 py-2 text-right font-mono text-good">{r.success_count}</td>
@@ -185,7 +186,7 @@ export default async function SyncStatusPage() {
               {(yuyuteiRuns ?? []).map((r) => (
                 <tr key={r.id} className="border-t border-border">
                   <td className="px-3 py-2 whitespace-nowrap">
-                    {new Date(r.started_at).toLocaleString("ja-JP")}
+                    {formatDateTime(r.started_at)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono">
                     {r.sets_fetched}/{r.sets_total}

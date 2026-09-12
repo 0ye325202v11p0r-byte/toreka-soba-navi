@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked, safeJsonLdString } from "@/lib/format";
+import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked, safeJsonLdString, formatDateTime } from "@/lib/format";
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 import type { Card, PriceSnapshot } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
@@ -128,7 +128,7 @@ export default async function CardDetailPage({
             </span>
           )}
           <span className="text-xs text-ink-faint">
-            最終更新：{new Date(c.updated_at).toLocaleString("ja-JP")}
+            最終更新：{formatDateTime(c.updated_at)}
           </span>
         </div>
       </div>

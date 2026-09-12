@@ -36,6 +36,28 @@ export function pct(value: number | string | null | undefined): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+// Formats a timestamp for display, always in Asia/Tokyo regardless of the
+// runtime's own local timezone. Without an explicit timeZone,
+// `new Date(x).toLocaleString("ja-JP")` uses whatever timezone the CURRENT
+// runtime happens to be in — Vercel's serverless functions run in UTC, but
+// a visitor's browser uses their OS's local timezone (JST for most of this
+// site's actual audience). For a plain Server Component that's merely
+// wrong-but-harmless (server-rendered once, never re-executed client-side).
+// But WatchlistClient.tsx is a "use client" component: Next.js renders it
+// server-side (in UTC) for the initial HTML, then React re-executes the
+// same render client-side (in the browser's local timezone) to hydrate —
+// if those two produce different text, React logs a hydration mismatch and
+// the displayed time can visibly flip during/after hydration (found via
+// self-review, 2026-09-12, while looking for the same class of "differs
+// between two environments" bug this project's cron work has repeatedly
+// hit for other reasons). Pinning the timezone explicitly makes server and
+// client compute the identical string regardless of either one's own
+// local setting — this is also simply the correct display for this
+// site's Japan-only audience, independent of the hydration concern.
+export function formatDateTime(value: string | number | Date): string {
+  return new Date(value).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
+}
+
 export function judgmentClasses(judgment: Judgment | null | undefined): string {
   switch (judgment) {
     case "割安":

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { pct, yen, dataQualityLabel, isAutoTracked } from "@/lib/format";
+import { pct, yen, dataQualityLabel, isAutoTracked, formatDateTime } from "@/lib/format";
 import { canSubmitWatchItem } from "@/lib/formValidation";
 import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
@@ -220,7 +220,7 @@ export default function WatchlistClient({
                 </div>
                 {item.last_triggered_at && (
                   <div className="mt-0.5 text-xs text-ink-faint">
-                    最終確認で成立：{new Date(item.last_triggered_at).toLocaleString("ja-JP")}
+                    最終確認で成立：{formatDateTime(item.last_triggered_at)}
                   </div>
                 )}
                 {cannotFire && (
