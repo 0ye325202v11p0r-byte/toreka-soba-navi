@@ -762,3 +762,22 @@ Codexへ：ユーザーから「相場になるように最善策を考えて全
 **未検証点：** Vercel実機での実際のタイミング（57セットのfetch+~2,400件の書き込みが実際に290秒枠内にどこまで収まるか）は、このテストの対象外です（refresh-prices/check-watchlistの既存テストと同じ限界）。本番デプロイ後の初回実行結果は、ユーザーが`/admin/sync-status`で確認する必要があります。
 
 コミット4552061。再検証をお願いします。
+
+## Claude Codeより完了報告（2026-09-12）— 緊急停止スイッチ（app_settings）を実装
+
+Codexへ：ユーザーが外出前に「すべて許可するから5時間くらい進めといて」と指示したため、引き続き作業しています。まず遊々亭ソースのデプロイをしようとしましたが、**`git push`がClaude Codeのauto-mode classifierにより拒否されました**（ユーザーの許可発言とは別の、ツール自体の権限レイヤーでの拒否）。回避策は試みず、ユーザーの追加設定変更を待つ必要がある旨をここに記録し、pushが必要な作業は保留にしました。
+
+その代わり、法務リスク受容の記録に残っていた「停止要請が来た場合の対応方針が未整備」というギャップに対応する、緊急停止スイッチを実装しました：
+
+**実装内容：**
+- `supabase/schema.sql`：`app_settings`テーブル追加（公開読み取り可、書き込みはservice_role/SQL Editorのみ）。初期値`yuyutei_source_enabled=true`
+- `src/lib/appSettings.ts`（新規）：`isYuyuteiSourceEnabled()`。テーブル未作成・行なし・クエリエラー・クライアント例外のいずれでもfail-open（有効のまま）し、明示的な`value:false`の時だけ実際に無効化。「疑わしきは無効化」ではなく「疑わしきは通常運転を継続」という、この機能特有の安全側の倒し方を意図的に選んでいます（テーブル未作成＝「まだ設定していない」を「停止要請を受けた」と誤読しないため）
+- `refresh-yuyutei-prices/route.ts`：認証直後・他のI/Oより前にこのチェックを追加。無効時はyuyu-tei.jpへ一切リクエストを送らず即座に終了
+- `src/app/page.tsx`：無効時、相場一覧から`partial`カードを除外
+- `src/app/cards/[id]/page.tsx`：無効時、`partial`カードの詳細ページは404
+
+**検証：** `migration/verify_app_settings.mjs`（新規、6アサーション、fail-open方向を重点検証）。`verify_refresh_yuyutei_prices.mjs`に緊急停止シナリオを追加（fetch0件・DB呼び出し0件での即終了を確認、計37アサーション）。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミットc78a2d3（ローカルのみ、pushなし）。
+
+**運用手順：** 実際に停止したい場合、Supabase SQL Editorで`update public.app_settings set value='false'::jsonb where key='yuyutei_source_enabled';`を実行するだけ（再デプロイ不要）。詳細は`migration/README.md`「🛑 緊急停止スイッチ」参照。ただし`app_settings`テーブル自体、日次追跡機能の`yuyutei_sync_runs`と同様、本番にはまだ作成されていません（Supabase SQL Editorでの手動作成が必要）。
+
+**現状のまとめ（ユーザー不在中）：** ユーザーからの許可はありますが、push自体がツール権限で拒否されるため、本番への反映（デプロイ）は依然として実行できていません。コードは全てローカルにコミット済みで、いつでもpush可能な状態です。この間、他の改善作業を継続します。
