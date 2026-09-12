@@ -1,8 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { computeStats } from "@/lib/priceStats";
 import { errorMessage } from "@/lib/errorMessage";
+import { adminClient } from "@/lib/supabase/admin";
+import { sleep } from "@/lib/sleep";
 
 // Vercel Hobby caps function duration at 60s by default (300s if Fluid
 // Compute is enabled on the project) and Pro at up to 800s. 378 cards at
@@ -22,24 +23,11 @@ const PER_REQUEST_TIMEOUT_MS = 15_000; // a single stalled fetch must never be a
 const DB_TIMEOUT_MS = 10_000; // a single stalled Supabase call must never be able to eat the whole run either
 const FINAL_LOG_TIMEOUT_MS = 15_000; // fixed (not budget-relative) — this runs after the budget is already spent
 
-// Server-only client with the service_role key (bypasses RLS). Never import
-// this file from client code — it must only run in this route handler.
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 const PRICE_PATTERN = /本日の販売平均額は([\d,]+)円です/;
 const TRACKED_NOTE =
   "現在は日次でonepiece-card-atari.jpの実測価格を自動取得しています。過去の一部期間（自動追跡が始まる前）は約2週間おきの実測値を日次に補完した推定値を含みます。";
 const USER_AGENT =
   "TorekaSobaNaviBot/1.0 (+https://github.com/; daily price sync for a personal One Piece TCG tracker; respects robots.txt)";
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function fetchCurrentPrice(url: string, timeoutMs: number): Promise<number | null> {
   // Without a signal, a single stalled connection could block past this

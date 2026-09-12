@@ -1,10 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { computeStats } from "@/lib/priceStats";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { parseSetPage, ALL_YUYUTEI_SETS, YUYUTEI_USER_AGENT } from "@/lib/yuyuteiParser";
 import { readYuyuteiSourceState } from "@/lib/appSettings";
 import { errorMessage } from "@/lib/errorMessage";
+import { adminClient } from "@/lib/supabase/admin";
+import { sleep } from "@/lib/sleep";
 
 // Daily price tracking for the 2,426 yuyu-tei-sourced (data_quality='partial')
 // cards added by migration/scrape_yuyutei.mjs. Until this route existed,
@@ -46,17 +47,6 @@ const SET_FETCH_SLEEP_MS = 1500;
 
 const YUYUTEI_TRACKED_NOTE =
   "現在は日次で遊々亭（1店舗）の店頭販売価格を自動取得しています。onepiece-card-atari.jpの実測データとは異なり、複数店舗の平均ではなく単一店舗の価格の推移です。";
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;

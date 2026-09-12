@@ -1,7 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import type { WatchlistAlertRule } from "@/lib/types";
 import { errorMessage } from "@/lib/errorMessage";
+import { adminClient } from "@/lib/supabase/admin";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -15,14 +15,6 @@ const DB_TIMEOUT_MS = 10_000;
 // the budget check fires, plus the final response (found via independent
 // review, 2026-09-11/12 — see COORDINATION.md).
 const TIME_BUDGET_MS = 45_000;
-
-function adminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
-
 
 // alert_rule is stored as JSONB with no schema-level constraint — the
 // WatchlistAlertRule TypeScript type is only a compile-time promise, not a
