@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked, safeJsonLdString, formatDateTime } from "@/lib/format";
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
-import type { Card, PriceSnapshot } from "@/lib/types";
+import { computePnl } from "@/lib/pnl";
+import { conditionMet } from "@/lib/watchlistRule";
+import type { Card, PriceSnapshot, Transaction, WatchlistItem } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
 import PriceChart from "@/components/PriceChart";
 import SetupNotice from "@/components/SetupNotice";
@@ -81,6 +84,37 @@ export default async function CardDetailPage({
   const dq = dataQualityLabel(c.data_quality);
   const history = (snapshots ?? []) as PriceSnapshot[];
 
+  // "Your status" panel (added 2026-09-13, part of the dashboard/roadmap
+  // work to make the app feel personalized everywhere, not just on
+  // /dashboard) — shown only to a logged-in user who actually holds or
+  // watches THIS card, so an anonymous visitor or an unrelated card sees
+  // nothing extra. Scoped queries (this one card_id only), not the full
+  // transaction/watchlist history, since that's all this panel needs.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let myHolding: { quantity: number; avgCost: number; costBasis: number } | null = null;
+  let myRealizedPnl = 0;
+  let myWatchItem: WatchlistItem | null = null;
+  let myWatchTriggered = false;
+  if (user) {
+    const [{ data: myTxns }, { data: myWatch }] = await Promise.all([
+      supabase.from("transactions").select("*").eq("user_id", user.id).eq("card_id", id),
+      supabase.from("watchlist_items").select("*").eq("user_id", user.id).eq("card_id", id),
+    ]);
+    const pnl = computePnl((myTxns ?? []) as Transaction[]);
+    myHolding = pnl.holdings[0] ?? null;
+    myRealizedPnl = pnl.realizedPnl;
+    myWatchItem = ((myWatch ?? [])[0] as WatchlistItem | undefined) ?? null;
+    if (myWatchItem) {
+      myWatchTriggered = conditionMet(myWatchItem.alert_rule, {
+        pctVsAvg30: c.pct_vs_avg30,
+        currentPrice: c.current_price,
+      });
+    }
+  }
+  const hasMyStatus = myHolding !== null || myRealizedPnl !== 0 || myWatchItem !== null;
+
   const jsonLd =
     c.current_price && c.current_price > 0
       ? {
@@ -132,6 +166,53 @@ export default async function CardDetailPage({
           </span>
         </div>
       </div>
+
+      {hasMyStatus && (
+        <div className="mb-6 rounded-lg border border-accent bg-accent-soft p-4">
+          <div className="mb-1 text-xs font-semibold text-accent-strong">👤 あなたの状況</div>
+          <div className="space-y-1 text-sm">
+            {myHolding && (
+              <p>
+                保有中：{myHolding.quantity}枚・平均取得単価 {yen(myHolding.avgCost)}・評価額{" "}
+                {yen((c.current_price ?? 0) * myHolding.quantity)}・含み損益{" "}
+                <span
+                  className={
+                    (c.current_price ?? 0) * myHolding.quantity - myHolding.costBasis >= 0
+                      ? "text-good"
+                      : "text-warn"
+                  }
+                >
+                  {yen((c.current_price ?? 0) * myHolding.quantity - myHolding.costBasis)}
+                </span>
+              </p>
+            )}
+            {myRealizedPnl !== 0 && (
+              <p>
+                このカードの確定損益（実現損益）：{" "}
+                <span className={myRealizedPnl >= 0 ? "text-good" : "text-warn"}>{yen(myRealizedPnl)}</span>
+              </p>
+            )}
+            {myWatchItem && (
+              <p>
+                ウォッチ中
+                {myWatchTriggered && (
+                  <span className="ml-2 rounded-full bg-good-soft px-2 py-0.5 text-xs font-semibold text-good">
+                    ✅ 条件成立中
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <div className="mt-2 flex gap-3 text-xs">
+            <Link href="/dashboard" className="text-accent-strong hover:underline">
+              ダッシュボードで見る →
+            </Link>
+            <Link href="/portfolio" className="text-accent-strong hover:underline">
+              ポートフォリオで見る →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatBox
