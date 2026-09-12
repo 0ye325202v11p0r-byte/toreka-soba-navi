@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { yen, dataQualityLabel, isAutoTracked, todayInTokyo } from "@/lib/format";
 import { canSubmitTransaction } from "@/lib/formValidation";
+import { buildTransactionsCsv } from "@/lib/transactionsCsv";
 import type { Transaction, TransactionType, PnlSummary, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -125,6 +126,38 @@ export default function PortfolioClient({
       // review, 2026-09-12).
       setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
     }
+  }
+
+  // Client-side only — the data is already loaded (this component's own
+  // `transactions` prop), so this needs no additional request. Added
+  // 2026-09-13: a paid P&L tool should let a user get their own records
+  // out for tax/record-keeping, not just view them in-browser.
+  function downloadCsv() {
+    const rows = transactions.map((t) => ({
+      transaction_date: t.transaction_date,
+      type: t.type,
+      card_id: t.card_id,
+      card_name: cardById.get(t.card_id)?.name ?? t.card_id,
+      quantity: Number(t.quantity),
+      price_per_unit: Number(t.price_per_unit),
+      fee: Number(t.fee ?? 0),
+    }));
+    const csv = buildTransactionsCsv(rows);
+    // A UTF-8 BOM prefix (self-review, 2026-09-13) — without it, Excel (the
+    // most likely tool this CSV is opened in, given this project's
+    // Japanese/Windows-desktop audience) misdetects the encoding and shows
+    // mojibake for every Japanese character, defeating the entire point of
+    // an export meant for record-keeping.
+    const BOM = String.fromCharCode(0xfeff); // spelled out explicitly rather than as a literal invisible character in source
+    const blob = new Blob([BOM + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `取引履歴_${todayInTokyo()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -267,7 +300,18 @@ export default function PortfolioClient({
         })}
       </div>
 
-      <h2 className="mb-2 text-sm font-semibold text-ink-muted">取引履歴</h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-ink-muted">取引履歴</h2>
+        {transactions.length > 0 && (
+          <button
+            type="button"
+            onClick={downloadCsv}
+            className="rounded-md border border-border px-2 py-1 text-xs hover:bg-bg-elevated"
+          >
+            CSVで保存
+          </button>
+        )}
+      </div>
       <div className="space-y-1">
         {transactions.length === 0 && (
           <p className="text-sm text-ink-faint">まだ取引が記録されていません。</p>
