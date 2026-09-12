@@ -90,6 +90,21 @@ create policy "cards are publicly readable"
 create table if not exists public.price_snapshots (
   id uuid primary key default gen_random_uuid(),
   card_id text not null references public.cards(id) on delete cascade,
+  -- snapshot_date is a UTC calendar date, not a JST one (raised by Codex,
+  -- 2026-09-12, discussed but deliberately not changed — see
+  -- COORDINATION.md for the full reasoning and future-migration
+  -- conditions). Both crons that write this column (refresh-prices,
+  -- refresh-yuyutei-prices — check-watchlist never writes
+  -- price_snapshots) stamp it via `new Date().toISOString().slice(0, 10)`,
+  -- i.e. UTC "today" at the moment they run. Since those two run at UTC
+  -- 20:00/20:30 (JST 05:00/05:30 the NEXT calendar day per vercel.json),
+  -- the date recorded
+  -- here is systematically the JST calendar day BEFORE the one the cron
+  -- actually ran on. This does not affect avg30/90 math — computeStats()
+  -- only ever compares snapshot_date strings against each other, all under
+  -- the same UTC convention, so the day-window logic stays internally
+  -- consistent. It matters only if you query this column directly and
+  -- assume it's a JST date (e.g. in the Supabase SQL Editor) — it isn't.
   snapshot_date date not null,
   price numeric not null,
   created_at timestamptz default now(),

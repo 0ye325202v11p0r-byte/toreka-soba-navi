@@ -307,6 +307,9 @@ export async function GET(request: Request) {
   const knownSetsWithNoCardsParsedToday = setsWithNoCardsParsed.filter((slug) => knownSetSlugs.has(slug));
 
   // ---- Phase 3: for each card, upsert today's snapshot + recompute stats ----
+  // Deliberately UTC, not JST — see the snapshot_date comment in
+  // supabase/schema.sql (raised by Codex, 2026-09-12) for why this stays
+  // UTC-based for now and what a future migration to JST would require.
   const today = new Date().toISOString().slice(0, 10);
   let successCount = 0;
   let failCount = 0;
