@@ -242,6 +242,7 @@ const twoMatchingCards = [
   assert(!threw, "control: no throw");
   assert(body?.setsFetched === 57, "control: all 57 sets fetched");
   assert(body?.setsFailed === 0, "control: no set-fetch failures");
+  assert(body?.cardsReadComplete === true, "control: cardsReadComplete is explicitly true");
   assert(body?.total === 2 && body?.success === 2 && body?.failed === 0, "control: both cards succeed");
   assert(body?.notFoundInFetch === 0, "control: both cards' URLs were found in the fetch results");
   assert(calls.updates === 2, "control: cards.update() called exactly once per successful card");
@@ -420,6 +421,38 @@ const twoMatchingCards = [
   // No budget left at all afterward -> the cards read loop's very first
   // budget check should also refuse to proceed, so no card DB calls happen.
   assert(calls.cardsPages === 0, "S1: with zero budget left, the cards read loop never even starts");
+}
+
+// Scenario 1b (Codex independent review, second bug, 2026-09-12,
+// reproduced by constructing this exact case against the real route):
+// the Phase 2 cards-read loop times out MID-PAGINATION with more than one
+// page of rows (1500 cards -> page 1 of 1000, then page 2 of 500). Before
+// this fix, hitting the budget check after page 1 just `break`d silently
+// and fell through to Phase 3 with only the 1000 rows from page 1 —
+// reporting `total: 1000` and `skippedForTime: 1000` as if that were the
+// complete picture, with the other 500 rows (never even read) vanishing
+// from the response entirely. The fix returns immediately instead, the
+// same way check-watchlist/route.ts's identical read loops already do.
+{
+  const fifteenHundredCards = Array.from({ length: 1500 }, (_, i) => ({
+    id: `c${i}`,
+    name: `テストカード${i}`,
+    source_url: `https://yuyu-tei.jp/sell/opc/card/op01/${i}`,
+    history_is_estimated: true,
+  }));
+  const { body, threw, calls } = await run("cards read loop times out mid-pagination (1500 rows, page 1 of 2)", {
+    allCards: fifteenHundredCards,
+    cardsPageAdvanceMs: 300_000, // one page alone blows the whole remaining budget
+  });
+  assert(!threw, "S1b: no throw");
+  assert(calls.cardsPages === 1, "S1b: only the first cards page is ever fetched, never a second");
+  assert(calls.upserts === 0 && calls.updates === 0, "S1b: Phase 3 never starts — no card is written");
+  assert(body?.incomplete === true, "S1b: incomplete:true is reported");
+  assert(body?.phase === "reading_cards", "S1b: phase names the read that was still in progress");
+  assert(body?.itemsReadSoFar === 1000, "S1b: itemsReadSoFar reflects exactly the one page that did complete");
+  assert(body?.total === undefined, "S1b: no fabricated 'total' field — 1000 must never be reported as if it were the true count of 1500");
+  assert(body?.skippedForTime === undefined, "S1b: no fabricated 'skippedForTime' either — Phase 3 never ran, so this must not appear as 1000");
+  assert(body?.setsFetched === 57, "S1b: the set-fetch phase (Phase 1) is unaffected and still reported");
 }
 
 // Scenario 2: set-fetch phase is fast and complete, but a couple of set

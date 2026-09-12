@@ -138,17 +138,58 @@ export async function GET(request: Request) {
 
   // ---- Phase 2: read existing yuyu-tei cards, oldest-updated-first ----
   // Same "1000-row PostgREST cap" pagination this project has hit
-  // repeatedly elsewhere, and the same "check the time budget before every
-  // DB call in a read loop, not just the processing loop after it" lesson
-  // from check-watchlist/route.ts (an independent review finding,
-  // 2026-09-12) — a large enough cards table could otherwise burn the
-  // whole budget just paging through reads before any card gets updated.
+  // repeatedly elsewhere. The budget IS checked before every DB call in
+  // this read loop (not just the processing loop after it) — but until
+  // this fix, hitting that check mid-pagination just `break`d silently,
+  // falling through to Phase 3 with whatever partial `cards` list had
+  // been read so far. Phase 3 then reported `total: cards.length` as if
+  // that were the true count and `skippedForTime` against that same
+  // undercounted total — the rows on unread pages vanished from the
+  // response and log entirely, never counted as read, skipped, or
+  // anything else (Codex independent review, second bug found by
+  // constructing a real 1500-row/mid-first-page-timeout case against the
+  // actual route, 2026-09-12). Fixed by returning immediately here,
+  // exactly like check-watchlist/route.ts's identical read loops already
+  // do — no Phase 3, no fabricated `total`, just an honest
+  // `itemsReadSoFar`.
   let cards: { id: string; name: string; source_url: string | null; history_is_estimated: boolean | null }[] = [];
   {
     const pageSize = 1000;
     let from = 0;
     while (true) {
-      if (remainingMs() <= 0) break;
+      if (remainingMs() <= 0) {
+        const { error: logErr } = await supabase
+          .from("yuyutei_sync_runs")
+          .insert({
+            started_at: startedAt,
+            finished_at: new Date().toISOString(),
+            sets_total: ALL_YUYUTEI_SETS.length,
+            sets_fetched: setsFetched,
+            sets_failed: setsFailed,
+            total_count: 0,
+            success_count: 0,
+            fail_count: 0,
+            not_found_count: 0,
+            error_sample: [
+              `incomplete: reading_cards, itemsReadSoFar=${cards.length}`,
+              setsSkippedForTime > 0 ? `(${setsSkippedForTime} set(s) were also not fetched this run)` : null,
+            ]
+              .filter(Boolean)
+              .join(" "),
+          })
+          .abortSignal(AbortSignal.timeout(FINAL_LOG_TIMEOUT_MS));
+        return NextResponse.json({
+          incomplete: true,
+          phase: "reading_cards",
+          itemsReadSoFar: cards.length,
+          setsTotal: ALL_YUYUTEI_SETS.length,
+          setsFetched,
+          setsFailed,
+          setsSkippedForTime,
+          syncRunLogged: !logErr,
+          ...(logErr ? { syncRunLogError: errorMessage(logErr) } : {}),
+        });
+      }
       let query = supabase
         .from("cards")
         .select("id, name, source_url, history_is_estimated")
@@ -291,6 +332,13 @@ export async function GET(request: Request) {
     setsFetched,
     setsFailed,
     setsSkippedForTime,
+    // Explicit marker (Codex independent review, 2026-09-12) so a log
+    // reader never has to infer from the absence of an earlier
+    // `incomplete: true, phase: "reading_cards"` response that Phase 2
+    // actually finished — this field says so directly. Always `true` on
+    // this success path (an incomplete Phase 2 returns earlier, above,
+    // and never reaches this response at all).
+    cardsReadComplete: true,
     total: cards.length,
     success: successCount,
     failed: failCount,
