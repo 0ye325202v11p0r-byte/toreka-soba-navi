@@ -89,7 +89,11 @@ function makeSupabaseMock({
   updateAdvanceMs = 0,
   updateShouldFail = () => false,
   syncRunShouldFail = false,
-  yuyuteiSourceEnabled = true,
+  // Either a boolean (shorthand for the common "explicit true/false stored
+  // value" case) or a function returning/throwing the raw
+  // {data, error}-shaped result, for scenarios that need to simulate a
+  // query error, a thrown exception, or an unrecognized stored value.
+  appSettingsResult = true,
 }) {
   const calls = { cardsPages: 0, upserts: 0, historySelects: 0, updates: 0, syncRunInsert: 0, appSettingsReads: 0 };
   const mock = {
@@ -98,10 +102,13 @@ function makeSupabaseMock({
         return {
           select: () => ({
             eq: () => ({
-              maybeSingle: async () => {
-                calls.appSettingsReads++;
-                return { data: { value: yuyuteiSourceEnabled }, error: null };
-              },
+              abortSignal: () => ({
+                maybeSingle: async () => {
+                  calls.appSettingsReads++;
+                  if (typeof appSettingsResult === "function") return appSettingsResult();
+                  return { data: { value: appSettingsResult }, error: null };
+                },
+              }),
             }),
           }),
         };
@@ -250,15 +257,89 @@ const twoMatchingCards = [
 {
   const { body, threw, calls } = await run("kill-switch: yuyutei_source_enabled is false", {
     allCards: twoMatchingCards,
-    yuyuteiSourceEnabled: false,
+    appSettingsResult: false,
   });
   assert(!threw, "S0: no throw");
   assert(body?.disabled === true, "S0: response reports disabled:true");
+  assert(body?.settingsState === "disabled", "S0: settingsState is reported as 'disabled'");
   assert(fetchCallCount === 0, "S0: zero requests to yuyu-tei.jp — not even one set page");
   assert(calls.cardsPages === 0, "S0: cards are never read");
   assert(calls.upserts === 0 && calls.updates === 0, "S0: no price_snapshots/cards writes");
   assert(calls.syncRunInsert === 0, "S0: not even the sync-run log is written (nothing ran to log)");
   assert(calls.appSettingsReads === 1, "S0: exactly one app_settings check happened, before anything else");
+}
+
+// Scenarios 0b-0e (Codex independent review, 2026-09-12): the settings
+// read can fail in ways that are NOT "explicitly false" — a generic query
+// error, a thrown exception, a timeout, or an unrecognized stored value.
+// None of these confirm the switch is actually enabled, so this route
+// must fail CLOSED on all of them (zero fetches) exactly like the
+// explicit-false case — this is the property the original implementation
+// got wrong (it fell back to "enabled" on any of these).
+{
+  const { body, threw, calls } = await run("kill-switch: settings read hits a generic query error (not missing-table)", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => ({ data: null, error: { code: "500", message: "internal server error" } }),
+  });
+  assert(!threw, "S0b: no throw");
+  assert(body?.disabled === true, "S0b: response reports disabled:true");
+  assert(body?.settingsState === "unknown", "S0b: settingsState is 'unknown', distinct from 'disabled'");
+  assert(fetchCallCount === 0, "S0b: zero requests to yuyu-tei.jp");
+  assert(calls.cardsPages === 0 && calls.updates === 0, "S0b: no cards read or written");
+}
+{
+  const { body, threw, calls } = await run("kill-switch: settings read throws synchronously", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => {
+      throw new Error("network error");
+    },
+  });
+  assert(!threw, "S0c: no throw escapes to the caller");
+  assert(body?.disabled === true, "S0c: response reports disabled:true");
+  assert(body?.settingsState === "unknown", "S0c: settingsState is 'unknown'");
+  assert(fetchCallCount === 0, "S0c: zero requests to yuyu-tei.jp");
+}
+{
+  const { body, threw, calls } = await run("kill-switch: settings read times out (AbortSignal fires)", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => {
+      throw new Error("The operation was aborted due to timeout");
+    },
+  });
+  assert(!threw, "S0d: no throw escapes to the caller");
+  assert(body?.disabled === true, "S0d: response reports disabled:true — a slow/timed-out read must NOT resume scraping");
+  assert(body?.settingsState === "unknown", "S0d: settingsState is 'unknown'");
+  assert(fetchCallCount === 0, "S0d: zero requests to yuyu-tei.jp");
+}
+{
+  const { body, threw, calls } = await run("kill-switch: stored value is not a recognized boolean", {
+    allCards: twoMatchingCards,
+    appSettingsResult: "not-a-boolean",
+  });
+  assert(!threw, "S0e: no throw");
+  assert(body?.disabled === true, "S0e: response reports disabled:true");
+  assert(body?.settingsState === "unknown", "S0e: settingsState is 'unknown'");
+  assert(fetchCallCount === 0, "S0e: zero requests to yuyu-tei.jp");
+}
+
+// Scenario 0f: the table/row genuinely doesn't exist yet (the actual
+// current production state, before migration/README.md's manual setup
+// step is done) — this is NOT the same as "unknown" and must NOT disable
+// scraping; it's indistinguishable from "nobody has set this up", so
+// today's no-kill-switch-at-all behavior is preserved until the table
+// exists.
+{
+  const { body, threw, calls } = await run("no kill-switch yet: app_settings table doesn't exist (PostgREST schema-cache-miss)", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => ({
+      data: null,
+      error: { code: "PGRST205", message: "Could not find the table 'public.app_settings' in the schema cache" },
+    }),
+  });
+  assert(!threw, "S0f: no throw");
+  assert(body?.disabled === undefined, "S0f: response does NOT report disabled — scraping proceeds normally");
+  assert(fetchCallCount === 57, "S0f: all 57 sets are still fetched, exactly as if there were no kill-switch at all");
+  assert(calls.updates === 2, "S0f: cards are still processed normally");
 }
 
 // Scenario 1: the set-fetch phase itself runs out of budget partway

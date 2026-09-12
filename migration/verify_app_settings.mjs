@@ -1,55 +1,164 @@
-// Regression test for isYuyuteiSourceEnabled() in src/lib/appSettings.ts —
-// the emergency kill-switch for the yuyu-tei data source (added 2026-09-12
-// alongside the daily-tracking cron, addressing the residual "what if
-// yuyu-tei asks us to stop" gap noted when the user accepted the legal
-// risk of scraping them).
+// Regression test for src/lib/appSettings.ts — the emergency kill-switch
+// for the yuyu-tei data source.
 //
-// The critical property under test is the FAIL-OPEN direction: this must
-// default to "still enabled" whenever the app_settings table/row is
-// missing or the query errors, and only actually disable on an explicit
-// `false` value — the opposite of how most of this project's checks fail
-// safe, and deliberately so (see the file's own comment for why).
+// Revised 2026-09-12 following Codex's independent static-code-review
+// finding: the original single boolean-returning function conflated
+// "not configured yet" (table/row missing — safe to default to enabled)
+// with "couldn't verify right now" (a settings row DOES exist, possibly
+// set to false, but this read attempt failed) — both fell back to
+// "enabled", meaning a genuinely disabled switch could look re-enabled
+// after a transient read error. This test verifies the fix:
+// readYuyuteiSourceState() distinguishes 4 states, isYuyuteiSourceEnabled()
+// (display pages) still fails open on "unconfigured"/"unknown", and
+// canScrapeYuyutei() (the actual scraping cron's gate) does NOT — it
+// requires positive confirmation of "enabled" or "unconfigured" and
+// fails CLOSED on "unknown" (query error other than a missing table,
+// thrown exception, timeout, or an unrecognized stored value).
 //
 // Imports the REAL src/lib/appSettings.ts. Run:
 // `node --experimental-strip-types migration/verify_app_settings.mjs`
-import { isYuyuteiSourceEnabled } from "../src/lib/appSettings.ts";
+import { readYuyuteiSourceState, isYuyuteiSourceEnabled, canScrapeYuyutei } from "../src/lib/appSettings.ts";
 
+let pass = 0;
+let fail = 0;
 function assertEqual(actual, expected, label) {
   const ok = actual === expected;
-  console.log(`${ok ? "PASS" : "FAIL"} ${label}: expected ${expected}, got ${actual}`);
-  if (!ok) process.exitCode = 1;
+  if (ok) {
+    pass++;
+  } else {
+    fail++;
+    console.error(`FAIL ${label}: expected ${expected}, got ${actual}`);
+  }
 }
 
-function chain(result) {
-  return { select: () => chain(result), eq: () => chain(result), maybeSingle: async () => result };
+// abortSignal() is the last call before the query actually executes (the
+// real code always ends with `.abortSignal(...).maybeSingle()`), so the
+// mock's result/behavior is supplied there.
+function chainToResult(result) {
+  return {
+    eq: () => chainToResult(result),
+    abortSignal: () => ({
+      maybeSingle: async () => {
+        if (typeof result === "function") return result();
+        return result;
+      },
+    }),
+  };
 }
 
 function mockClient(result) {
-  return { from: () => chain(result) };
+  return { from: () => ({ select: () => chainToResult(result) }) };
 }
 
-const enabled = await isYuyuteiSourceEnabled(mockClient({ data: { value: true }, error: null }));
-assertEqual(enabled, true, "T1 explicit value:true -> enabled");
+function mockClientThatThrowsOnFrom() {
+  return {
+    from: () => {
+      throw new Error("network error");
+    },
+  };
+}
 
-const disabled = await isYuyuteiSourceEnabled(mockClient({ data: { value: false }, error: null }));
-assertEqual(disabled, false, "T2 explicit value:false -> disabled (the only way to actually trip the switch)");
+// ---- readYuyuteiSourceState: the 4 states ----
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: { value: true }, error: null }));
+  assertEqual(s, "enabled", "T1 explicit value:true -> 'enabled'");
+}
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: { value: false }, error: null }));
+  assertEqual(s, "disabled", "T2 explicit value:false -> 'disabled'");
+}
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: null, error: null }));
+  assertEqual(s, "unconfigured", "T3 row missing, no error -> 'unconfigured'");
+}
+{
+  const s = await readYuyuteiSourceState(
+    mockClient({ data: null, error: { code: "PGRST205", message: "Could not find the table 'public.app_settings' in the schema cache" } })
+  );
+  assertEqual(s, "unconfigured", "T4 PostgREST schema-cache-miss error -> 'unconfigured' (table doesn't exist yet)");
+}
+{
+  const s = await readYuyuteiSourceState(
+    mockClient({ data: null, error: { code: "42P01", message: 'relation "app_settings" does not exist' } })
+  );
+  assertEqual(s, "unconfigured", "T5 raw Postgres undefined_table error -> 'unconfigured'");
+}
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: null, error: { code: "500", message: "internal server error" } }));
+  assertEqual(s, "unknown", "T6 a generic/unrelated query error -> 'unknown' (NOT the same as unconfigured)");
+}
+{
+  const s = await readYuyuteiSourceState({
+    from: () => {
+      throw new Error("boom");
+    },
+  });
+  assertEqual(s, "unknown", "T7 client throws synchronously -> 'unknown'");
+}
+{
+  const s = await readYuyuteiSourceState(
+    mockClient(() => {
+      throw new Error("aborted: signal timed out");
+    })
+  );
+  assertEqual(s, "unknown", "T8 the query itself throws (simulating AbortSignal.timeout firing) -> 'unknown'");
+}
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: { value: "true" }, error: null }));
+  assertEqual(s, "unknown", "T9 a non-boolean stored value -> 'unknown' (not confidently either state)");
+}
+{
+  const s = await readYuyuteiSourceState(mockClient({ data: { value: null }, error: null }));
+  assertEqual(s, "unknown", "T10 value:null stored -> 'unknown'");
+}
 
-const missingRow = await isYuyuteiSourceEnabled(mockClient({ data: null, error: null }));
-assertEqual(missingRow, true, "T3 row missing (no error) -> fails open, still enabled");
+// ---- isYuyuteiSourceEnabled: display pages, fails open on unconfigured/unknown ----
+assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: { value: true }, error: null })), true, "T11 display: enabled -> true");
+assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: { value: false }, error: null })), false, "T12 display: disabled -> false (this is the only way to actually hide anything)");
+assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: null, error: null })), true, "T13 display: unconfigured -> true (fail open)");
+assertEqual(
+  await isYuyuteiSourceEnabled(mockClient({ data: null, error: { code: "500", message: "oops" } })),
+  true,
+  "T14 display: unknown (generic error) -> true (fail open — no external traffic decision here)"
+);
+assertEqual(await isYuyuteiSourceEnabled(mockClientThatThrowsOnFrom()), true, "T15 display: client throws -> true (fail open)");
 
-const queryError = await isYuyuteiSourceEnabled(mockClient({ data: null, error: { message: "relation does not exist" } }));
-assertEqual(queryError, true, "T4 table doesn't exist yet -> fails open, still enabled");
+// ---- canScrapeYuyutei: the scraping cron's gate, fails CLOSED on unknown ----
+assertEqual(await canScrapeYuyutei(mockClient({ data: { value: true }, error: null })), true, "T16 cron: enabled -> true (may scrape)");
+assertEqual(await canScrapeYuyutei(mockClient({ data: { value: false }, error: null })), false, "T17 cron: disabled -> false (must NOT scrape)");
+assertEqual(
+  await canScrapeYuyutei(mockClient({ data: null, error: null })),
+  true,
+  "T18 cron: unconfigured (table/row genuinely absent) -> true (no takedown could have been issued through a switch that doesn't exist)"
+);
+// The critical property from Codex's review: a settings row that IS
+// configured, but whose value this specific read couldn't determine, must
+// NOT be treated the same as "confirmed enabled".
+assertEqual(
+  await canScrapeYuyutei(mockClient({ data: null, error: { code: "500", message: "internal server error" } })),
+  false,
+  "T19 cron: unknown (generic query error, NOT a missing-table error) -> false — must fail CLOSED, not resume scraping on a hunch"
+);
+assertEqual(
+  await canScrapeYuyutei(mockClientThatThrowsOnFrom()),
+  false,
+  "T20 cron: client throws synchronously -> false — must fail CLOSED"
+);
+assertEqual(
+  await canScrapeYuyutei(
+    mockClient(() => {
+      throw new Error("aborted: signal timed out");
+    })
+  ),
+  false,
+  "T21 cron: settings read times out -> false — must fail CLOSED, a disabled switch must not look re-enabled just because this read was slow"
+);
+assertEqual(
+  await canScrapeYuyutei(mockClient({ data: { value: "not-a-boolean" }, error: null })),
+  false,
+  "T22 cron: unrecognized stored value -> false — must fail CLOSED rather than assume enabled"
+);
 
-const clientThrows = await isYuyuteiSourceEnabled({
-  from: () => {
-    throw new Error("network error");
-  },
-});
-assertEqual(clientThrows, true, "T5 client throws synchronously -> fails open, still enabled");
-
-// A truthy-but-not-boolean value (e.g. a stray string) must not be
-// misread as disabled — only a literal `false` disables.
-const stringValue = await isYuyuteiSourceEnabled(mockClient({ data: { value: "true" }, error: null }));
-assertEqual(stringValue, true, "T6 non-boolean truthy value -> still enabled (only literal false disables)");
-
+console.log(`\n${pass} passed, ${fail} failed`);
+if (fail > 0) process.exitCode = 1;
 console.log("\nAll appSettings.ts checks completed.");

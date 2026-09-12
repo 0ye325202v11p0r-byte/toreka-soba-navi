@@ -10,25 +10,49 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 //   update public.app_settings set value = 'false'::jsonb
 //     where key = 'yuyutei_source_enabled';
 //
-// Deliberately fails OPEN (returns true / "still enabled") if the
-// app_settings table doesn't exist yet, or the row is missing, or the
-// query errors — the absence of this table/row means "not configured",
-// not "a takedown request was received". Only an explicit `false` value
-// actually disables the source. This mirrors how the rest of this
-// project's data_quality checks fail safe in the *opposite* direction
-// (assume untracked/unverified on doubt) — here, "doubt" about a
-// safety-relevant kill switch must not itself trip the switch, or a
-// transient DB hiccup would silently take down a whole data source with
-// no one asking for that.
-//
-// Two call sites care about this, for two different reasons:
-//   - src/app/api/cron/refresh-yuyutei-prices/route.ts: MUST check this
-//     before making any request to yuyu-tei.jp at all — this is the "stop
-//     sending them traffic" half of a takedown request.
-//   - src/app/page.tsx / src/app/cards/[id]/page.tsx: check this to
-//     exclude/hide already-collected yuyu-tei-sourced (data_quality=
-//     'partial') cards from public pages — this is the "stop republishing
-//     their data" half.
+// REVISED 2026-09-12 following Codex's independent static-code-review
+// finding: the original single boolean-returning function conflated two
+// different situations under "fail open" —
+//   (a) the row genuinely doesn't exist (nobody has configured this yet —
+//       correctly safe to default to "enabled", since no takedown request
+//       could have been issued through a switch that was never set up)
+//   (b) the row DOES exist (someone configured this, possibly to `false`)
+//       but THIS PARTICULAR read attempt failed — timeout, network blip,
+//       unexpected error shape, or a stored value that isn't literally
+//       `true`/`false`
+// Treating (b) the same as (a) meant a card already disabled via an
+// explicit `false` could have scraping silently RESUME on any later run
+// where the settings read merely happened to hiccup — the exact opposite
+// of what a "stop guarantee" needs to mean. readYuyuteiSourceState() below
+// distinguishes these as "unconfigured" (a) vs "unknown" (b); callers then
+// choose deliberately how to treat each, rather than both collapsing into
+// one fail-open boolean.
+const SETTINGS_READ_TIMEOUT_MS = 5_000;
+
+export type YuyuteiSourceState = "enabled" | "disabled" | "unconfigured" | "unknown";
+
+// PostgREST reports a table missing from its schema cache with its own
+// code (PGRST205) rather than surfacing the underlying Postgres
+// "undefined_table" error (42P01) directly, but which one actually
+// reaches the client can depend on the PostgREST/Supabase version and
+// request path — neither has been observed against a real deployment of
+// this exact table (this project has no live Supabase access in this
+// session), so both are checked, plus a message-text fallback, rather
+// than betting on one exact shape.
+function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = "code" in error ? String((error as { code: unknown }).code) : "";
+  const message =
+    "message" in error ? String((error as { message: unknown }).message).toLowerCase() : "";
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    code === "PGRST202" ||
+    message.includes("does not exist") ||
+    message.includes("schema cache")
+  );
+}
+
 // Typed as the base SupabaseClient (default generics) rather than a
 // hand-written structural interface — Supabase's query builder is a
 // thenable, not a plain Promise, and a hand-rolled shape for it fights
@@ -36,16 +60,59 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // request-scoped server client from src/lib/supabase/server.ts, and the
 // service_role admin client the cron route builds) are SupabaseClient
 // instances, so this accepts either.
-export async function isYuyuteiSourceEnabled(supabase: SupabaseClient): Promise<boolean> {
+export async function readYuyuteiSourceState(supabase: SupabaseClient): Promise<YuyuteiSourceState> {
   try {
     const { data, error } = await supabase
       .from("app_settings")
       .select("value")
       .eq("key", "yuyutei_source_enabled")
+      .abortSignal(AbortSignal.timeout(SETTINGS_READ_TIMEOUT_MS))
       .maybeSingle();
-    if (error || !data) return true; // table/row missing, or query failed -> fail open
-    return data.value !== false;
+    if (error) return isMissingTableError(error) ? "unconfigured" : "unknown";
+    if (!data) return "unconfigured"; // table exists, but no row for this key yet
+    if (data.value === true) return "enabled";
+    if (data.value === false) return "disabled";
+    return "unknown"; // some other stored value — not confidently either state
   } catch {
-    return true; // network/client error -> fail open
+    // Includes AbortSignal.timeout() firing, and any other thrown/network
+    // error the client surfaces as an exception rather than {error}.
+    return "unknown";
   }
+}
+
+// For DISPLAY-only callers (the public pages that decide whether to show
+// already-collected yuyu-tei data — src/app/page.tsx, cards/[id]/page.tsx
+// (both the page body and generateMetadata), compare/page.tsx, sitemap.ts,
+// cards/[id]/opengraph-image.tsx): both "unconfigured" and "unknown" fail
+// open (show the data). No external traffic decision is made by these
+// callers, so a transient read failure hiding the entire catalog on every
+// page load would be a disproportionate response to a DB hiccup — the
+// worst case is briefly-stale visibility, not a broken stop guarantee.
+export async function isYuyuteiSourceEnabled(supabase: SupabaseClient): Promise<boolean> {
+  const state = await readYuyuteiSourceState(supabase);
+  return state !== "disabled";
+}
+
+// For the ONE caller that actually sends new requests to yuyu-tei.jp
+// (src/app/api/cron/refresh-yuyutei-prices/route.ts): this is the
+// safety-critical gate Codex's review was about. Only a CONFIRMED
+// "enabled" or a CONFIRMED "unconfigured" (the table/row genuinely doesn't
+// exist — so no takedown request could have been issued through it)
+// permit scraping to proceed. "unknown" — a read failure, timeout,
+// exception, or an unrecognized stored value — must NOT permit scraping:
+// we cannot rule out that an explicit `false` is sitting there and this
+// read simply failed to observe it. This is deliberately stricter than
+// isYuyuteiSourceEnabled() above.
+//
+// Trade-off this makes explicit: until the app_settings table is created
+// in production (see migration/README.md), every check here returns
+// "unconfigured" -> scraping proceeds normally, identical to today's
+// behavior with no kill-switch at all. The stop guarantee only exists
+// from the moment the table (and its default `true` row) is created
+// onward; before that, there is nothing to fail closed *about* — there is
+// no switch yet, only the absence of one, which is the same state as
+// "not yet asked to stop."
+export async function canScrapeYuyutei(supabase: SupabaseClient): Promise<boolean> {
+  const state = await readYuyuteiSourceState(supabase);
+  return state === "enabled" || state === "unconfigured";
 }

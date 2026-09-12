@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { computeStats } from "@/lib/priceStats";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { parseSetPage, ALL_YUYUTEI_SETS, YUYUTEI_USER_AGENT } from "@/lib/yuyuteiParser";
-import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
+import { readYuyuteiSourceState } from "@/lib/appSettings";
 
 // Daily price tracking for the 2,426 yuyu-tei-sourced (data_quality='partial')
 // cards added by migration/scrape_yuyutei.mjs. Until this route existed,
@@ -79,8 +79,32 @@ export async function GET(request: Request) {
   // "stop sending them traffic" half of complying with a takedown request;
   // src/app/page.tsx and src/app/cards/[id]/page.tsx handle the "stop
   // republishing their data" half separately.
-  if (!(await isYuyuteiSourceEnabled(supabase))) {
-    return NextResponse.json({ disabled: true, reason: "yuyutei_source_enabled is false in app_settings" });
+  //
+  // Reads the tri-state result directly (rather than the boolean
+  // canScrapeYuyutei() helper) so the gate and the reported reason come
+  // from the SAME read — calling a boolean check and then a second,
+  // separate read to explain it risks the two reads disagreeing under a
+  // transient condition. Only a confirmed "enabled" or "unconfigured"
+  // (table/row genuinely doesn't exist yet — no takedown request could
+  // have been issued through a switch that isn't set up) permits
+  // scraping; "disabled" and "unknown" (read failure, timeout, exception,
+  // unrecognized value) both fail CLOSED here — a settings-read failure
+  // must never be indistinguishable from "still enabled" (Codex
+  // independent review, 2026-09-12): a genuinely disabled switch must stay
+  // disabled even if a later run's read of it merely times out or errors,
+  // not silently resume scraping. This is deliberately stricter than the
+  // display pages' isYuyuteiSourceEnabled(), which fails open on
+  // "unknown" since it isn't deciding whether to send external traffic.
+  const settingsState = await readYuyuteiSourceState(supabase);
+  if (settingsState === "disabled" || settingsState === "unknown") {
+    return NextResponse.json({
+      disabled: true,
+      reason:
+        settingsState === "disabled"
+          ? "yuyutei_source_enabled is false in app_settings"
+          : "could not confirm yuyutei_source_enabled is true (failing closed — no request was sent to yuyu-tei.jp)",
+      settingsState,
+    });
   }
 
   const startedAt = new Date().toISOString();
