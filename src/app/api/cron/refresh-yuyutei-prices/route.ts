@@ -110,6 +110,14 @@ export async function GET(request: Request) {
   let setsFailed = 0;
   let setsSkippedForTime = 0;
   const setErrorSamples: string[] = [];
+  // Distinguishes "HTTP fetch succeeded" from "the page actually contained
+  // parseable card listings" (Codex independent review, 2026-09-12,
+  // reproduced by feeding the real route a 200-OK maintenance-page HTML —
+  // every set "succeeds" as setsFetched++ while yielding zero prices, with
+  // nothing anywhere distinguishing that from a genuinely low-inventory
+  // set). A set landing here is not itself proof of a problem — see the
+  // anomaly/diagnostic logic after Phase 2 below for how this is used.
+  const setsWithNoCardsParsed: string[] = [];
 
   for (const setSlug of ALL_YUYUTEI_SETS) {
     if (remainingMs() <= 0) {
@@ -125,9 +133,14 @@ export async function GET(request: Request) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
       const { cards } = parseSetPage(html);
+      let pricesFoundThisSet = 0;
       for (const c of cards) {
-        if (c.price > 0) todayPriceByUrl.set(c.url, c.price);
+        if (c.price > 0) {
+          todayPriceByUrl.set(c.url, c.price);
+          pricesFoundThisSet++;
+        }
       }
+      if (pricesFoundThisSet === 0) setsWithNoCardsParsed.push(setSlug);
       setsFetched++;
     } catch (err) {
       setsFailed++;
@@ -135,6 +148,27 @@ export async function GET(request: Request) {
     }
     await sleep(SET_FETCH_SLEEP_MS);
   }
+
+  // Plan C (2026-09-12, following a design discussion with Codex — see
+  // COORDINATION.md for the full reasoning): rather than choosing between
+  // "flag a run-wide anomaly only if literally every set came back empty"
+  // (cheap, but misses a partial breakage affecting only some sets) or
+  // "flag any set with known existing cards that came back empty"
+  // (requires reordering Phase 1/Phase 2 or an extra DB query, and needs
+  // its own "unknown set" carve-out to avoid false alarms on genuinely
+  // low-inventory sets), this does both cheaply with data already in hand:
+  //   - allFetchedSetsEmpty: the simple, high-confidence run-wide signal
+  //     (every set that returned HTTP 200 also parsed to zero cards) —
+  //     computed right here, no dependency on Phase 2.
+  //   - knownSetsWithNoCardsParsedToday (computed after Phase 2 below):
+  //     a DIAGNOSTIC list only, not an auto-triggered anomaly — cross-
+  //     references setsWithNoCardsParsed against the sets Phase 2's
+  //     `cards` are actually known to belong to (derived from source_url,
+  //     already in memory, no extra query), so a partial breakage is
+  //     visible to a human reviewing /admin/sync-status without the
+  //     system asserting "this run failed" over what might just be a
+  //     legitimately empty set it hasn't learned about yet.
+  const allFetchedSetsEmpty = setsFetched > 0 && todayPriceByUrl.size === 0;
 
   // ---- Phase 2: read existing yuyu-tei cards, oldest-updated-first ----
   // Same "1000-row PostgREST cap" pagination this project has hit
@@ -173,6 +207,7 @@ export async function GET(request: Request) {
             error_sample: [
               `incomplete: reading_cards, itemsReadSoFar=${cards.length}`,
               setsSkippedForTime > 0 ? `(${setsSkippedForTime} set(s) were also not fetched this run)` : null,
+              allFetchedSetsEmpty ? "ANOMALY: every fetched set returned zero cards (possible site block or page structure change)" : null,
             ]
               .filter(Boolean)
               .join(" "),
@@ -186,6 +221,7 @@ export async function GET(request: Request) {
           setsFetched,
           setsFailed,
           setsSkippedForTime,
+          allFetchedSetsEmpty,
           syncRunLogged: !logErr,
           ...(logErr ? { syncRunLogError: errorMessage(logErr) } : {}),
         });
@@ -208,6 +244,23 @@ export async function GET(request: Request) {
       from += pageSize;
     }
   }
+
+  // Diagnostic only (see the Plan C comment above Phase 1) — cross-
+  // references setsWithNoCardsParsed against the set each already-tracked
+  // card actually belongs to (derived from source_url, which Phase 2 just
+  // read — no extra query). A set showing up here has EXISTING cards in
+  // the catalog yet produced zero prices today despite its HTTP fetch
+  // succeeding — worth a human glancing at /admin/sync-status, but
+  // deliberately NOT auto-classified as a failure (a card can be the only
+  // one this project tracks from an otherwise-thin set, and one card
+  // going temporarily out of stock on yuyu-tei is not evidence of a
+  // scraper problem).
+  const setSlugFromSourceUrl = (url: string | null): string | null =>
+    url?.match(/\/card\/([a-z0-9]+)\//)?.[1] ?? null;
+  const knownSetSlugs = new Set(
+    cards.map((c) => setSlugFromSourceUrl(c.source_url)).filter((s): s is string => s !== null)
+  );
+  const knownSetsWithNoCardsParsedToday = setsWithNoCardsParsed.filter((slug) => knownSetSlugs.has(slug));
 
   // ---- Phase 3: for each card, upsert today's snapshot + recompute stats ----
   const today = new Date().toISOString().slice(0, 10);
@@ -294,6 +347,12 @@ export async function GET(request: Request) {
   }
 
   const errorSample = [
+    allFetchedSetsEmpty
+      ? "ANOMALY: every fetched set returned zero cards (possible site block or page structure change)"
+      : null,
+    knownSetsWithNoCardsParsedToday.length > 0
+      ? `sets with known tracked cards but zero parsed today (not auto-flagged as a failure, review manually): ${knownSetsWithNoCardsParsedToday.join(", ")}`
+      : null,
     ...setErrorSamples.map((s) => `[set fetch] ${s}`),
     ...errorSamples,
     setsSkippedForTime > 0 ? `(time budget reached during set fetch — ${setsSkippedForTime} set(s) not fetched this run)` : null,
@@ -332,6 +391,14 @@ export async function GET(request: Request) {
     setsFetched,
     setsFailed,
     setsSkippedForTime,
+    // Plan C fields (design discussion with Codex, 2026-09-12 — see
+    // COORDINATION.md): allFetchedSetsEmpty is the high-confidence,
+    // run-wide anomaly signal; knownSetsWithNoCardsParsedToday is a
+    // diagnostic-only list (not an auto-flagged failure) of sets with
+    // existing tracked cards that nonetheless parsed to zero today.
+    allFetchedSetsEmpty,
+    setsWithNoCardsParsed,
+    knownSetsWithNoCardsParsedToday,
     // Explicit marker (Codex independent review, 2026-09-12) so a log
     // reader never has to infer from the absence of an earlier
     // `incomplete: true, phase: "reading_cards"` response that Phase 2

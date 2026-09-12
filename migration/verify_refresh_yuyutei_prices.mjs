@@ -57,14 +57,34 @@ const fixtureHtml = readFileSync(new URL("./_test_fixtures/yuyutei_op01_sample.h
 const FIXTURE_URL_1 = "https://yuyu-tei.jp/sell/opc/card/op01/10151"; // price 3,980
 const FIXTURE_URL_2 = "https://yuyu-tei.jp/sell/opc/card/op01/10152"; // price 148,000
 
+// A trivial, real (not hand-fabricated with card markup) empty page —
+// stands in for a maintenance page, a bot-detection block page, or a
+// genuinely empty/not-yet-stocked set: parseSetPage() finds zero listings
+// either way, exactly the ambiguity Plan C's diagnostics are about.
+const EMPTY_HTML = "<title>[XX99]Nothing Here</title><html><body>no listings</body></html>";
+// A second, DISJOINT set of real card URLs (same real fixture markup,
+// text-substituted to different ids/slug) — needed so a test can make
+// "the other 56 sets" return genuinely non-empty, non-op01 listings,
+// proving allFetchedSetsEmpty stays false and todayPriceByUrl gets real
+// entries, while still isolating op01 specifically as the broken one.
+// Plain fixtureHtml alone can't do this: every set's mocked response
+// would otherwise "leak" the same op01 card URLs regardless of which set
+// slug was actually requested.
+const OTHER_SET_HTML = fixtureHtml.replace(/op01/g, "op99").replace(/10151/g, "90001").replace(/10152/g, "90002");
+
 let fetchAdvanceMs = 0;
 let fetchCallCount = 0;
 let fetchShouldFail = () => false;
+// Optional override: (setSlug) => html | undefined. Falls back to the
+// real fixture when not provided or when it returns undefined for a slug.
+let fetchHtmlForSet = () => undefined;
 global.fetch = async (url) => {
   fetchCallCount++;
   advance(fetchAdvanceMs);
   if (fetchShouldFail(String(url))) return { ok: false, status: 500 };
-  return { ok: true, text: async () => fixtureHtml };
+  const setSlug = String(url).match(/\/s\/([a-z0-9]+)$/)?.[1] ?? null;
+  const html = (setSlug && fetchHtmlForSet(setSlug)) ?? fixtureHtml;
+  return { ok: true, text: async () => html };
 };
 
 // ---- Supabase mock ----
@@ -194,6 +214,7 @@ async function run(label, opts) {
   fetchCallCount = 0;
   fetchAdvanceMs = opts.fetchAdvanceMs ?? 0;
   fetchShouldFail = opts.fetchShouldFail ?? (() => false);
+  fetchHtmlForSet = opts.fetchHtmlForSet ?? (() => undefined);
   const { mock, calls } = makeSupabaseMock(opts);
   globalThis.__SUPABASE_MOCK__ = mock;
   const request = new Request("http://localhost/api/cron/refresh-yuyutei-prices", {
@@ -527,6 +548,84 @@ const twoMatchingCards = [
   assert(body?.success === 2, "S5: the actual price-tracking work still completed");
   assert(body?.syncRunLogged === false, "S5: syncRunLogged is false");
   assert(typeof body?.syncRunLogError === "string" && body.syncRunLogError.length > 0, "S5: syncRunLogError is surfaced");
+}
+
+// Scenarios 6-9 (Plan C, design discussion with Codex, 2026-09-12 — see
+// COORDINATION.md): distinguishing "HTTP fetch succeeded" from "the page
+// actually contained parseable card listings", and testing that the
+// resulting anomaly/diagnostic signals fire (or deliberately don't) in
+// exactly the cases they're meant to.
+
+// Scenario 6 (false-alarm check): a set with NO existing tracked cards in
+// the DB parses to zero today (e.g. a genuinely not-yet-stocked/unreleased
+// set). This must NOT be treated as an anomaly of any kind.
+{
+  const { body, threw } = await run("Plan C: an unknown/genuinely-empty set parsing to zero is not a false alarm", {
+    allCards: twoMatchingCards, // all reference set "op01" only
+    fetchHtmlForSet: (slug) => (slug === "eb04" ? EMPTY_HTML : undefined),
+  });
+  assert(!threw, "S6: no throw");
+  assert(body?.allFetchedSetsEmpty === false, "S6: no run-wide anomaly");
+  assert(body?.setsWithNoCardsParsed?.includes("eb04"), "S6: eb04 is correctly recorded as having parsed zero cards");
+  assert(
+    !body?.knownSetsWithNoCardsParsedToday?.includes("eb04"),
+    "S6: eb04 does NOT appear in the diagnostic list — no tracked card belongs to it, so this is not flagged"
+  );
+  assert(body?.knownSetsWithNoCardsParsedToday?.length === 0, "S6: the diagnostic list is empty — no false alarm");
+}
+
+// Scenario 7 (miss check, partial breakage): a set that DOES have existing
+// tracked cards (op01, per twoMatchingCards) parses to zero today, while
+// every other set is fine. This must show up in the diagnostic list —
+// but must NOT trip the run-wide anomaly (most sets are still fine).
+{
+  const { body, threw } = await run("Plan C: a set with known tracked cards parsing to zero is surfaced as a diagnostic", {
+    allCards: twoMatchingCards,
+    // op01 (the only set twoMatchingCards' source_urls reference) returns
+    // nothing; every OTHER set returns real, disjoint (op99) card
+    // listings — so this scenario is genuinely "one set out of 57 broke",
+    // not indistinguishable from S8's total breakdown.
+    fetchHtmlForSet: (slug) => (slug === "op01" ? EMPTY_HTML : OTHER_SET_HTML),
+  });
+  assert(!threw, "S7: no throw");
+  assert(body?.allFetchedSetsEmpty === false, "S7: no run-wide anomaly — only one set out of 57 is affected");
+  assert(body?.setsWithNoCardsParsed?.includes("op01"), "S7: op01 is recorded as having parsed zero cards");
+  assert(
+    body?.knownSetsWithNoCardsParsedToday?.includes("op01"),
+    "S7: op01 DOES appear in the diagnostic list — it has known tracked cards (twoMatchingCards) and still came back empty"
+  );
+  // Both tracked cards' prices are consequently not found this run —
+  // proves the diagnostic isn't just cosmetic, it corresponds to a real
+  // effect downstream.
+  assert(body?.notFoundInFetch === 2, "S7: both known cards are correctly reported as not-found-in-fetch this run");
+}
+
+// Scenario 8 (miss check, total breakdown): every set returns HTTP 200
+// but zero parseable listings (e.g. a maintenance page, or a bot-block
+// page that still responds 200) — the high-confidence, cheap-to-compute
+// run-wide signal must fire.
+{
+  const { body, threw } = await run("Plan C: every fetched set returning zero cards trips the run-wide anomaly", {
+    allCards: twoMatchingCards,
+    fetchHtmlForSet: () => EMPTY_HTML,
+  });
+  assert(!threw, "S8: no throw");
+  assert(body?.allFetchedSetsEmpty === true, "S8: run-wide anomaly is flagged");
+  assert(body?.setsWithNoCardsParsed?.length === 57, "S8: all 57 sets are recorded as zero-parse");
+  assert(body?.notFoundInFetch === 2, "S8: both cards are not-found this run (nothing was parsed anywhere)");
+}
+
+// Scenario 9 (control): every set parses normally — no anomaly, no
+// diagnostic entries, proving the new logic doesn't misfire when nothing
+// is actually wrong.
+{
+  const { body, threw } = await run("Plan C control: everything parses normally, no anomaly/diagnostic signals fire", {
+    allCards: twoMatchingCards,
+  });
+  assert(!threw, "S9: no throw");
+  assert(body?.allFetchedSetsEmpty === false, "S9: no run-wide anomaly");
+  assert(body?.setsWithNoCardsParsed?.length === 0, "S9: no set parsed to zero cards");
+  assert(body?.knownSetsWithNoCardsParsedToday?.length === 0, "S9: no diagnostic entries");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
