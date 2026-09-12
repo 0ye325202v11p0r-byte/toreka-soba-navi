@@ -342,6 +342,43 @@ const twoMatchingCards = [
   assert(calls.updates === 2, "S0f: cards are still processed normally");
 }
 
+// Scenarios 0g-0h (Codex independent re-verification, second pass,
+// 2026-09-12): isMissingTableError()'s message-substring fallback was
+// found to be too broad — a genuine PostgREST "column not found" error
+// (the table EXISTS, something else is misconfigured) contains "schema
+// cache" and would have been misclassified as "unconfigured" (table
+// doesn't exist yet, safe to scrape) by the pre-fix logic. These assert
+// the fix at the full route level: such errors must fail CLOSED (zero
+// fetches), the same as any other "unknown" state — not be confused with
+// the genuinely-safe "table doesn't exist yet" case in S0f above.
+{
+  const { body, threw, calls } = await run("kill-switch: app_settings table exists but a COLUMN is missing (schema mismatch)", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => ({
+      data: null,
+      error: { code: "PGRST204", message: "Could not find the 'value' column of 'app_settings' in the schema cache" },
+    }),
+  });
+  assert(!threw, "S0g: no throw");
+  assert(body?.disabled === true, "S0g: response reports disabled:true — a column-level schema error must NOT be treated as 'table not set up yet'");
+  assert(body?.settingsState === "unknown", "S0g: settingsState is 'unknown', not 'unconfigured', despite the message containing 'schema cache'");
+  assert(fetchCallCount === 0, "S0g: zero requests to yuyu-tei.jp");
+  assert(calls.cardsPages === 0 && calls.updates === 0, "S0g: no cards read or written");
+}
+{
+  const { body, threw, calls } = await run("kill-switch: a DIFFERENT table's schema-cache-miss error (not app_settings)", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => ({
+      data: null,
+      error: { code: "PGRST205", message: "Could not find the table 'public.some_other_table' in the schema cache" },
+    }),
+  });
+  assert(!threw, "S0h: no throw");
+  assert(body?.disabled === true, "S0h: response reports disabled:true — this error doesn't confirm app_settings itself is missing");
+  assert(body?.settingsState === "unknown", "S0h: settingsState is 'unknown'");
+  assert(fetchCallCount === 0, "S0h: zero requests to yuyu-tei.jp");
+}
+
 // Scenario 1: the set-fetch phase itself runs out of budget partway
 // through (each fetch costs enough virtual time that TIME_BUDGET_MS trips
 // before all 57 are done). Assert setsSkippedForTime > 0 and fewer than 57

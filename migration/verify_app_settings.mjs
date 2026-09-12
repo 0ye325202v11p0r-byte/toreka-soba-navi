@@ -112,6 +112,51 @@ function mockClientThatThrowsOnFrom() {
   assertEqual(s, "unknown", "T10 value:null stored -> 'unknown'");
 }
 
+// ---- Precision of isMissingTableError (Codex independent re-verification,
+// second pass, 2026-09-12): the table exists but SOMETHING ELSE is wrong
+// must classify as 'unknown', never 'unconfigured' — the app_settings
+// table being present but broken in some other way still means a
+// takedown request COULD have been issued through it, so this must not
+// be treated the same as "nobody has set this up yet". The previous
+// message-substring fallback (`includes("does not exist")` or
+// `includes("schema cache")` alone) was too broad and would have
+// misclassified several of these as 'unconfigured'. ----
+{
+  // Real PostgREST PGRST204 message shape for a missing COLUMN (not the
+  // table) — table exists, this column doesn't. Contains "schema cache"
+  // (the old fallback's trigger) but says nothing about a missing table.
+  const s = await readYuyuteiSourceState(
+    mockClient({
+      data: null,
+      error: { code: "PGRST204", message: "Could not find the 'value' column of 'app_settings' in the schema cache" },
+    })
+  );
+  assertEqual(s, "unknown", "T10b column-missing error (PGRST204, names app_settings, mentions 'schema cache') -> 'unknown', NOT 'unconfigured'");
+}
+{
+  // A schema-cache-flavored error that doesn't name this table at all.
+  const s = await readYuyuteiSourceState(
+    mockClient({ data: null, error: { code: "PGRST205", message: "Could not find the table 'public.some_other_table' in the schema cache" } })
+  );
+  assertEqual(s, "unknown", "T10c a DIFFERENT table's schema-cache-miss error -> 'unknown' (doesn't confirm app_settings is missing)");
+}
+{
+  // Names app_settings and says "does not exist", but about a function,
+  // not the table — PGRST202 is "could not find a function", not a
+  // missing-table code, and was WRONGLY included as one in the original
+  // implementation (fixed in this same pass).
+  const s = await readYuyuteiSourceState(
+    mockClient({ data: null, error: { code: "PGRST202", message: "Could not find the function public.app_settings_helper() does not exist" } })
+  );
+  assertEqual(s, "unknown", "T10d function-not-found error (PGRST202), even naming app_settings loosely -> 'unknown', NOT 'unconfigured'");
+}
+{
+  // Generic ambiguous message containing "schema cache" but naming
+  // neither this table nor a missing-table condition specifically.
+  const s = await readYuyuteiSourceState(mockClient({ data: null, error: { code: "500", message: "schema cache reload in progress" } }));
+  assertEqual(s, "unknown", "T10e ambiguous 'schema cache' message not about app_settings being missing -> 'unknown'");
+}
+
 // ---- isYuyuteiSourceEnabled: display pages, fails open on unconfigured/unknown ----
 assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: { value: true }, error: null })), true, "T11 display: enabled -> true");
 assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: { value: false }, error: null })), false, "T12 display: disabled -> false (this is the only way to actually hide anything)");
