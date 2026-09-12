@@ -74,6 +74,10 @@ export interface Transaction {
   type: TransactionType;
   quantity: number;
   price_per_unit: number;
+  // Total fee/commission paid on this transaction (added 2026-09-13) —
+  // `not null default 0` in the DB, so this is always a real number, never
+  // null, even for transactions recorded before the column existed.
+  fee: number;
   transaction_date: string;
   note: string | null;
   created_at: string;

@@ -178,6 +178,15 @@ create table if not exists public.transactions (
   type text not null check (type in ('buy', 'sell')),
   quantity integer not null check (quantity > 0),
   price_per_unit numeric not null check (price_per_unit >= 0),
+  -- Total fee/commission actually paid on this one transaction (buy or
+  -- sell) — added 2026-09-13 so 含み損益/実現損益 reflects what really
+  -- lands in the user's pocket, not just quantity*price_per_unit. Optional
+  -- in the UI (defaults to 0, the same as every transaction recorded
+  -- before this column existed); see src/lib/pnl.ts for how it folds into
+  -- the FIFO calculation. `not null default 0` rather than nullable so
+  -- computePnl() never has to branch on null — a real transaction with no
+  -- fee IS a fee of exactly 0, not an unknown fee.
+  fee numeric not null default 0 check (fee >= 0),
   transaction_date date not null default current_date,
   note text,
   created_at timestamptz default now()

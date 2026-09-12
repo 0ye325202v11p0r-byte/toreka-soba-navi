@@ -38,6 +38,7 @@ export default function PortfolioClient({
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState(1);
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
+  const [fee, setFee] = useState<number | "">("");
   const [date, setDate] = useState(todayInTokyo);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export default function PortfolioClient({
       setErrorMsg("選択したカードが見つかりません。カードを選択し直してください。");
       return;
     }
-    if (!canSubmitTransaction({ cardId, isKnownCard: true, pricePerUnit, quantity })) return;
+    if (!canSubmitTransaction({ cardId, isKnownCard: true, pricePerUnit, quantity, fee })) return;
     setBusy(true);
     setErrorMsg(null);
     // try/finally around the whole body (self-review, 2026-09-12) — without
@@ -88,6 +89,9 @@ export default function PortfolioClient({
         type,
         quantity,
         price_per_unit: pricePerUnit,
+        // "" (not entered) becomes 0 here, matching the DB column's own
+        // `not null default 0` — an omitted fee IS a fee of 0, not unknown.
+        fee: fee === "" ? 0 : fee,
         transaction_date: date,
       });
       if (error) {
@@ -95,6 +99,7 @@ export default function PortfolioClient({
         return;
       }
       setPricePerUnit("");
+      setFee("");
       router.refresh();
     } catch {
       setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
@@ -183,6 +188,20 @@ export default function PortfolioClient({
           />
         </div>
         <div>
+          <label htmlFor="txn-fee" className="mb-1 block text-xs text-ink-muted">
+            手数料（円・任意）
+          </label>
+          <input
+            id="txn-fee"
+            type="number"
+            min={0}
+            placeholder="0"
+            value={fee}
+            onChange={(e) => setFee(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-28 rounded-md border border-border bg-bg px-2 py-1.5"
+          />
+        </div>
+        <div>
           <label htmlFor="txn-date" className="mb-1 block text-xs text-ink-muted">
             日付
           </label>
@@ -198,7 +217,7 @@ export default function PortfolioClient({
           type="submit"
           disabled={
             busy ||
-            !canSubmitTransaction({ cardId, isKnownCard: cardById.has(cardId), pricePerUnit, quantity })
+            !canSubmitTransaction({ cardId, isKnownCard: cardById.has(cardId), pricePerUnit, quantity, fee })
           }
           className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
         >
@@ -265,6 +284,9 @@ export default function PortfolioClient({
                   {t.type === "buy" ? "購入" : "売却"}
                 </span>{" "}
                 {card?.name ?? t.card_id} × {t.quantity} @ {yen(t.price_per_unit)}
+                {Number(t.fee) > 0 && (
+                  <span className="text-xs text-ink-faint"> （手数料 {yen(t.fee)}）</span>
+                )}
                 <span className="ml-2 text-xs text-ink-faint">{t.transaction_date}</span>
               </div>
               <button

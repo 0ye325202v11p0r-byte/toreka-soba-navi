@@ -97,6 +97,40 @@ assertEqual(
   "T6c whole-number quantity (2) is still submittable"
 );
 
+// Fee is optional (added 2026-09-13 with fee-aware P&L) — omitted or ""
+// means "not entered," valid, defaults to 0 on submit. Only a value the
+// user actually typed gets validated against the DB's `check (fee >= 0)`.
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2 }),
+  true,
+  "T6d omitted fee (undefined) is still submittable — same as every transaction recorded before this field existed"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2, fee: "" }),
+  true,
+  "T6e empty-string fee (not yet typed) is still submittable"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2, fee: 100 }),
+  true,
+  "T6f a genuine non-negative fee is submittable"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2, fee: -50 }),
+  false,
+  "T6g a negative fee blocks submission (matches the DB's check (fee >= 0))"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2, fee: NaN }),
+  false,
+  "T6h a non-finite fee blocks submission"
+);
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: 2, fee: 0 }),
+  true,
+  "T6i an explicit fee of exactly 0 is submittable"
+);
+
 // --- canSubmitWatchItem ---
 
 assertEqual(

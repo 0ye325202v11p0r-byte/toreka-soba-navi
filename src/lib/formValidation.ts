@@ -16,8 +16,13 @@ export function canSubmitTransaction(params: {
   isKnownCard: boolean;
   pricePerUnit: number | "";
   quantity: number;
+  // Optional (added 2026-09-13 with fee-aware P&L) — "" or omitted means
+  // "not entered," which is valid and defaults to 0 on submit, exactly the
+  // same as every transaction recorded before this field existed. Only a
+  // value the user actually typed gets validated.
+  fee?: number | "";
 }): boolean {
-  const { cardId, isKnownCard, pricePerUnit, quantity } = params;
+  const { cardId, isKnownCard, pricePerUnit, quantity, fee } = params;
   if (!cardId || !isKnownCard) return false;
   if (pricePerUnit === "" || !Number.isFinite(pricePerUnit)) return false;
   // transactions.quantity is a Postgres `integer` column (supabase/schema.sql)
@@ -29,6 +34,10 @@ export function canSubmitTransaction(params: {
   // instead of a Japanese validation message — found via self-review,
   // 2026-09-12.
   if (!Number.isInteger(quantity) || quantity < 1) return false;
+  // Matches the DB's `check (fee >= 0)` — catches a bad value here with a
+  // friendly message instead of a raw Postgres constraint error, same
+  // reasoning as the quantity check above.
+  if (fee !== undefined && fee !== "" && (!Number.isFinite(fee) || fee < 0)) return false;
   return true;
 }
 

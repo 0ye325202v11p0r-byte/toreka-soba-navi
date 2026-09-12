@@ -35,23 +35,39 @@ export function computePnl(transactions: Transaction[]): PnlSummary {
     const lots: Lot[] = [];
 
     for (const t of sorted) {
-      // price_per_unit is a Postgres `numeric` column, which PostgREST may
-      // serialize as a JSON string to avoid float precision loss — coerce
-      // explicitly rather than relying on operator coercion further down.
+      // price_per_unit/fee are Postgres `numeric` columns, which PostgREST
+      // may serialize as a JSON string to avoid float precision loss —
+      // coerce explicitly rather than relying on operator coercion further
+      // down. `t.fee ?? 0` covers transactions recorded before the fee
+      // column existed (absent from the object entirely, not just 0).
       const quantity = Number(t.quantity);
       const pricePerUnit = Number(t.price_per_unit);
+      const fee = Number(t.fee ?? 0);
 
       if (t.type === "buy") {
-        lots.push({ quantity, pricePerUnit });
+        // Fee raises the effective cost basis — a ¥100 fee on a ¥1000×2
+        // purchase means the true cost is ¥1050/unit, not ¥1000/unit.
+        // Folded into the lot's own pricePerUnit here (rather than tracked
+        // separately) so every downstream FIFO consumption below needs no
+        // changes at all — it already operates purely on lot.pricePerUnit
+        // (self-review, 2026-09-13: without this, 含み損益/実現損益 never
+        // reflected what actually left the user's pocket on a purchase).
+        const effectiveCostPerUnit = (quantity * pricePerUnit + fee) / quantity;
+        lots.push({ quantity, pricePerUnit: effectiveCostPerUnit });
         continue;
       }
 
-      // sell: consume oldest lots first (FIFO), realize gain/loss per unit sold
+      // sell: fee lowers the effective proceeds per unit, the same way —
+      // a ¥100 fee on a ¥1200×2 sale means real proceeds are ¥1150/unit,
+      // not ¥1200/unit.
+      const effectiveProceedsPerUnit = (quantity * pricePerUnit - fee) / quantity;
+
+      // consume oldest lots first (FIFO), realize gain/loss per unit sold
       let remainingToSell = quantity;
       while (remainingToSell > 0 && lots.length > 0) {
         const lot = lots[0];
         const consumed = Math.min(lot.quantity, remainingToSell);
-        realizedPnl += consumed * (pricePerUnit - lot.pricePerUnit);
+        realizedPnl += consumed * (effectiveProceedsPerUnit - lot.pricePerUnit);
         lot.quantity -= consumed;
         remainingToSell -= consumed;
         if (lot.quantity === 0) lots.shift();

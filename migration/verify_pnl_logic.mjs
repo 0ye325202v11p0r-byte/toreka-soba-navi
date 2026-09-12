@@ -134,4 +134,43 @@ function assertEqual(actual, expected, label) {
   assertEqual(input.length, inputLengthBefore, "T7 input array length is unchanged (no push/shift/splice)");
 }
 
+// --- Test 8: fee raises the effective cost basis on a buy (2026-09-13) ---
+// Buy 2 @ 1000 with a 100 total fee. Effective cost = (2*1000+100)/2 = 1050
+// per unit, so cost basis = 2100, not 2000 — the FIFO calc previously
+// ignored fees entirely, so 含み損益 never reflected what actually left
+// the user's pocket on a purchase.
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, fee: 100, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+  ]);
+  assertEqual(result.holdings[0].costBasis, 2100, "T8 buy fee raises cost basis (2000 + 100 fee)");
+  assertEqual(result.holdings[0].avgCost, 1050, "T8 buy fee raises avgCost per unit (2100/2)");
+}
+
+// --- Test 9: fee lowers the effective proceeds on a sell (2026-09-13) ---
+// Buy 2 @ 1000 (no fee), sell 2 @ 1500 with a 100 total fee. Effective
+// proceeds = (2*1500-100)/2 = 1450/unit. Realized = 2*(1450-1000) = 900,
+// not the fee-blind 1000 from Test 2's identical prices with no fee.
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, fee: 0, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+    { card_id: "c1", type: "sell", quantity: 2, price_per_unit: 1500, fee: 100, transaction_date: "2026-02-01", created_at: "2026-02-01T00:00:00Z" },
+  ]);
+  assertEqual(result.realizedPnl, 900, "T9 sell fee lowers realized profit (1000 fee-blind minus the 100 fee)");
+}
+
+// --- Test 10: a transaction with no fee field at all (recorded before this
+// column existed) behaves identically to fee=0 — backward compatibility
+// for every transaction already in the database (2026-09-13). ---
+{
+  const withoutFeeField = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+  ]);
+  const withExplicitZeroFee = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, fee: 0, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+  ]);
+  assertEqual(withoutFeeField.holdings[0].costBasis, withExplicitZeroFee.holdings[0].costBasis, "T10 missing fee field == explicit fee:0");
+  assertEqual(withoutFeeField.holdings[0].costBasis, 2000, "T10 cost basis with no fee is the plain quantity*price");
+}
+
 console.log("\nAll pnl.ts logic checks completed.");
