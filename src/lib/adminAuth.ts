@@ -21,7 +21,13 @@
 // mean the owner is locked out of /admin/sync-status until ADMIN_EMAIL is
 // set, which is the correct trade-off for a page with no other gate at all.
 export function isAdminUser(email: string | null | undefined): boolean {
-  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminEmail = process.env.ADMIN_EMAIL?.trim();
   if (!adminEmail || !email) return false;
-  return email.toLowerCase() === adminEmail.toLowerCase();
+  // Trims the compared user email too — Supabase-authenticated emails are
+  // never expected to carry stray whitespace, but ADMIN_EMAIL is set by
+  // hand (pasted into .env.local or the Vercel dashboard), where a trailing
+  // space or newline is an easy, silent way to lock the real owner out
+  // (found via self-review, 2026-09-12, while re-reading this file after
+  // shipping it — not a reported incident).
+  return email.trim().toLowerCase() === adminEmail.toLowerCase();
 }

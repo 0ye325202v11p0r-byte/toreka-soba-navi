@@ -60,4 +60,21 @@ await withAdminEmail("", async (isAdminUser) => {
   assertEqual(isAdminUser(""), false, "T10 ADMIN_EMAIL='' does not match an empty user email either");
 });
 
+// Whitespace handling (self-review, 2026-09-12) — ADMIN_EMAIL is set by
+// hand (pasted into .env.local or the Vercel dashboard), where a stray
+// trailing space/newline is an easy, silent way to lock the real owner out.
+await withAdminEmail("  owner@example.com\n", async (isAdminUser) => {
+  assertEqual(isAdminUser("owner@example.com"), true, "T11 leading/trailing whitespace in ADMIN_EMAIL is trimmed before comparing");
+});
+await withAdminEmail("owner@example.com", async (isAdminUser) => {
+  assertEqual(isAdminUser("  owner@example.com  "), true, "T12 leading/trailing whitespace in the user's own email is also trimmed");
+});
+// A whitespace-only ADMIN_EMAIL (e.g. an accidental single space pasted
+// into the Vercel dashboard) must be treated the same as fully unset —
+// fail-closed, not "matches an empty/whitespace user email."
+await withAdminEmail("   ", async (isAdminUser) => {
+  assertEqual(isAdminUser("owner@example.com"), false, "T13 whitespace-only ADMIN_EMAIL is treated as unset (fail-closed)");
+  assertEqual(isAdminUser("   "), false, "T13b whitespace-only ADMIN_EMAIL does not match a whitespace-only user email either");
+});
+
 console.log("\nAll adminAuth.ts checks completed.");
