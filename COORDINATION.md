@@ -1039,3 +1039,13 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 検証：両方とも`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。ログインフォーム自体は完全なReactコンポーネントのため専用テストは追加せず（既存の方針通り）。
 
 push・本番DB照会/変更/デプロイは行っていません。引き続き点検・改善を継続します。
+
+## Claude Codeより報告（2026-09-12）— 改善3件目：日時表示のタイムゾーン固定（ハイドレーション不一致の解消）
+
+**発見した問題：** `new Date(x).toLocaleString("ja-JP")`はtimeZoneを明示しない限り実行環境自身のローカルタイムゾーンを使います。`WatchlistClient.tsx`は`"use client"`コンポーネントで、Next.jsはこれをサーバー側（Vercel＝UTC）でレンダリングしてSSR用HTMLを生成した後、クライアント側（訪問者のブラウザ＝日本の利用者なら通常JST）で同じレンダリングを再実行してハイドレーションします。`last_triggered_at`の表示がサーバー・クライアントで異なる文字列になりうるため、Reactのハイドレーション不一致（コンソール警告、初回表示直後に時刻が9時間ズレて一瞬見える可能性）を引き起こしうる状態でした。`admin/sync-status/page.tsx`・`cards/[id]/page.tsx`はServer Componentのため実害はありませんが、一貫性のため同様に修正しました。
+
+**修正：** `src/lib/format.ts`に`formatDateTime()`（`timeZone: "Asia/Tokyo"`固定）を追加し、該当4箇所を置き換え。
+
+**検証：** `process.env.TZ`を実際に`America/New_York`に変更してから呼び出し、`UTC`設定時と完全に同じ文字列が返ることを確認（Node側のTZ変更が実行時に反映されることも合わせて確認済み）。`migration/verify_format.mjs`に2件追加、計7アサーション全PASS。全11ファイルの回帰テスト・`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミット8ca0cdb（ローカルのみ、pushなし）。
+
+引き続き点検・改善を継続します。
