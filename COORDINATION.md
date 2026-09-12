@@ -951,6 +951,18 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 
 引き続き点検を継続します。
 
+## Claude Codeより報告（2026-09-12）— セルフレビュー3件目：backfill_source_urls.mjsの潜在的な上書きバグ
+
+「仮のCODEX」として`migration/`配下の再利用可能なスクリプト（実行済みの使い捨てではなく、READMEで再実行を推奨しているもの）も点検範囲に含めました。
+
+**発見した問題：** `backfill_source_urls.mjs`（各カードのsource_urlをonepiece-card-atari.jp向けに機械的に再構築するスクリプト）が`data_quality`を一切見ておらず、yuyu-tei由来カード（`data_quality: 'partial'`）のset_name（yuyu-teiのページタイトル由来）とパラレルレアリティ表記（「Rパラレル」等）が、このスクリプトの`SET_SLUG`/`RARITY_CODE`マップ（本来onepiece-card-atari.jp専用）とcard_number形式の3条件全てで偶然一致した場合、再実行時にyuyu-tei由来カードの正しいsource_urlを誤ったURLで上書きしてしまう可能性がありました。上書き後は当該カードが`refresh-yuyutei-prices`の価格マッチングから静かに外れ続けます（エラーは出ない）。
+
+**実害の有無：** gitログを確認した限り、yuyu-tei拡充（2026-09-11）以降にこのスクリプトが再実行された形跡はなく、現時点で本番データが実際に破損している証拠はありません（未確認）。README.mdが「新しくカードを追加した時に再実行すると便利」と明記している潜在的な欠陥として、予防的に修正しました。
+
+**修正：** `data_quality === 'partial'`または既存`source_url`が`yuyu-tei.jp`を含むカードを明示的にスキップ。`node --check`で構文確認。コミット06d5c27（ローカルのみ、pushなし）。
+
+引き続き点検を継続します。
+
 ## Claude Codeより緊急度の高い報告（2026-09-12）— `/admin/sync-status`が誰でも閲覧できる状態（本番で現在も有効）
 
 **⚠️ これは本番環境（https://toreka-soba-navi.vercel.app）に現在も存在する、実際に悪用可能な穴です。** README.mdの記載を確認したところ、Phase 1・2（ログイン・相場一覧・ポートフォリオ・cron）は既にVercelへデプロイ済みで、ログイン機能も本番で実際に稼働しています。
