@@ -17,6 +17,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, appendFileSync } from "fs";
+import { computeStats } from "../src/lib/priceStats.ts";
+import { buildVerdictText } from "../src/lib/ai-verdict.ts";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -54,53 +56,24 @@ function ymd(slashDate) {
   return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
 }
 
-function computeStats(history) {
-  const sorted = [...history].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
-  const prices = sorted.map((h) => h.price);
-  const last30 = prices.slice(-30);
-  const last90 = prices.slice(-90);
-  const avg = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-  const avg30 = avg(last30);
-  const avg90 = avg(last90);
-  const current = prices[prices.length - 1];
-  const pctVsAvg30 = Math.round(((current - avg30) / avg30) * 1000) / 10;
-  const pctVsAvg90 = Math.round(((current - avg90) / avg90) * 1000) / 10;
-  const low30 = Math.min(...last30);
-  const judgment = pctVsAvg30 > 15 ? "割高" : pctVsAvg30 < -15 ? "割安" : "適正";
-  const trend = pctVsAvg30 > 3 ? "rising" : pctVsAvg30 < -3 ? "declining" : "flat";
-  return {
-    current_price: current,
-    avg30: Math.round(avg30),
-    avg90: Math.round(avg90),
-    pct_vs_avg30: pctVsAvg30,
-    pct_vs_avg90: pctVsAvg90,
-    low30,
-    change_amt30: current - low30,
-    judgment,
-    trend_direction: trend,
-  };
-}
-
-function buildVerdictText({ currentPrice, avg30, pctVsAvg30, pctVsAvg90, judgment }) {
-  const direction = judgment === "割安" ? "下回る" : judgment === "割高" ? "上回る" : "近い";
-  const magnitude = Math.abs(pctVsAvg30) > 40 ? "大きく" : Math.abs(pctVsAvg30) > 20 ? "やや" : "";
-  const moveVerb = judgment === "割安" ? "下がっています" : judgment === "割高" ? "上がっています" : "推移しています";
-  const sameDirection = (pctVsAvg30 >= 0 && pctVsAvg90 >= 0) || (pctVsAvg30 <= 0 && pctVsAvg90 <= 0);
-  const trendSentence = sameDirection
-    ? `90日平均比でも${pctVsAvg90 > 0 ? "+" : ""}${pctVsAvg90.toFixed(1)}%と同様に${pctVsAvg90 >= 0 ? "プラス" : "マイナス"}方向で推移しており、短期的な一時的な動きというより、ある程度の期間をかけて価格が${judgment === "割高" ? "切り上がって" : judgment === "割安" ? "落ち着いて" : "安定して"}きた可能性があります。`
-    : `一方で90日平均比では${pctVsAvg90 > 0 ? "+" : ""}${pctVsAvg90.toFixed(1)}%と逆方向になっており、直近の値動きと中期的なトレンドの方向感が一致していません。短期的な変動の可能性もあるため注意が必要です。`;
-  const advice =
-    judgment === "割高"
-      ? "高値掴みを避けるため、急いで購入せず値動きが落ち着くタイミングも選択肢に入れるとよさそうです。"
-      : judgment === "割安"
-        ? "店舗仕入れ状況などで短期的に価格が動くこともあるため、購入を検討する際は複数店舗の掲載も確認したうえで判断することをおすすめします。"
-        : "目立った過熱・冷え込みは見られず、現時点では急いで判断する必要は薄いと考えられます。";
-  const openLine =
-    direction === "近い"
-      ? `30日平均${Math.round(avg30).toLocaleString("ja-JP")}円に対し現在の店舗掲載価格が${Math.round(currentPrice).toLocaleString("ja-JP")}円（${pctVsAvg30 > 0 ? "+" : ""}${pctVsAvg30.toFixed(1)}%）。平均から大きくは乖離しておらず、比較的落ち着いた値動きです。`
-      : `30日平均${Math.round(avg30).toLocaleString("ja-JP")}円に対し現在の店舗掲載価格が${Math.round(currentPrice).toLocaleString("ja-JP")}円（${pctVsAvg30 > 0 ? "+" : ""}${pctVsAvg30.toFixed(1)}%）。平均を${magnitude}${direction}水準まで${moveVerb}。`;
-  return `${openLine}${trendSentence}${advice}`;
-}
+// computeStats/buildVerdictText used to be duplicated here with their own
+// local copies (both pre-dating the calendar-day avg30/90 fix and the
+// pctVsAvg90-based trend-wording fix documented in README.md/
+// fix_avg_window_bug.mjs/fix_verdict_wording.mjs). This script's own header
+// comment says its fetched history is "typically 25-30 weekly points
+// spanning 6-8 months" — exactly the sparse-history shape that triggered
+// the original avg30/90 bug (52% of the 844 'real' cards had wrong stats,
+// 27% had an outright wrong 割安/割高/適正 judgment). Because this file
+// never imported the shared, since-fixed src/lib/priceStats.ts /
+// src/lib/ai-verdict.ts — unlike scrape_yuyutei.mjs, which already imports
+// src/lib/yuyuteiParser.ts the same way — re-running this script (its own
+// header describes it as reusable via --start/--limit, and README.md calls
+// it "拡充する際の主力スクリプト") would have silently reintroduced both
+// already-fixed bugs into every newly-inserted card. Found via self-review,
+// 2026-09-12; not confirmed to have actually happened (no evidence in git
+// history that this script ran again after the fixes landed). Fixed by
+// importing the real functions instead of reimplementing them, per this
+// project's established "test/import the real thing" principle.
 
 function parsePage(html, url) {
   const nameMatch = html.match(/<h1 class="main_title"[\s\S]*?《([^》]+)》/);
@@ -220,8 +193,10 @@ async function main() {
     }
 
     const verdictText = buildVerdictText({
+      name: result.name,
       currentPrice: stats.current_price,
       avg30: stats.avg30,
+      avg90: stats.avg90,
       pctVsAvg30: stats.pct_vs_avg30,
       pctVsAvg90: stats.pct_vs_avg90,
       judgment: stats.judgment,
