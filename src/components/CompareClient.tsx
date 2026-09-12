@@ -25,13 +25,24 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
   const [snapshotsByCard, setSnapshotsByCard] = useState<Record<string, PriceSnapshot[]>>({});
   const [query, setQuery] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by the "再試行" button to re-run the effect below without
+  // `selected` itself having changed — deselecting-and-reselecting the same
+  // card was the only way to retry otherwise (Codex independent review,
+  // 2026-09-13).
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     async function loadMissing() {
       const toLoad = selected.filter((id) => !snapshotsByCard[id]);
-      if (toLoad.length === 0) return;
+      // Cleared unconditionally, BEFORE the early return below — previously
+      // this ran after the `toLoad.length === 0` check, so deselecting the
+      // one card that had failed to load (making `toLoad` empty again on
+      // the next run) left the old error message on screen forever, with
+      // no failed card left selected to explain it (Codex independent
+      // review, 2026-09-13).
       setLoadError(null);
+      if (toLoad.length === 0) return;
       // Supabase/PostgREST caps a single select() at 1000 rows by default.
       // At most MAX_SELECTED (5) cards load here, but daily cron snapshots
       // accumulating over time can push their combined row count past 1000 —
@@ -87,7 +98,7 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, retryNonce]);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -128,7 +139,16 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
       />
 
       {loadError && (
-        <div className="mb-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">{loadError}</div>
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">
+          <span>{loadError}</span>
+          <button
+            type="button"
+            onClick={() => setRetryNonce((n) => n + 1)}
+            className="shrink-0 rounded-md border border-warn px-2 py-1 text-xs font-semibold hover:bg-warn hover:text-bg-elevated"
+          >
+            再試行
+          </button>
+        </div>
       )}
 
       <p className="mb-1 text-xs text-ink-faint">
