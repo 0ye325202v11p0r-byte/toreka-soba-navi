@@ -58,6 +58,20 @@ export function formatDateTime(value: string | number | Date): string {
   return new Date(value).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 }
 
+// Today's calendar date in Asia/Tokyo, as YYYY-MM-DD — for defaulting a
+// transaction date <input type="date"> (PortfolioClient.tsx). Plain
+// `new Date().toISOString().slice(0, 10)` gives UTC's current date, which
+// is a full calendar day behind Japan's for the ~9 hours (00:00-08:59 JST)
+// every day when UTC hasn't rolled over yet — a user recording a purchase
+// just after midnight their own time would see yesterday's date pre-filled
+// (found via self-review, 2026-09-12, while fixing the same UTC-vs-JST
+// class of issue for formatDateTime() above). Uses Intl's en-CA locale
+// purely as a formatting trick (it's the one built-in locale that already
+// outputs YYYY-MM-DD), not because the date is meant to read as Canadian.
+export function todayInTokyo(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Tokyo" });
+}
+
 export function judgmentClasses(judgment: Judgment | null | undefined): string {
   switch (judgment) {
     case "割安":

@@ -9,7 +9,7 @@
 // Imports the REAL src/lib/format.ts. Run: `node --experimental-strip-types
 // migration/verify_format.mjs`. A MODULE_TYPELESS_PACKAGE_JSON warning on
 // stderr is expected and harmless.
-import { safeJsonLdString, formatDateTime } from "../src/lib/format.ts";
+import { safeJsonLdString, formatDateTime, todayInTokyo } from "../src/lib/format.ts";
 
 function assertEqual(actual, expected, label) {
   const ok = actual === expected;
@@ -76,4 +76,19 @@ function assertEqual(actual, expected, label) {
   assertEqual(nyResult.includes("12:00"), true, "T5b formatDateTime renders the correct JST wall-clock time (12:00 for 03:00 UTC)");
 }
 
-console.log("\nAll format.ts (safeJsonLdString, formatDateTime) checks completed.");
+// todayInTokyo: format + TZ-independence (can't assert an exact date value
+// here — it reads the real current time — so this checks shape and
+// cross-environment consistency instead, the same technique as T5 above).
+{
+  const originalTZ = process.env.TZ;
+  process.env.TZ = "Pacific/Kiritimati"; // UTC+14 — can be a full calendar day ahead of Asia/Tokyo
+  const kiritimatiResult = todayInTokyo();
+  process.env.TZ = "Etc/GMT+12"; // UTC-12 — can be a full calendar day behind Asia/Tokyo
+  const farWestResult = todayInTokyo();
+  if (originalTZ === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTZ;
+  assertEqual(/^\d{4}-\d{2}-\d{2}$/.test(kiritimatiResult), true, "T6 todayInTokyo() returns YYYY-MM-DD");
+  assertEqual(kiritimatiResult, farWestResult, "T7 todayInTokyo() is identical regardless of the process's local TZ, even TZs a full day off from Asia/Tokyo in either direction");
+}
+
+console.log("\nAll format.ts (safeJsonLdString, formatDateTime, todayInTokyo) checks completed.");

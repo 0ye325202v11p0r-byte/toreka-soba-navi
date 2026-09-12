@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { yen, dataQualityLabel, isAutoTracked } from "@/lib/format";
+import { yen, dataQualityLabel, isAutoTracked, todayInTokyo } from "@/lib/format";
 import { canSubmitTransaction } from "@/lib/formValidation";
 import type { Transaction, TransactionType, PnlSummary, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
@@ -38,7 +38,7 @@ export default function PortfolioClient({
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState(1);
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [date, setDate] = useState(todayInTokyo);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
