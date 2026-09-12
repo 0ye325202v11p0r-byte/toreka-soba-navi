@@ -44,6 +44,20 @@ export interface MarketListCard {
   data_quality: DataQuality | null;
 }
 
+// Subset of Card used by the dashboard (src/app/dashboard/page.tsx) — only
+// ever queried for the cards a specific user actually holds or watches
+// (never the full ~3,270-card catalog), so this is deliberately narrower
+// than MarketListCard: no rarity/set_name/judgment, since the dashboard
+// doesn't render them.
+export interface DashboardCardInfo {
+  id: string;
+  name: string;
+  current_price: number | null;
+  pct_vs_avg30: number | null;
+  data_quality: DataQuality | null;
+  source_url: string | null;
+}
+
 export interface PriceSnapshot {
   id: string;
   card_id: string;

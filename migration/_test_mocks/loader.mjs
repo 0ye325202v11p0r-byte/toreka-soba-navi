@@ -23,5 +23,27 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === "next/server") {
     return nextResolve("next/server.js", context);
   }
-  return nextResolve(specifier, context);
+  try {
+    return await nextResolve(specifier, context);
+  } catch (err) {
+    // TypeScript/Next.js allow (and this project's convention uses)
+    // extensionless relative imports between sibling .ts files under
+    // src/lib/ (e.g. dashboardSummary.ts's `import ... from "./pnl"`) —
+    // normal under the bundler's own module resolution, but plain Node ESM
+    // has no such fallback and fails outright. Added 2026-09-13 when
+    // dashboardSummary.ts became the first pure lib module tested this way
+    // to import ANOTHER sibling lib module's real runtime function (not
+    // just a type-only import, which gets erased before resolution ever
+    // matters). Retries with ".ts" appended only for relative specifiers
+    // with no extension already, so this doesn't mask a genuinely missing
+    // package.
+    if (
+      err?.code === "ERR_MODULE_NOT_FOUND" &&
+      (specifier.startsWith("./") || specifier.startsWith("../")) &&
+      !/\.[a-zA-Z0-9]+$/.test(specifier)
+    ) {
+      return nextResolve(`${specifier}.ts`, context);
+    }
+    throw err;
+  }
 }

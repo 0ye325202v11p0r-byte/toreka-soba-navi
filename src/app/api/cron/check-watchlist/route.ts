@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { WatchlistAlertRule } from "@/lib/types";
 import { errorMessage } from "@/lib/errorMessage";
 import { adminClient } from "@/lib/supabase/admin";
+import { conditionMet } from "@/lib/watchlistRule";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -32,30 +33,6 @@ function isValidAlertRule(rule: unknown): rule is WatchlistAlertRule {
   return true;
 }
 
-function conditionMet(
-  rule: WatchlistAlertRule,
-  card: { pctVsAvg30: number | null; currentPrice: number | null }
-): boolean {
-  if (rule.type === "pct_vs_avg30") {
-    // Cards the daily refresh-prices cron doesn't auto-track (data_quality
-    // 'partial' or 'flat' — see isAutoTracked() in src/lib/format.ts) never
-    // have a pct_vs_avg30 computed, regardless of which of those two
-    // applies. Checking the actual value's nullness here (rather than
-    // re-deriving "is this trackable" from data_quality) means this
-    // doesn't need to enumerate every quality tier to stay correct — there
-    // is simply nothing to evaluate the condition against, so it never
-    // fires. This mirrors the warning already shown in WatchlistClient
-    // when registering one.
-    if (card.pctVsAvg30 === null) return false;
-    return rule.op === "lte" ? card.pctVsAvg30 <= rule.value : card.pctVsAvg30 >= rule.value;
-  }
-  // "price": works for every card regardless of data_quality, since
-  // current_price is always populated (even partial-quality cards have a
-  // single reference price) — unlike pct_vs_avg30 this doesn't need
-  // tracked history.
-  if (card.currentPrice === null) return false;
-  return rule.op === "lte" ? card.currentPrice <= rule.value : card.currentPrice >= rule.value;
-}
 
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;

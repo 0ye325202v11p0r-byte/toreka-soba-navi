@@ -22,6 +22,14 @@ export default async function NavBar() {
           </Link>
           {!configured ? null : user ? (
             <>
+              {/* First link in the logged-in nav segment, deliberately —
+                  this is meant to be the "come back here" destination (see
+                  COORDINATION.md's dashboard design discussion, 2026-09-13):
+                  a returning user should land on "what changed with MY
+                  cards" before Portfolio/Watchlist's own full item lists. */}
+              <Link href="/dashboard" className="text-ink-muted hover:text-ink">
+                ダッシュボード
+              </Link>
               <Link href="/portfolio" className="text-ink-muted hover:text-ink">
                 ポートフォリオ
               </Link>

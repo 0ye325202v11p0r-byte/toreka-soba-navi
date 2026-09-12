@@ -1,0 +1,152 @@
+// Regression test for src/lib/dashboardSummary.ts's buildDashboardSummary()
+// — the pure aggregation behind the new /dashboard page (added 2026-09-13
+// in response to the user's request to make the app worth reopening
+// weekly; see COORDINATION.md's design discussion). Imports the REAL
+// implementation (buildDashboardSummary, which itself calls the real
+// computePnl/conditionMet/isAutoTracked), not a hand-copied
+// reimplementation — this project's established convention.
+//
+// Scenarios below simulate a real login session's worth of data end to
+// end, not just isolated unit checks, per the request to show "an actual
+// user flow."
+//
+// Run: node --experimental-strip-types migration/verify_dashboard_summary.mjs
+//
+// Registers the shared test-loader hook (see _test_mocks/loader.mjs) even
+// though this file needs none of its @/ or Supabase mocking — it also now
+// carries the fallback that resolves dashboardSummary.ts's own extensionless
+// relative imports to its sibling lib modules (./pnl, ./watchlistRule,
+// ./format), which plain Node ESM resolution can't do on its own.
+import { register } from "node:module";
+register("./_test_mocks/loader.mjs", import.meta.url);
+
+// Dynamic import, not a static one — static imports are resolved during
+// linking, before this file's own top-level code (including the
+// register() call above) ever runs, so a static import here would resolve
+// with plain Node ESM rules and fail the same way a static import of a
+// cron route does in this project's other loader-hook-based tests (see
+// verify_cron_time_budget.mjs).
+const { buildDashboardSummary } = await import("../src/lib/dashboardSummary.ts");
+
+let pass = 0;
+let fail = 0;
+function assertEqual(actual, expected, label) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  if (ok) {
+    pass++;
+  } else {
+    fail++;
+    console.error(`FAIL: ${label} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+function assert(cond, label) {
+  if (cond) pass++;
+  else {
+    fail++;
+    console.error(`FAIL: ${label}`);
+  }
+}
+
+function card(id, overrides = {}) {
+  return {
+    id,
+    name: `カード${id}`,
+    current_price: 1000,
+    pct_vs_avg30: null,
+    data_quality: "real",
+    source_url: `https://example.invalid/${id}`,
+    ...overrides,
+  };
+}
+function txn(cardId, type, quantity, pricePerUnit, date) {
+  return {
+    id: `t-${cardId}-${date}-${type}`,
+    user_id: "u1",
+    card_id: cardId,
+    type,
+    quantity,
+    price_per_unit: pricePerUnit,
+    transaction_date: date,
+    note: null,
+    created_at: `${date}T00:00:00.000Z`,
+  };
+}
+function watchItem(id, cardId, rule) {
+  return { id, user_id: "u1", card_id: cardId, alert_rule: rule, last_triggered_at: null };
+}
+
+// Scenario 1: brand-new user, no transactions, no watchlist — this is the
+// literal first thing a new subscriber sees, so it must read as an
+// invitation, not an error.
+{
+  const s = buildDashboardSummary([], [], []);
+  assert(s.hasNothing === true, "S1: hasNothing is true for a brand-new user");
+  assertEqual(s.currentValue, 0, "S1: currentValue is 0");
+  assertEqual(s.triggeredItems, [], "S1: no triggered items");
+  assertEqual(s.gainers, [], "S1: no gainers");
+}
+
+// Scenario 2: a realistic full login session — the actual "why did I open
+// this app today" case this feature exists for. One user holds two cards
+// (c1 up, c2 down since purchase), watches a third (c3) whose 30-day-average
+// condition has now tripped, and also watches a fourth (c4) that is NOT
+// auto-tracked (data_quality 'partial', no source_url) — testing all four
+// summary sections together in one coherent scenario, not in isolation.
+{
+  const cards = [
+    card("c1", { current_price: 1200, pct_vs_avg30: 25 }), // bought at 1000, now 1200 — up
+    card("c2", { current_price: 700, pct_vs_avg30: -22 }), // bought at 1000, now 700 — down
+    card("c3", { current_price: 500, pct_vs_avg30: -18 }), // watched, condition: pct_vs_avg30 <= -15
+    card("c4", { data_quality: "partial", source_url: null, current_price: 300, pct_vs_avg30: null }), // untracked
+  ];
+  const transactions = [
+    txn("c1", "buy", 2, 1000, "2026-08-01"),
+    txn("c2", "buy", 1, 1000, "2026-08-01"),
+  ];
+  const watchlistItems = [
+    watchItem("w1", "c3", { type: "pct_vs_avg30", op: "lte", value: -15 }), // TRIGGERED
+    watchItem("w2", "c4", { type: "price", op: "lte", value: 100 }), // NOT triggered (300 > 100)
+  ];
+
+  const s = buildDashboardSummary(transactions, watchlistItems, cards);
+
+  assert(s.hasNothing === false, "S2: hasNothing is false — this user has real activity");
+  assertEqual(s.holdingsCount, 2, "S2: 2 distinct held cards (c1, c2)");
+  // currentValue = c1(1200*2) + c2(700*1) = 2400 + 700 = 3100
+  assertEqual(s.currentValue, 3100, "S2: currentValue sums current_price*quantity across holdings");
+  // costBasisTotal = 1000*2 + 1000*1 = 3000; unrealizedPnl = 3100 - 3000 = 100
+  assertEqual(s.unrealizedPnl, 100, "S2: unrealizedPnl reflects the real gain on c1 net of the loss on c2");
+  assertEqual(s.realizedPnl, 0, "S2: no sells yet, so realizedPnl is 0");
+  assertEqual(s.totalPnl, 100, "S2: totalPnl = unrealized + realized");
+
+  assertEqual(s.triggeredItems.length, 1, "S2: exactly one watchlist item is currently triggered");
+  assertEqual(s.triggeredItems[0].item.id, "w1", "S2: the triggered item is w1 (c3), not w2 (c4, condition not met)");
+  assertEqual(s.triggeredItems[0].card.id, "c3", "S2: the triggered item's resolved card is c3");
+
+  // Gainers/losers are scoped to c1/c2/c3 (held or watched AND has a
+  // pct_vs_avg30) — c4 is excluded (null pct_vs_avg30, not auto-tracked).
+  assertEqual(s.gainers.map((c) => c.id), ["c1", "c3", "c2"], "S2: gainers sorted descending by pct_vs_avg30 (25, -18, -22)");
+  assertEqual(s.losers.map((c) => c.id), ["c2", "c3", "c1"], "S2: losers sorted ascending by pct_vs_avg30 (-22, -18, 25)");
+
+  assertEqual(s.untrackedCount, 1, "S2: exactly one relevant card (c4) is not auto-tracked");
+}
+
+// Scenario 3: gainers/losers must be capped at 3 and must never include a
+// card with a null pct_vs_avg30 via some accidental 0-fallback.
+{
+  const cards = [
+    card("g1", { pct_vs_avg30: 50 }),
+    card("g2", { pct_vs_avg30: 40 }),
+    card("g3", { pct_vs_avg30: 30 }),
+    card("g4", { pct_vs_avg30: 20 }),
+    card("untracked", { pct_vs_avg30: null }),
+  ];
+  const watchlistItems = cards.map((c, i) => watchItem(`w${i}`, c.id, { type: "price", op: "gte", value: 0 }));
+  const s = buildDashboardSummary([], watchlistItems, cards);
+  assertEqual(s.gainers.length, 3, "S3: gainers is capped at 3 even with 4 tracked candidates");
+  assertEqual(s.gainers.map((c) => c.id), ["g1", "g2", "g3"], "S3: gainers is the top 3 by pct_vs_avg30");
+  assert(!s.gainers.some((c) => c.id === "untracked"), "S3: the null-pct_vs_avg30 card never appears among gainers");
+}
+
+console.log(`\n${pass} passed, ${fail} failed`);
+if (fail > 0) process.exitCode = 1;

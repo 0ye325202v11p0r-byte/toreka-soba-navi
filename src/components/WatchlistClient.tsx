@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { pct, yen, dataQualityLabel, isAutoTracked, formatDateTime } from "@/lib/format";
 import { canSubmitWatchItem } from "@/lib/formValidation";
+import { conditionMet } from "@/lib/watchlistRule";
 import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -27,9 +28,10 @@ function ruleLabel(rule: WatchlistAlertRule): string {
 }
 
 function ruleIsMet(rule: WatchlistAlertRule, card: CardOption | undefined): boolean {
-  const current = rule.type === "pct_vs_avg30" ? card?.pct_vs_avg30 : card?.current_price;
-  if (current === null || current === undefined) return false;
-  return rule.op === "lte" ? current <= rule.value : current >= rule.value;
+  return conditionMet(
+    rule,
+    card && { pctVsAvg30: card.pct_vs_avg30, currentPrice: card.current_price }
+  );
 }
 
 export default function WatchlistClient({
