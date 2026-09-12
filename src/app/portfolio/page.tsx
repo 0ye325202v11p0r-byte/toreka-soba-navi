@@ -4,9 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import PortfolioClient from "@/components/PortfolioClient";
 import PortfolioValueChart from "@/components/PortfolioValueChart";
+import HoldingsBreakdownPanel from "@/components/HoldingsBreakdownPanel";
 import SetupNotice from "@/components/SetupNotice";
 import { computePnl } from "@/lib/pnl";
 import { buildPortfolioValueHistory } from "@/lib/portfolioHistory";
+import { buildHoldingsBreakdown } from "@/lib/holdingsBreakdown";
 import type { Transaction, DataQuality, PriceSnapshot } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -156,6 +158,7 @@ export default async function PortfolioPage({
     }
   }
   const valueHistory = buildPortfolioValueHistory(transactions, snapshotsByCard);
+  const breakdown = buildHoldingsBreakdown(pnl.holdings, cards);
 
   return (
     <div>
@@ -167,6 +170,12 @@ export default async function PortfolioPage({
         <div className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-ink-muted">評価額の推移</h2>
           <PortfolioValueChart points={valueHistory} />
+        </div>
+      )}
+      {pnl.holdings.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold text-ink-muted">構成内訳</h2>
+          <HoldingsBreakdownPanel byRarity={breakdown.byRarity} bySet={breakdown.bySet} />
         </div>
       )}
       <PortfolioClient transactions={transactions} cards={cards} pnl={pnl} initialCardId={initialCardId} />
