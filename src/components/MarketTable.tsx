@@ -36,6 +36,12 @@ export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
   );
   const [setFilter, setSetFilter] = useState("");
 
+  // レアリティは弾ごとに表記ゆれがなく種類数も少ないため、弾フィルタと
+  // 同じAND条件の追加ファセットとして自然に組み合わせられる（複数条件の
+  // 組み合わせ強化——2026-09-13のロードマップ提案項目7）。
+  const rarities = useMemo(() => Array.from(new Set(cards.map((c) => c.rarity))).sort(), [cards]);
+  const [rarityFilter, setRarityFilter] = useState("");
+
   const visible = useMemo(() => {
     let list = cards;
     if (query.trim()) {
@@ -45,13 +51,16 @@ export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
     if (setFilter) {
       list = list.filter((c) => c.set_name === setFilter);
     }
+    if (rarityFilter) {
+      list = list.filter((c) => c.rarity === rarityFilter);
+    }
     if (qualityFilter === "real") {
       list = list.filter((c) => c.data_quality === "real");
     } else if (qualityFilter === "partial") {
       list = list.filter((c) => c.data_quality === "partial");
     }
     return [...list].sort(SORTERS[sortKey]);
-  }, [cards, query, setFilter, sortKey, qualityFilter]);
+  }, [cards, query, setFilter, rarityFilter, sortKey, qualityFilter]);
 
   const [displayCount, setDisplayCount] = useState(PAGE_SIZE);
   // any change that redefines "visible" should reset back to page 1 —
@@ -59,7 +68,7 @@ export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
   // from before, or a fresh page of results could get hidden below the fold.
   // Resetting during render (the "adjusting state when props change" React
   // pattern) rather than in a useEffect avoids an extra cascading render.
-  const filterKey = `${query}|${setFilter}|${sortKey}|${qualityFilter}`;
+  const filterKey = `${query}|${setFilter}|${rarityFilter}|${sortKey}|${qualityFilter}`;
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
   if (filterKey !== prevFilterKey) {
     setPrevFilterKey(filterKey);
@@ -90,6 +99,19 @@ export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
           {setNames.map((s) => (
             <option key={s} value={s as string}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label="レアリティで絞り込み"
+          value={rarityFilter}
+          onChange={(e) => setRarityFilter(e.target.value)}
+          className="rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm"
+        >
+          <option value="">すべてのレアリティ</option>
+          {rarities.map((r) => (
+            <option key={r} value={r}>
+              {r}
             </option>
           ))}
         </select>
