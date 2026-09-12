@@ -1012,3 +1012,14 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 **追記：ページ側のゲートだけでは不十分だったことに気づき、追加修正しました（コミット3706806）。** `sync_runs`/`yuyutei_sync_runs`テーブル自体のRLSポリシーが`auth.role() = 'authenticated'`（ログイン済みなら誰でも）のままだったため、`/admin/sync-status`ページを経由せず、ログイン済みの非管理者ユーザーが開発者ツールからSupabaseクライアントで直接この2テーブルを読むことができる状態が残っていました（本サイトの匿名キーはブラウザに公開されているため）。両テーブルのSELECTポリシーを`auth.jwt()->>'email'`による管理者メールアドレス一致に変更し、`migration/retrofit_admin_only_sync_runs.sql`（既存の本番`sync_runs`向けDROP+CREATE POLICY）を用意しました。`migration/README.md`に手順を追記済み。これも本番未反映（push・SQL実行ともにユーザー自身の対応が必要）です。
 
 引き続き点検を継続します。
+
+## 📋 ユーザー自身の対応が必要な項目まとめ（2026-09-12時点）
+
+セルフレビュー（仮のCODEX）で見つかった修正がローカルコミットに積み上がってきたため、本番に反映するために**ユーザー自身が行う必要がある作業**をここに一箇所にまとめます（個々の詳細は上記の各報告セクション・`migration/README.md`参照）。このセッション自体は`git push`がツール権限で拒否される状態であり、かつ本番DB照会・変更・デプロイを行わない方針のため、以下はすべて未実施です。
+
+1. **`git push`する**（このローカルリポジトリのコミット全て。2026-09-12のセルフレビュー分だけで`5ff77b3`〜`810ec5d`まで約20コミット）。これをしない限り、以下の全ての修正は本番のVercel/Supabaseに一切反映されません。
+2. **Vercelの環境変数に`ADMIN_EMAIL`を追加**（`.env.local`に設定済みの値と同じメールアドレス）してから再デプロイ。追加しないと`/admin/sync-status`は「本人含め誰も見られない」フェイルクローズ状態のままになります（誰でも見られる状態よりは安全側ですが、意図通りには使えません）。
+3. **Supabase SQL Editorで`migration/retrofit_admin_only_sync_runs.sql`を実行**（実行前にファイル内の`REPLACE_WITH_YOUR_ADMIN_EMAIL`を実際のメールアドレスに置き換える）。既存の本番`sync_runs`テーブルのRLSポリシーを管理者限定に変更するために必要です。
+4. **遊々亭の日次自動追跡を有効化する場合**（任意・法務リスクは既に受容済みという前提）：`supabase/schema.sql`の`yuyutei_sync_runs`/`app_settings`テーブル定義をSupabase SQL Editorで実行（実行前に`yuyutei_sync_runs`ポリシー内の`REPLACE_WITH_YOUR_ADMIN_EMAIL`も同様に置き換える）。詳細は`migration/README.md`「遊々亭の日次自動追跡を本番で有効にする手順」参照。
+
+上記1〜3は特にセキュリティに関わる項目のため優先度が高いと考えますが、最終的な優先順位はユーザーの判断にお任せします。Codex復帰後、このチェックリスト自体も含めて再検証をお願いします。
