@@ -32,6 +32,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the checked-in template itself: SetupNotice.tsx and README.md
+# both instruct a fresh setup to copy this file to .env.local, but the
+# blanket `.env*` rule above silently excluded it too (no secrets in it —
+# every value is a blank placeholder), so it was never actually committed.
+# Found via self-review, 2026-09-12 — `git ls-files | grep env` returned
+# nothing at all before this fix, meaning a clone of this repo had no way
+# to follow that documented setup step.
+!.env.local.example
 
 # vercel
 .vercel
