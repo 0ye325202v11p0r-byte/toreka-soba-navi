@@ -163,8 +163,7 @@ export async function GET(request: Request) {
   // COORDINATION.md for the full reasoning): rather than choosing between
   // "flag a run-wide anomaly only if literally every set came back empty"
   // (cheap, but misses a partial breakage affecting only some sets) or
-  // "flag any set with known existing cards that came back empty"
-  // (requires reordering Phase 1/Phase 2 or an extra DB query, and needs
+  // "flag any set with known existing cards that came back empty" (needs
   // its own "unknown set" carve-out to avoid false alarms on genuinely
   // low-inventory sets), this does both cheaply with data already in hand:
   //   - allFetchedSetsEmpty: the simple, high-confidence run-wide signal
@@ -178,7 +177,42 @@ export async function GET(request: Request) {
   //     visible to a human reviewing /admin/sync-status without the
   //     system asserting "this run failed" over what might just be a
   //     legitimately empty set it hasn't learned about yet.
+  //
+  // Correction (Codex independent re-verification, 2026-09-12): the
+  // original comment above claimed the "known-set" precision Plan B wanted
+  // "requires reordering Phase 1/Phase 2 or an extra DB query" — that
+  // framing was wrong. knownSetsWithNoCardsParsedToday below proves the
+  // exact same precision is available for free, computed entirely AFTER
+  // Phase 2 from data already in memory, no reordering or extra query
+  // needed. The real, still-valid reason allFetchedSetsEmpty stays as a
+  // SEPARATE run-wide signal (not replaced by the known-set diagnostic) is
+  // scope, not cost: knownSetsWithNoCardsParsedToday can only ever flag a
+  // set this project already has tracked cards for — a brand-new set with
+  // zero existing rows would never appear there even if its fetch were
+  // completely broken. allFetchedSetsEmpty is what still catches that case.
   const allFetchedSetsEmpty = setsFetched > 0 && todayPriceByUrl.size === 0;
+
+  // allFetchedSetsEmpty is an OBSERVATION about the sets actually fetched,
+  // not a confirmed site-wide failure — it says nothing by itself about
+  // whether the fetch was complete (Codex independent review, 2026-09-12:
+  // a run that times out after only 2-3 sets, all of which happen to be
+  // genuinely thin/unreleased, could trip this flag despite the site being
+  // completely healthy). The boolean's own true/false computation is
+  // unchanged; this only makes the accompanying TEXT say so explicitly —
+  // previously it read "every fetched set returned zero cards", technically
+  // accurate but easy to misread as "the whole site is down" without
+  // noticing how few sets that actually covers. Always states the sample
+  // size (N/total) inline, and calls out explicitly when the run itself
+  // was incomplete, so a reader never has to cross-reference setsFetched/
+  // setsSkippedForTime separately to judge how much weight to give this.
+  function allFetchedSetsEmptyMessage(): string | null {
+    if (!allFetchedSetsEmpty) return null;
+    const partialNote =
+      setsSkippedForTime > 0
+        ? ` — NOTE: this run itself was incomplete (${setsSkippedForTime} set(s) not yet fetched due to the time budget), so this reflects a partial sample, not full site coverage`
+        : "";
+    return `ANOMALY: every set actually fetched so far (${setsFetched}/${ALL_YUYUTEI_SETS.length}) returned zero cards (possible site block or page structure change)${partialNote}`;
+  }
 
   // ---- Phase 2: read existing yuyu-tei cards, oldest-updated-first ----
   // Same "1000-row PostgREST cap" pagination this project has hit
@@ -217,7 +251,7 @@ export async function GET(request: Request) {
             error_sample: [
               `incomplete: reading_cards, itemsReadSoFar=${cards.length}`,
               setsSkippedForTime > 0 ? `(${setsSkippedForTime} set(s) were also not fetched this run)` : null,
-              allFetchedSetsEmpty ? "ANOMALY: every fetched set returned zero cards (possible site block or page structure change)" : null,
+              allFetchedSetsEmptyMessage(),
             ]
               .filter(Boolean)
               .join(" "),
@@ -357,9 +391,7 @@ export async function GET(request: Request) {
   }
 
   const errorSample = [
-    allFetchedSetsEmpty
-      ? "ANOMALY: every fetched set returned zero cards (possible site block or page structure change)"
-      : null,
+    allFetchedSetsEmptyMessage(),
     knownSetsWithNoCardsParsedToday.length > 0
       ? `sets with known tracked cards but zero parsed today (not auto-flagged as a failure, review manually): ${knownSetsWithNoCardsParsedToday.join(", ")}`
       : null,

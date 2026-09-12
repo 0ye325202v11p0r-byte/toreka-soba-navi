@@ -195,8 +195,15 @@ function makeSupabaseMock({
       }
       if (table === "yuyutei_sync_runs") {
         return {
-          insert: () => {
+          insert: (payload) => {
             calls.syncRunInsert++;
+            // Captures the actual insert payload (not just a call count) so
+            // tests can assert on error_sample's TEXT content — needed to
+            // verify the allFetchedSetsEmptyMessage() wording fix (Codex
+            // independent review, 2026-09-12: the message must state its
+            // own sample size and flag an incomplete run inline, not just
+            // compute the right boolean).
+            calls.lastSyncRunPayload = payload;
             return chain(async () => (syncRunShouldFail ? { error: { message: "relation does not exist" } } : { error: null }));
           },
         };
@@ -613,6 +620,49 @@ const twoMatchingCards = [
   assert(body?.allFetchedSetsEmpty === true, "S8: run-wide anomaly is flagged");
   assert(body?.setsWithNoCardsParsed?.length === 57, "S8: all 57 sets are recorded as zero-parse");
   assert(body?.notFoundInFetch === 2, "S8: both cards are not-found this run (nothing was parsed anywhere)");
+}
+
+// Scenario 8b (Codex independent review, 2026-09-12): the anomaly TEXT
+// written to yuyutei_sync_runs.error_sample, not just the boolean, must
+// state its own sample size and — when the run wasn't actually complete —
+// say so inline, rather than reading as an unqualified "the whole site is
+// down." This is exactly S8's setup (complete fetch, everything empty), but
+// now inspecting calls.lastSyncRunPayload.error_sample instead of just the
+// boolean.
+{
+  const { threw, calls } = await run("Plan C: anomaly text states sample size, no incomplete-run caveat when the fetch was complete", {
+    allCards: twoMatchingCards,
+    fetchHtmlForSet: () => EMPTY_HTML,
+  });
+  assert(!threw, "S8b: no throw");
+  const text = calls.lastSyncRunPayload?.error_sample ?? "";
+  assert(text.includes("57/57"), "S8b: anomaly text states the sample size (57/57 — the fetch was complete)");
+  assert(!text.includes("NOTE:"), "S8b: no incomplete-run caveat when every set was actually fetched");
+}
+
+// Scenario 8c (Codex independent review, 2026-09-12 — the core of their
+// concern): a run that times out partway through Phase 1, where the FEW
+// sets it did manage to fetch all happen to be empty, must NOT read as a
+// confident "site-wide block" — the anomaly text must explicitly flag that
+// this was only a partial sample. fetchAdvanceMs is high enough that the
+// budget is exhausted after a handful of sets; fetchHtmlForSet makes every
+// one of those come back empty.
+{
+  const { body, threw, calls } = await run("Plan C: incomplete-fetch anomaly text explicitly flags partial coverage", {
+    allCards: twoMatchingCards,
+    fetchHtmlForSet: () => EMPTY_HTML,
+    fetchAdvanceMs: 60_000, // budget is checked before each fetch, not after — 5 fetches complete (5*60s=300s > 270s budget, but the check only trips at the top of the 6th iteration)
+  });
+  assert(!threw, "S8c: no throw");
+  assert(body?.setsSkippedForTime > 0, "S8c: this run's own set-fetch phase was itself incomplete");
+  assert(body?.allFetchedSetsEmpty === true, "S8c: the boolean itself is unchanged by this fix — still flips true here");
+  const text = calls.lastSyncRunPayload?.error_sample ?? "";
+  assert(text.includes("NOTE:"), "S8c: anomaly text explicitly flags that this run was incomplete");
+  assert(text.includes("not full site coverage"), "S8c: anomaly text explicitly says this isn't full site coverage");
+  assert(
+    text.includes(`${body.setsFetched}/57`),
+    "S8c: anomaly text states the true (partial) sample size, matching setsFetched, not the full 57"
+  );
 }
 
 // Scenario 9 (control): every set parses normally — no anomaly, no
