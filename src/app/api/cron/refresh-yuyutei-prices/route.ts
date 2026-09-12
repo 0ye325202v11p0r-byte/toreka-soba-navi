@@ -56,6 +56,20 @@ export async function GET(request: Request) {
   }
 
   const supabase = adminClient();
+  const startedAt = new Date().toISOString();
+  // Captured before the kill-switch check below, not after — that check
+  // itself does a DB read (readYuyuteiSourceState, with its own internal
+  // up-to-5s timeout), so capturing startTime afterward would let that
+  // read's latency sit entirely outside the time budget, undermining the
+  // "TIME_BUDGET_MS + FINAL_LOG_TIMEOUT_MS stays under maxDuration"
+  // guarantee by up to ~5s in the worst case (found via self-review after
+  // the appSettings.ts redesign added this check ahead of the rest of the
+  // route's work, 2026-09-12 — the exact "capture startTime before ANY
+  // I/O" principle this project has emphasized since refresh-prices/
+  // route.ts's original DB-budget-reuse bug, just not yet applied to this
+  // newer check).
+  const startTime = Date.now();
+  const remainingMs = () => TIME_BUDGET_MS - (Date.now() - startTime);
 
   // Emergency kill-switch (see src/lib/appSettings.ts) — checked before
   // ANY request to yuyu-tei.jp, including the very first one. This is the
@@ -89,10 +103,6 @@ export async function GET(request: Request) {
       settingsState,
     });
   }
-
-  const startedAt = new Date().toISOString();
-  const startTime = Date.now(); // before any network/DB I/O, so the budget covers all of it
-  const remainingMs = () => TIME_BUDGET_MS - (Date.now() - startTime);
 
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
