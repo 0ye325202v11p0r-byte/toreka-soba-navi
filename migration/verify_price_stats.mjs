@@ -105,5 +105,23 @@ const TODAY = "2026-09-11";
   assertEqual(stats.trend_direction === "rising" ? 1 : 0, 1, "threshold: +20% is rising (>3%)");
 }
 
+// Scenario 5: price values arriving as STRINGS, the way PostgREST may
+// serialize a Postgres `numeric` column (self-review, 2026-09-12 — this
+// function was the one numeric consumer in the codebase without the
+// Number() coercion src/lib/format.ts and src/lib/pnl.ts already apply for
+// exactly this reason). Before the fix, `s + v` string-concatenated instead
+// of summing, producing wildly wrong (not just imprecise) avg30/90 —
+// confirmed by feeding this exact input through the unfixed function during
+// self-review, which returned avg30=6000550 instead of ~1100.
+{
+  const stats = computeStats([
+    { snapshot_date: daysAgo(TODAY, 40), price: "1000" },
+    { snapshot_date: daysAgo(TODAY, 26), price: "1200" },
+    { snapshot_date: TODAY, price: "1100" },
+  ]);
+  assertEqual(stats.avg30, 1150, "string prices: avg30 sums numerically, not by string concatenation");
+  assertEqual(stats.current_price, 1100, "string prices: current_price is coerced to a number");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

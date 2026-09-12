@@ -28,7 +28,26 @@ export interface PriceStats {
  * for that card, not a bug to paper over.
  */
 export function computeStats(history: { snapshot_date: string; price: number }[]): PriceStats {
-  const sorted = [...history].sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
+  // price_snapshots.price is a Postgres `numeric` column, which PostgREST
+  // may serialize as a JSON string rather than a JSON number (the same risk
+  // src/lib/format.ts's yen()/pct() and src/lib/pnl.ts's price_per_unit
+  // handling already defend against — this function was the one numeric
+  // consumer in the codebase that didn't). The TypeScript `price: number`
+  // annotation is a compile-time promise only; it does not coerce an actual
+  // string at runtime. Without this, a string price would make `s + v`
+  // below do STRING CONCATENATION instead of addition (e.g. summing
+  // "1000"/"1200"/"1100" this way, then dividing the concatenated-and-
+  // reparsed result by count, produces something like avg30=6000550 instead
+  // of ~1100 — confirmed by feeding string prices through this function
+  // during self-review, 2026-09-12). Not confirmed to have actually
+  // happened against real Supabase data (an active occurrence would have
+  // produced obviously absurd avg30/90 values that the earlier avg-window
+  // audit — see fix_avg_window_bug.mjs — would very likely have caught);
+  // this coercion is defensive hardening, matching this codebase's existing
+  // convention, not a fix for a proven incident.
+  const sorted = [...history]
+    .map((h) => ({ snapshot_date: h.snapshot_date, price: Number(h.price) }))
+    .sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date));
   const current = sorted[sorted.length - 1].price;
   const currentDate = sorted[sorted.length - 1].snapshot_date;
 
