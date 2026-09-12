@@ -379,6 +379,30 @@ const twoMatchingCards = [
   assert(fetchCallCount === 0, "S0h: zero requests to yuyu-tei.jp");
 }
 
+// Scenario 0i (Codex independent re-verification, THIRD pass, 2026-09-12):
+// the real Postgres undefined_column error (42703) for app_settings'
+// OWN column reads `column "app_settings.value" of relation
+// "app_settings" does not exist` — this genuinely names app_settings and
+// says "relation ... does not exist", so the 2nd-pass message-based
+// fallback still misclassified this as 'unconfigured' (table doesn't
+// exist yet, safe to scrape) despite the table genuinely existing with a
+// real schema problem. The fix drops message-text heuristics entirely —
+// only code 42P01/PGRST205 count — so this must now fail closed too.
+{
+  const { body, threw, calls } = await run("kill-switch: real Postgres undefined_column (42703) for app_settings' own column", {
+    allCards: twoMatchingCards,
+    appSettingsResult: () => ({
+      data: null,
+      error: { code: "42703", message: 'column "app_settings.value" of relation "app_settings" does not exist' },
+    }),
+  });
+  assert(!threw, "S0i: no throw");
+  assert(body?.disabled === true, "S0i: response reports disabled:true — 42703 is a column-level error, not confirmed table-missing");
+  assert(body?.settingsState === "unknown", "S0i: settingsState is 'unknown', not 'unconfigured', despite naming app_settings and saying 'does not exist'");
+  assert(fetchCallCount === 0, "S0i: zero requests to yuyu-tei.jp");
+  assert(calls.cardsPages === 0 && calls.updates === 0, "S0i: no cards read or written");
+}
+
 // Scenario 1: the set-fetch phase itself runs out of budget partway
 // through (each fetch costs enough virtual time that TIME_BUDGET_MS trips
 // before all 57 are done). Assert setsSkippedForTime > 0 and fewer than 57

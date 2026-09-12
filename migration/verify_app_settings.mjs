@@ -156,6 +156,25 @@ function mockClientThatThrowsOnFrom() {
   const s = await readYuyuteiSourceState(mockClient({ data: null, error: { code: "500", message: "schema cache reload in progress" } }));
   assertEqual(s, "unknown", "T10e ambiguous 'schema cache' message not about app_settings being missing -> 'unknown'");
 }
+{
+  // THIRD pass (Codex independent re-verification, 2026-09-12): the raw
+  // Postgres undefined_column error (42703) for THIS exact table's
+  // missing column reads `column "app_settings.value" of relation
+  // "app_settings" does not exist` — this satisfies "names app_settings"
+  // AND "table/relation" AND "does not exist" simultaneously, so the
+  // previous (2nd-pass) message-based fallback still misclassified it as
+  // 'unconfigured' despite the table genuinely existing. Per Codex's
+  // guidance, message-text heuristics are now dropped entirely — only
+  // code 42P01/PGRST205 (with the table name confirmed) count as
+  // 'unconfigured'; every other code, including this one, is 'unknown'.
+  const s = await readYuyuteiSourceState(
+    mockClient({
+      data: null,
+      error: { code: "42703", message: 'column "app_settings.value" of relation "app_settings" does not exist' },
+    })
+  );
+  assertEqual(s, "unknown", "T10f real Postgres undefined_column (42703) for THIS table's own column -> 'unknown', NOT 'unconfigured' (the table genuinely exists)");
+}
 
 // ---- isYuyuteiSourceEnabled: display pages, fails open on unconfigured/unknown ----
 assertEqual(await isYuyuteiSourceEnabled(mockClient({ data: { value: true }, error: null })), true, "T11 display: enabled -> true");

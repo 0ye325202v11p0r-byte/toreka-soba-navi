@@ -31,50 +31,44 @@ const SETTINGS_READ_TIMEOUT_MS = 5_000;
 
 export type YuyuteiSourceState = "enabled" | "disabled" | "unconfigured" | "unknown";
 
-// PostgREST reports a table missing from its schema cache as PGRST205
-// (distinct from PGRST204 "column not found" and PGRST202/203 "function
-// not found/ambiguous" — none of those mean this table is missing, they
-// mean it EXISTS but something else is wrong) rather than surfacing the
-// underlying Postgres "undefined_table" error (42P01) directly, but which
-// one actually reaches the client can depend on the PostgREST/Supabase
-// version and request path — neither has been observed against a real
-// deployment of this exact table (this project has no live Supabase
-// access in this session), so both codes are checked.
+// PostgREST reports a table missing from its schema cache as PGRST205;
+// the underlying Postgres "undefined_table" error is 42P01. Both are
+// checked, since which one actually reaches the client can depend on the
+// PostgREST/Supabase version and request path — neither has been
+// observed against a real deployment of this exact table (this project
+// has no live Supabase access in this session).
 //
-// REVISED 2026-09-12 (Codex independent re-verification, second pass):
-// the message-text fallback below was previously `message.includes(
-// "does not exist") || message.includes("schema cache")` — far too broad.
-// PostgREST's own "column not found" message reads e.g. "Could not find
-// the 'value' column of 'app_settings' in the schema cache", which
-// contains "schema cache" but means the TABLE EXISTS with a schema
-// mismatch — exactly the kind of "something is actually wrong, don't
-// assume it's fine to scrape" situation that must classify as "unknown",
-// not "unconfigured". The fallback now requires the message to both (a)
-// name this specific table and (b) say a table/relation is missing —
-// not just contain either phrase in isolation, since either alone is
-// equally consistent with a column-, function-, or unrelated-table error.
+// REVISED 2026-09-12 (Codex independent re-verification, THIRD pass):
+// two earlier message-text fallbacks were each found too broad in turn —
+// first a bare `includes("does not exist") || includes("schema cache")`,
+// then a tightened "(table|relation) + (does not exist|could not find) +
+// app_settings" combination that still matched Postgres's genuine
+// undefined_column error (42703), whose message reads e.g. `column
+// "app_settings.value" of relation "app_settings" does not exist` — this
+// mentions "relation", "does not exist", AND "app_settings" while still
+// being a column-level problem, not a missing table.
+//
+// Per Codex's guidance: stop trying to recognize "table is missing" from
+// message text at all. Only the two known, unambiguous error CODES count;
+// everything else (a different code, or no code) is "unknown", not
+// "unconfigured" — deliberately erring toward failing closed (scraping
+// stays off) for any error shape this project hasn't actually observed in
+// production, rather than guessing from prose that keeps turning out to
+// have another legitimate meaning. Once the app_settings table exists in
+// production and a real error is actually observed, add compatibility
+// for that SPECIFIC confirmed shape then — not preemptively from guesses.
 function isMissingTableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const code = "code" in error ? String((error as { code: unknown }).code) : "";
+  if (code !== "42P01" && code !== "PGRST205") return false;
+  // This function's only caller queries `app_settings` exclusively, so a
+  // PGRST205/42P01 error from THAT query can only genuinely be about
+  // app_settings — this name check is pure defense-in-depth against a
+  // malformed or unexpected error object reusing one of these codes for
+  // something else, not a general-purpose text heuristic.
   const message =
     "message" in error ? String((error as { message: unknown }).message).toLowerCase() : "";
-  // This function's only caller queries `app_settings` exclusively, so in
-  // genuine use a PGRST205/42P01 error from THAT query can only ever be
-  // about app_settings — but the table name is checked even for these
-  // recognized codes anyway (not just the message-only fallback below) as
-  // pure defense-in-depth against a malformed or unexpected error shape
-  // reusing one of these codes for something else.
-  const namesThisTable = message.includes("app_settings");
-  if ((code === "42P01" || code === "PGRST205") && namesThisTable) return true;
-  // Message fallback for when code is absent or from a different
-  // Supabase/PostgREST version — requires the message to both (a) name
-  // this specific table and (b) say a table/relation is missing, not
-  // just contain either phrase in isolation (either alone is equally
-  // consistent with a column-, function-, or unrelated-table error).
-  const saysTableIsMissing =
-    (message.includes("table") || message.includes("relation")) &&
-    (message.includes("does not exist") || message.includes("could not find"));
-  return namesThisTable && saysTableIsMissing;
+  return message.includes("app_settings");
 }
 
 // Typed as the base SupabaseClient (default generics) rather than a
