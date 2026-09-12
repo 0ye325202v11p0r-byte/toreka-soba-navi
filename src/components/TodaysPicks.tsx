@@ -3,8 +3,18 @@ import type { MarketListCard } from "@/lib/types";
 import { yen, pct } from "@/lib/format";
 
 export default function TodaysPicks({ cards }: { cards: MarketListCard[] }) {
+  // Not "data_quality === 'real'" specifically — once
+  // /api/cron/refresh-yuyutei-prices exists (2026-09-12), 'partial' cards
+  // also accumulate real computed judgment/pct_vs_avg30 (see isAutoTracked()
+  // in src/lib/format.ts). pct_vs_avg30 !== null is only ever true for a
+  // card that has actually been through stats computation, so this needs
+  // no change to know a card is "genuinely tracked" — it's already the
+  // right signal. 'flat' is excluded the same defensive way MoverStrip.tsx
+  // already does: a legacy row could in principle carry a stray
+  // pct_vs_avg30 from the original Artifact-era migration despite never
+  // having real tracked history.
   const picks = cards
-    .filter((c) => c.data_quality === "real" && c.judgment === "割安" && c.pct_vs_avg30 !== null)
+    .filter((c) => c.data_quality !== "flat" && c.judgment === "割安" && c.pct_vs_avg30 !== null)
     .sort((a, b) => (a.pct_vs_avg30 ?? 0) - (b.pct_vs_avg30 ?? 0))
     .slice(0, 6);
 

@@ -12,11 +12,13 @@
 //
 // IMPORTANT — this source is structurally different from the primary one:
 //   - It's a live shop's current listing price (today only), not a
-//     multi-shop tracked average with historical charts. There is no
-//     backfill possible: every card added from here starts with exactly
-//     ONE snapshot (today) and will only grow a real history going forward
-//     if it keeps getting scraped (not yet wired into the daily cron —
-//     that's a separate follow-up, not done by this script).
+//     multi-shop average. A card inserted by this script starts with
+//     exactly ONE snapshot (today's) — real history (and avg30/avg90/
+//     judgment) only accumulates once the daily tracking cron
+//     (src/app/api/cron/refresh-yuyutei-prices/route.ts, added 2026-09-12)
+//     has re-scraped it enough calendar days. This script's job is only the
+//     one-time insert of newly-discovered cards; day-to-day price tracking
+//     for cards already inserted is that cron's job, not this script's.
 //   - One fetch per SET (not per card) returns every card in that set with
 //     its rarity and price in one page — much more efficient, but means
 //     dedup happens per-set, not per-card via a sitemap diff.
@@ -25,9 +27,13 @@
 //     parallel print. This script maps P-X -> Xパラレル and plain X -> X,
 //     matching the rarity strings already used elsewhere in this project.
 //   - Every card is inserted with data_quality='partial' and
-//     history_is_estimated=true, and is EXCLUDED from avg30/avg90/judgment
-//     computation (those need real history) — current_price is set, the
-//     rest left null, exactly like this project already treats c9.
+//     history_is_estimated=true. avg30/avg90/judgment start null (no
+//     history yet) — they are NOT excluded forever, just not computable
+//     until the daily cron has accumulated enough snapshots for this card.
+//     data_quality stays 'partial' even once tracked: it describes
+//     single-shop vs multi-shop provenance, not whether a card is
+//     currently being auto-updated (see isAutoTracked() in
+//     src/lib/format.ts for that separate axis).
 //
 // Safety: re-checks existing (card_number, rarity) keys from Supabase
 // before every insert, so any overlap with the primary source (e.g. a "SP"
@@ -37,6 +43,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { appendFileSync } from "fs";
+import { parseSetPage, RARITY_MAP, YUYUTEI_USER_AGENT } from "../src/lib/yuyuteiParser.ts";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -53,8 +60,7 @@ const DEFAULT_SETS = Array.from({ length: 17 }, (_, i) => `op${String(i + 1).pad
 const SETS = setsArgIdx >= 0 ? args[setsArgIdx + 1].split(",") : DEFAULT_SETS;
 
 const TODAY = new Date().toISOString().slice(0, 10);
-const USER_AGENT =
-  "TorekaSobaNaviBot/1.0 (+https://github.com/0ye325202v11p0r-byte/toreka-soba-navi; catalog expansion for a personal One Piece TCG tracker; price data only, no image/content reproduction)";
+const USER_AGENT = YUYUTEI_USER_AGENT;
 const LOG_PATH = new URL("./scrape_yuyutei.log", import.meta.url);
 
 function log(msg) {
@@ -89,69 +95,6 @@ async function fetchAllCards() {
     from += pageSize;
   }
   return all;
-}
-
-function decodeHtmlEntities(str) {
-  return str
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&nbsp;/g, " ");
-}
-
-const RARITY_MAP = {
-  "P-SEC": "SECパラレル",
-  SEC: "SEC",
-  "P-SR": "SRパラレル",
-  SR: "SR",
-  "P-R": "Rパラレル",
-  R: "R",
-  UC: "UC",
-  C: "C",
-  "P-L": "Lパラレル",
-  L: "L",
-  "P-SP": "SPパラレル",
-  SP: "SP",
-  "P-UC": "UCパラレル",
-  "P-C": "Cパラレル",
-  TR: "TR",
-  "P-TR": "TRパラレル",
-};
-
-// Parses one set-list page: groups are announced by a rarity header, each
-// followed by a run of .card-product blocks until the next header.
-function parseSetPage(html) {
-  const titleMatch = html.match(/<title>\[[a-z0-9]+\]([^|<]+)/i);
-  const setName = titleMatch ? decodeHtmlEntities(titleMatch[1].trim()) : null;
-
-  const cards = [];
-  let currentRarityLabel = null;
-
-  // walk the document as a stream of "rarity header" and "card block" tokens
-  const tokenRe =
-    /class="py-2 d-inline-block px-2 me-2 text-white fw-bold">([^<]+)<|href="https:\/\/yuyu-tei\.jp\/sell\/opc\/card\/([a-z0-9]+)\/(\d+)"><div\s+class="position-relative product-img">\s*<img\s+src="([^"]+)"\s+alt="([^"]+)"[^>]*class="card[^"]*"\/>[\s\S]{0,400}?<span\s+class="d-block border border-dark p-1 w-100 text-center my-2">([^<]+)<\/span>\s*<a\s+href="[^"]+"><h4 class="text-primary fw-bold">([^<]+)<\/h4>\s*<\/a>\s*<strong\s+class="d-block text-end\s*">\s*([\d,]+)\s*円/g;
-
-  let m;
-  while ((m = tokenRe.exec(html))) {
-    if (m[1] !== undefined) {
-      currentRarityLabel = m[1].trim();
-      continue;
-    }
-    const [, , setSlug, numericId, , , cardNumber, name, priceStr] = m;
-    cards.push({
-      setSlug,
-      numericId,
-      cardNumber: cardNumber.trim(),
-      name: decodeHtmlEntities(name.trim()),
-      rarityLabel: currentRarityLabel,
-      price: Number(priceStr.replace(/,/g, "")),
-      url: `https://yuyu-tei.jp/sell/opc/card/${setSlug}/${numericId}`,
-    });
-  }
-
-  return { setName, cards };
 }
 
 async function main() {

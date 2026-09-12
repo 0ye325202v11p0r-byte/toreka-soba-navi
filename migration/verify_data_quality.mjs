@@ -12,6 +12,12 @@
 // AND. isAutoTracked() mirrors that exact condition so the UI warning and
 // the cron's real behavior can't drift apart.
 //
+// Updated 2026-09-12 (same day, later): /api/cron/refresh-yuyutei-prices
+// now also exists, targeting data_quality='partial' cards — so 'partial'
+// flipped from "never tracked" to "tracked, same as 'real'" here. This is
+// an intentional behavior change (T4 below), not a regression: it reflects
+// isAutoTracked() mirroring BOTH crons' scope now, not just one.
+//
 // Imports the REAL src/lib/format.ts (not a hand-copied reimplementation,
 // per this project's established testing convention). Run:
 // `node --experimental-strip-types migration/verify_data_quality.mjs`.
@@ -48,13 +54,22 @@ assertEqual(
   "T3 real but source_url undefined -> NOT tracked"
 );
 
-// 'partial' (yuyu-tei, single-shop, real source but no tracked history):
-// never tracked, regardless of source_url — refresh-prices only ever
-// selects data_quality='real' rows.
+// 'partial' (yuyu-tei, single-shop) + source_url present -> tracked, now
+// that /api/cron/refresh-yuyutei-prices exists and targets exactly this
+// combination (its own selection query:
+// `.eq("data_quality","partial").not("source_url","is",null)`).
 assertEqual(
   isAutoTracked({ data_quality: "partial", source_url: "https://yuyu-tei.jp/x" }),
+  true,
+  "T4 partial + source_url present -> tracked (by refresh-yuyutei-prices)"
+);
+// Same edge case as T2/T3, mirrored for the 'partial' cron: a 'partial'
+// row with a null source_url must NOT be treated as tracked, since
+// refresh-yuyutei-prices' own `.not("source_url","is",null)` would skip it.
+assertEqual(
+  isAutoTracked({ data_quality: "partial", source_url: null }),
   false,
-  "T4 partial (has a source_url, but wrong data_quality) -> NOT tracked"
+  "T4b partial but source_url null -> NOT tracked (cron would skip it)"
 );
 
 // 'flat' (unsourced manual estimate): never tracked. This is the exact

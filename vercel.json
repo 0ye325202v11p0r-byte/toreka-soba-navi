@@ -5,6 +5,10 @@
       "schedule": "0 20 * * *"
     },
     {
+      "path": "/api/cron/refresh-yuyutei-prices",
+      "schedule": "30 20 * * *"
+    },
+    {
       "path": "/api/cron/check-watchlist",
       "schedule": "0 21 * * *"
     }

@@ -113,7 +113,7 @@ export default function MarketTable({ cards }: { cards: MarketListCard[] }) {
         >
           <option value="all">データ品質：すべて</option>
           <option value="real">実測データのみ（判定・平均あり）</option>
-          <option value="partial">参考値のみ（遊々亭・1店舗単発）</option>
+          <option value="partial">参考値のみ（遊々亭・1店舗）</option>
         </select>
       </div>
 

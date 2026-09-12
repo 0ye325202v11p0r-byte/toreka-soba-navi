@@ -12,6 +12,16 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 「カードデータの収録範囲」参照）。このディレクトリの既存スクリプトは全て
 対応済みだが、新規スクリプトでは同じ落とし穴に注意すること。
 
+## ⚠️ 遊々亭の日次自動追跡（2026-09-12実装）を本番で有効にする手順（未実施）
+
+`/api/cron/refresh-yuyutei-prices`はコード・テストとも完成していますが、**本番へは一切反映していません**（push・デプロイ・本番DB変更は今回のセッションで意図的に行っていません）。実際に有効化するには、ユーザー自身が以下を順に行う必要があります：
+
+1. Supabase SQL Editorで`supabase/schema.sql`の`yuyutei_sync_runs`テーブル定義（`create table if not exists`のブロック）を実行する（新規テーブルなので、既存テーブルへの影響なし）。
+2. このリポジトリを通常通りgit push（→Vercelが自動デプロイ）。これで`vercel.json`に追加済みの新規cronエントリ（`/api/cron/refresh-yuyutei-prices`、毎日UTC20:30）が有効になります。
+3. デプロイ後、`/admin/sync-status`の「参考価格（yuyu-tei.jp・単一店舗）」セクションで初回実行を確認してください。
+
+これらを行うまでは、遊々亭ソースの2,426件は引き続き登録時点の価格のまま自動更新されません（現状と変わりません）。
+
 | ファイル | 役割 | 再実行の必要性 |
 |---|---|---|
 | `migrate.mjs` | Claude Artifact DBのエクスポート（`cards_export/`）をSupabaseへ一括投入する初回移行スクリプト | 実行済み。再実行は基本不要（冪等・upsert） |
@@ -24,7 +34,9 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 | `find_new_candidates.mjs` | サイト全体の`sitemap-cards.xml`（生XMLを直接取得・自前パース。WebFetchの要約は大規模リストで抽出漏れ・混同が起きたため不使用）を、既存Supabaseデータ（card_number+rarity）と突き合わせ、未収録の候補一覧を`new_candidates.json`に出力する | カードデータをさらに拡充したくなったら再実行。事前に`node migration/sitemap-cards-raw.xml`相当の生XMLを取得する処理を内包していないので、実行前に別途sitemapを取得する必要がある（スクリプト冒頭のコメント参照） |
 | `expand_catalog.mjs` | `new_candidates.json`の各URLを実際にfetchし、ページに埋め込まれたChart.jsの生データ（labels/data配列、通常25〜30週分の実測価格）を正規表現で直接パースして、WebFetch要約より遥かに正確な価格履歴を取得。本番cronと同じ礼儀正しいレート制限（1.2〜1.3秒間隔・正直なUser-Agent）でSupabaseに投入する。`--start N` `--limit N`で分割実行・再開が可能 | カードデータをさらに拡充する際の主力スクリプト。2026-09-11時点で`sitemap-cards.xml`の全894件（23の特別収録ボックス分）を処理済み＝このデータソースからは事実上枯渇状態。**このサイトは「特別収録ボックス」のパラレル/チェイスカードのみを個別ページ化しており、OP01〜OP17などメインブースターの通常レアリティ（ノーマルのC/UC/R/SR等）は元々サイトに個別ページが存在しない**（`sitemap-expansions.xml`で全23セットを確認済み・他に隠れたセットなし）。この通常レアリティのギャップは`scrape_yuyutei.mjs`（第2のデータソース）で埋めた |
 | `fix_op13_r_variant_bugs.mjs` | 拡充中の監査で発見した印刷バリエーション混同バグ2件（c500, c503）の修正。パターンはc9/c2と同一（直近2件のスナップショットだけ別バリエーションの価格に汚染されている） | 再実行不要（既に実行済み） |
-| `scrape_yuyutei.mjs` | 第2のデータソース、yuyu-tei.jp（遊々亭）の店頭販売価格を取得。`--sets op01,op02,...`でセットのURLスラッグを指定（1セット=1フェッチで全カードのレアリティ・価格を取得できる効率的な構造）。`--dry-run`で実投入せず件数だけ確認可能。取得したカードは`data_quality: 'partial'`・統計値なし・単発スナップショットとして投入される（詳細はスクリプト冒頭のコメントとREADME.mdの「カードデータの収録範囲」参照）。cross-set（Don!!カード等、別セット由来の番号を持つカード）は誤ったset_name付与を避けるため自動的にスキップする | OP01〜OP17（17主要セット）・ST01〜ST36（全スターターデッキ）・EB01〜EB04（全エクストラブースター）は2026-09-11に実行済み。プロモ（P-XXX）はまだ未実行 — さらに拡充する場合の次の候補 |
+| `scrape_yuyutei.mjs` | 第2のデータソース、yuyu-tei.jp（遊々亭）の店頭販売価格を取得。`--sets op01,op02,...`でセットのURLスラッグを指定（1セット=1フェッチで全カードのレアリティ・価格を取得できる効率的な構造）。`--dry-run`で実投入せず件数だけ確認可能。取得したカードは`data_quality: 'partial'`として投入される（詳細はスクリプト冒頭のコメントとREADME.mdの「カードデータの収録範囲」参照）。cross-set（Don!!カード等、別セット由来の番号を持つカード）は誤ったset_name付与を避けるため自動的にスキップする。2026-09-12、HTML解析ロジック（`parseSetPage`等）を`src/lib/yuyuteiParser.ts`に切り出し、このスクリプトと新設の`refresh-yuyutei-prices/route.ts`が同じ実装を共用するよう変更（挙動は変わっていない） | OP01〜OP17（17主要セット）・ST01〜ST36（全スターターデッキ）・EB01〜EB04（全エクストラブースター）は2026-09-11に実行済み。プロモ（P-XXX）はまだ未実行 — さらに拡充する場合の次の候補 |
+| `verify_yuyutei_parser.mjs` | `src/lib/yuyuteiParser.ts`の`parseSetPage`本体を直接importする回帰テスト。実際に2026-09-12にyuyu-tei.jpから取得した実物のHTML断片（`_test_fixtures/yuyutei_op01_sample.html`、手書きではない）を使い、セット名・カード番号・カード名・価格・レアリティラベル→この案件のレアリティ文字列へのマッピングを検証。`ALL_YUYUTEI_SETS`（57セット、OP17+ST36+EB4）の件数・重複なしも確認。計17アサーション | `yuyuteiParser.ts`を変更したら必ず再実行。yuyu-tei.jpのページ構造が変わった場合、この回帰テストではなく手動での再確認が必要（構造変化そのものはこのテストでは検出できない——固定フィクスチャに対する検証のため） |
+| `verify_refresh_yuyutei_prices.mjs`（`_test_mocks/`を共用） | 2026-09-12新設：`refresh-yuyutei-prices/route.ts`の`GET`を実際にimportして実行する回帰テスト。3フェーズ（①57セットページのfetch、②既存`partial`カードのページネーション読み取り、③カード毎のupsert/history read/update）それぞれで時間予算切れが正しく次のI/Oを止めることを検証（同種のバグがrefresh-prices/check-watchlistの両方で見つかった過去の教訓をそのまま適用）。仮想時計・`global.fetch`モック（実物のフィクスチャHTMLを返す）・Supabaseモックを使用、実ネットワーク・実DB通信なし。`globalThis.setTimeout`もモックし、ルート内の`sleep(1500)`（57セット分の礼儀正しい間隔）が実時間を消費しないようにしている（予算判定は仮想`Date.now()`が担うため、実待機は検証したいことと無関係）。制御フロー・一部セットのfetch失敗・カードのソース未検出（`notFoundInFetch`）・`yuyutei_sync_runs`未作成時のログ失敗を含む計30アサーション | `refresh-yuyutei-prices/route.ts`を変更したら必ず再実行（DB接続・外部通信なし） |
 | `fix_html_entities.mjs` | `scrape_yuyutei.mjs`の初回実行時（HTMLエンティティのデコード処理を実装する前）に投入されたカード名に残っていた`&amp;`等のエンティティを一括修正した使い捨てスクリプト | 再実行不要（既に実行済み。スクリプト自体は修正済みなので今後は発生しない） |
 | `fix_akaji_variants_real_source.mjs` | c9/c500/c503（印刷バリエーション混同で`data_quality: 'flat'`・未ソースの手動参考値のままだった3件）について、遊々亭に「特別パラレル」という別商品ページ（白文字版とは別のproduct ID）が存在することを発見し、実測ソース付きの`data_quality: 'partial'`に格上げした | 再実行不要（既に実行済み）。同種の「-R」サフィックスの赤文字カードが他にも見つかった場合のテンプレートとして使える |
 | `fix_avg_window_bug.mjs` | 2026-09-11発見：avg30/avg90が「直近30/90件のスナップショット」を「直近30/90日」の代わりに使っていたバグ（`src/lib/priceStats.ts`の`computeStats`に集約・修正済み）の、既存カードへの一括再計算。カレンダー日付で日数を判定し直し、`data_quality='real'`の844件のうち438件（うち230件は割安/割高/適正の判定自体が変わっていた）を修正。`--apply`なしはdry-run | 再実行不要（既に実行済み）。同種のバグが再発した場合の修正テンプレートとして使える。`node --experimental-strip-types migration/fix_avg_window_bug.mjs --apply` で実行（`verify_pnl_logic.mjs`と同じNode 24の型ストリッピング機能を使用） |

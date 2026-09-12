@@ -96,16 +96,17 @@ export async function GET(request: Request) {
   // data_quality='real' only: the 2026-09-11 yuyu-tei expansion added 2,423
   // 'partial' cards that also carry a non-null source_url (pointing at
   // yuyu-tei.jp, not onepiece-card-atari.jp), which this route's
-  // PRICE_PATTERN regex can never match. Without this filter every cron run
-  // was quietly burning its time budget attempting ~2,400 fetches destined
-  // to fail (each logged as a real fetch failure in sync_runs, and each a
-  // real HTTP request against yuyu-tei.jp with no benefit), starving the
-  // 844 cards this route can actually update. Tracking yuyu-tei prices on a
-  // recurring daily basis is a separate, not-yet-decided project (see
-  // COORDINATION.md / README.md "遊々亭ソースの法務リスクについて" — running
-  // a permanent daily scraper against a live third-party shop is a bigger
-  // commitment than the one-time bulk import already done, and needs the
-  // user's own sign-off given the unresolved legal-risk question there).
+  // PRICE_PATTERN regex can never match (it's built for
+  // onepiece-card-atari.jp's page structure). Without this filter every
+  // cron run was quietly burning its time budget attempting ~2,400 fetches
+  // destined to fail, starving the 844 cards this route can actually
+  // update. Daily yuyu-tei tracking is handled by a separate route,
+  // /api/cron/refresh-yuyutei-prices (added 2026-09-12, after the user's
+  // explicit legal-risk acceptance — see README.md "遊々亭ソースの法務リス
+  // クについて"), which fetches per-SET pages (yuyu-tei's own structure)
+  // rather than per-card — deliberately kept as its own route/function
+  // rather than merged into this one, so the two sources' very different
+  // fetch shapes and time budgets don't have to share a single loop.
   let query = supabase
     .from("cards")
     .select("id, name, source_url, history_is_estimated")

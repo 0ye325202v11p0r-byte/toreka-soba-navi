@@ -44,30 +44,36 @@ export function dataQualityLabel(quality: string | null | undefined): {
   }
 }
 
-// Whether a card is auto-updated by /api/cron/refresh-prices and carries
-// tracked history (avg30/avg90/judgment). Mirrors that route's actual
-// selection query exactly — `.eq("data_quality", "real")` AND
-// `.not("source_url", "is", null)` (src/app/api/cron/refresh-prices/
-// route.ts) — rather than assuming data_quality alone decides it.
-// data_quality and source_url are set independently at data-entry time
-// (see migration/migrate.mjs), so a "real" card with a null source_url is
-// possible in principle; treating that combination as untracked (the `&&`
-// below) fails safe rather than silently overstating freshness.
+// Whether a card is in scope for one of the two daily price-tracking crons
+// — /api/cron/refresh-prices (data_quality='real', onepiece-card-atari.jp)
+// or /api/cron/refresh-yuyutei-prices (data_quality='partial', yuyu-tei.jp,
+// added 2026-09-12) — and so carries tracked history (avg30/avg90/
+// judgment). Mirrors those routes' actual selection queries — both require
+// a non-null source_url — rather than assuming data_quality alone decides
+// it. data_quality and source_url are set independently at data-entry time
+// (see migration/migrate.mjs), so a "real" or "partial" card with a null
+// source_url is possible in principle; treating that combination as
+// untracked (the `&&` below) fails safe rather than silently overstating
+// freshness. 'flat' (an unsourced manual estimate — no shop to re-fetch
+// from at all) is never in scope for either cron.
 //
 // This is a distinct axis from dataQualityLabel()'s real/partial/flat
-// label: that label answers "is there a verifiable real-world price source
-// at all" (real and partial both qualify; flat, an unsourced manual
-// estimate, does not). isAutoTracked answers "does the daily cron keep
-// this price current" (only real+source_url qualifies; partial and flat
-// are both never auto-updated, for different reasons). Conflating the two
-// previously showed the "not auto-updated" warning only for
+// label: that label answers "is this a multi-shop average, a single-shop
+// price, or an unverified estimate" (a provenance question that doesn't
+// change once a card starts being tracked — yuyu-tei is always one shop,
+// tracked daily or not). isAutoTracked answers "does a daily cron keep
+// this price current" (a separate, cron-scope question). Conflating the
+// two previously showed the "not auto-updated" warning only for
 // data_quality==='partial', silently omitting it for 'flat' cards (found
-// in UX review, 2026-09-12).
+// in UX review, 2026-09-12); building the yuyu-tei cron is exactly why
+// that separation matters going forward — 'partial' cards are now
+// expected to flip from "not tracked" to "tracked" without their
+// data_quality ever changing.
 //
-// IMPORTANT — this answers only "is this card in scope for the cron", a
+// IMPORTANT — this answers only "is this card in scope for a cron", a
 // static/structural question. It does NOT mean: the most recent cron run
-// actually succeeded for this card (a real+source_url card can still have
-// a stale price if recent fetches failed), that the displayed price is
+// actually succeeded for this card (an in-scope card can still have a
+// stale price if recent fetches failed), that the displayed price is
 // fresh as of today, or that a pct_vs_avg30 watch rule is guaranteed to
 // fire — those depend on run history and the card's actual stats being
 // non-null, which callers must still check separately (independent review
@@ -78,5 +84,7 @@ export function isAutoTracked(card: {
   data_quality?: string | null;
   source_url?: string | null;
 }): boolean {
-  return card.data_quality === "real" && card.source_url != null;
+  return (
+    (card.data_quality === "real" || card.data_quality === "partial") && card.source_url != null
+  );
 }
