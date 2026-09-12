@@ -77,36 +77,51 @@ export default function WatchlistClient({
     }
     setBusy(true);
     setErrorMsg(null);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    // try/finally around the whole body (self-review, 2026-09-12) — without
+    // it, an exception thrown rather than resolved as {error} (e.g. a
+    // genuine network failure mid-request) would skip setBusy(false) and
+    // leave "追加" disabled until the user reloads the page, with no error
+    // message explaining why.
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
+        return;
+      }
+      const { error } = await supabase.from("watchlist_items").insert({
+        user_id: user.id,
+        card_id: cardId,
+        alert_rule: { type: ruleType, op, value } as WatchlistAlertRule,
+      });
+      if (error) {
+        setErrorMsg(`登録に失敗しました：${error.message}`);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
       setBusy(false);
-      setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
-      return;
     }
-    const { error } = await supabase.from("watchlist_items").insert({
-      user_id: user.id,
-      card_id: cardId,
-      alert_rule: { type: ruleType, op, value } as WatchlistAlertRule,
-    });
-    setBusy(false);
-    if (error) {
-      setErrorMsg(`登録に失敗しました：${error.message}`);
-      return;
-    }
-    router.refresh();
   }
 
   async function removeItem(id: string) {
     if (!window.confirm("このウォッチリスト条件を削除しますか？")) return;
     setErrorMsg(null);
-    const { error } = await supabase.from("watchlist_items").delete().eq("id", id);
-    if (error) {
-      setErrorMsg(`削除に失敗しました：${error.message}`);
-      return;
+    try {
+      const { error } = await supabase.from("watchlist_items").delete().eq("id", id);
+      if (error) {
+        setErrorMsg(`削除に失敗しました：${error.message}`);
+        return;
+      }
+      router.refresh();
+    } catch {
+      // Without this, an exception (e.g. a genuine network failure) here
+      // left the user with no feedback at all (self-review, 2026-09-12).
+      setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
     }
-    router.refresh();
   }
 
   return (

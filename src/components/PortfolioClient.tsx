@@ -68,40 +68,58 @@ export default function PortfolioClient({
     if (!canSubmitTransaction({ cardId, isKnownCard: true, pricePerUnit, quantity })) return;
     setBusy(true);
     setErrorMsg(null);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
+    // try/finally around the whole body (self-review, 2026-09-12) — without
+    // it, an exception thrown rather than resolved as {error} (e.g. a
+    // genuine network failure mid-request, not just a Postgres rejection)
+    // would skip every setBusy(false) below and leave "記録する" disabled
+    // until the user reloads the page, with no error message explaining
+    // why.
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
+        return;
+      }
+      const { error } = await supabase.from("transactions").insert({
+        user_id: user.id,
+        card_id: cardId,
+        type,
+        quantity,
+        price_per_unit: pricePerUnit,
+        transaction_date: date,
+      });
+      if (error) {
+        setErrorMsg(`記録に失敗しました：${error.message}`);
+        return;
+      }
+      setPricePerUnit("");
+      router.refresh();
+    } catch {
+      setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
       setBusy(false);
-      setErrorMsg("ログイン状態を確認できませんでした。再度ログインしてください。");
-      return;
     }
-    const { error } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      card_id: cardId,
-      type,
-      quantity,
-      price_per_unit: pricePerUnit,
-      transaction_date: date,
-    });
-    setBusy(false);
-    if (error) {
-      setErrorMsg(`記録に失敗しました：${error.message}`);
-      return;
-    }
-    setPricePerUnit("");
-    router.refresh();
   }
 
   async function removeTransaction(id: string) {
     if (!window.confirm("この取引記録を削除しますか？この操作は取り消せません。")) return;
     setErrorMsg(null);
-    const { error } = await supabase.from("transactions").delete().eq("id", id);
-    if (error) {
-      setErrorMsg(`削除に失敗しました：${error.message}`);
-      return;
+    try {
+      const { error } = await supabase.from("transactions").delete().eq("id", id);
+      if (error) {
+        setErrorMsg(`削除に失敗しました：${error.message}`);
+        return;
+      }
+      router.refresh();
+    } catch {
+      // Without this, an exception (e.g. a genuine network failure) here
+      // left the user with no feedback at all — no error shown, and no way
+      // to tell whether the delete silently succeeded or failed (self-
+      // review, 2026-09-12).
+      setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
     }
-    router.refresh();
   }
 
   return (
