@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked } from "@/lib/format";
+import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked, safeJsonLdString } from "@/lib/format";
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 import type { Card, PriceSnapshot } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
@@ -110,7 +110,7 @@ export default async function CardDetailPage({
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLdString(jsonLd) }}
         />
       )}
       <div className="mb-4 flex items-start justify-between">

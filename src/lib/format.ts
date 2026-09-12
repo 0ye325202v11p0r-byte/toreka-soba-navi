@@ -1,5 +1,22 @@
 import type { Judgment } from "./types";
 
+// For embedding structured data (JSON-LD) via dangerouslySetInnerHTML.
+// Plain JSON.stringify() does not escape "<", so a value containing the
+// literal text "</script>" (e.g. a card name — cards.name is populated by
+// expand_catalog.mjs/scrape_yuyutei.mjs from THIRD-PARTY scraped HTML, not
+// hand-authored content) would close the JSON-LD <script> tag early and let
+// whatever text follows it be parsed as new HTML/script. < is the
+// standard escape for this: it round-trips through JSON.parse back to "<"
+// (so structured-data consumers like Google's rich-results parser see the
+// same object), but the browser's HTML tokenizer never sees a literal "<"
+// while scanning for the closing tag, so it can't be tricked into ending
+// the script block early. Found via self-review, 2026-09-12 — not confirmed
+// exploited (no real card name has contained this so far), but scraped
+// third-party text should never be assumed safe to embed unescaped.
+export function safeJsonLdString(data: unknown): string {
+  return JSON.stringify(data).replace(/</g, "\\u003c");
+}
+
 // PostgREST can return Postgres `numeric` columns as JSON strings (to avoid
 // float precision loss), so every value coming from Supabase is typed
 // `number` here but must be coerced defensively before calling
