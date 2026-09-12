@@ -1033,6 +1033,7 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 2. **Vercelの環境変数に`ADMIN_EMAIL`を追加**（`.env.local`に設定済みの値と同じメールアドレス）してから再デプロイ。追加しないと`/admin/sync-status`は「本人含め誰も見られない」フェイルクローズ状態のままになります（誰でも見られる状態よりは安全側ですが、意図通りには使えません）。
 3. **Supabase SQL Editorで`migration/retrofit_admin_only_sync_runs.sql`を実行**（実行前にファイル内の`REPLACE_WITH_YOUR_ADMIN_EMAIL`を実際のメールアドレスに置き換える）。既存の本番`sync_runs`テーブルのRLSポリシーを管理者限定に変更するために必要です。
 4. **遊々亭の日次自動追跡を有効化する場合**（任意・法務リスクは既に受容済みという前提）：`supabase/schema.sql`の`yuyutei_sync_runs`/`app_settings`テーブル定義をSupabase SQL Editorで実行（実行前に`yuyutei_sync_runs`ポリシー内の`REPLACE_WITH_YOUR_ADMIN_EMAIL`も同様に置き換える）。詳細は`migration/README.md`「遊々亭の日次自動追跡を本番で有効にする手順」参照。
+5. **（判断待ち・未修正）cronのsnapshot_dateがUTC基準になっている論点**：「取引記録フォームの日付初期値、および未修正の構造的な論点を1件発見」セクション参照。対応するか・するとしてどう移行するかはユーザー判断待ちで、コード修正はまだ行っていません。
 
 上記1〜3は特にセキュリティに関わる項目のため優先度が高いと考えますが、最終的な優先順位はユーザーの判断にお任せします。Codex復帰後、このチェックリスト自体も含めて再検証をお願いします。
 
