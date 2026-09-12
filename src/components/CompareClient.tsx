@@ -24,12 +24,14 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [snapshotsByCard, setSnapshotsByCard] = useState<Record<string, PriceSnapshot[]>>({});
   const [query, setQuery] = useState("");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function loadMissing() {
       const toLoad = selected.filter((id) => !snapshotsByCard[id]);
       if (toLoad.length === 0) return;
+      setLoadError(null);
       // Supabase/PostgREST caps a single select() at 1000 rows by default.
       // At most MAX_SELECTED (5) cards load here, but daily cron snapshots
       // accumulating over time can push their combined row count past 1000 —
@@ -39,20 +41,38 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
       let rows: PriceSnapshot[] = [];
       const pageSize = 1000;
       let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("price_snapshots")
-          .select("*")
-          .in("card_id", toLoad)
-          .order("snapshot_date", { ascending: true })
-          .order("id", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (cancelled) return;
-        if (error || !data) break;
-        rows = rows.concat(data as PriceSnapshot[]);
-        if (data.length < pageSize) break;
-        from += pageSize;
+      try {
+        while (true) {
+          const { data, error } = await supabase
+            .from("price_snapshots")
+            .select("*")
+            .in("card_id", toLoad)
+            .order("snapshot_date", { ascending: true })
+            .order("id", { ascending: true })
+            .range(from, from + pageSize - 1);
+          if (cancelled) return;
+          if (error) {
+            // Previously just `break`, silently keeping whatever partial
+            // `rows` had been read so far with no indication anything went
+            // wrong — a selected card's line would simply never appear on
+            // the chart, with nothing telling the user why (self-review,
+            // 2026-09-13).
+            setLoadError("価格履歴の取得に失敗しました。もう一度お試しください。");
+            return;
+          }
+          if (!data) break;
+          rows = rows.concat(data as PriceSnapshot[]);
+          if (data.length < pageSize) break;
+          from += pageSize;
+        }
+      } catch {
+        // An exception here (e.g. a genuine network failure) previously
+        // propagated as an unhandled promise rejection with no user-facing
+        // feedback at all.
+        if (!cancelled) setLoadError("通信エラーが発生しました。もう一度お試しください。");
+        return;
       }
+      if (cancelled) return;
       setSnapshotsByCard((prev) => {
         const next = { ...prev };
         for (const id of toLoad) next[id] = [];
@@ -106,6 +126,10 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
         onChange={(e) => setQuery(e.target.value)}
         className="mb-3 w-full rounded-md border border-border bg-bg-elevated px-3 py-2"
       />
+
+      {loadError && (
+        <div className="mb-3 rounded-lg bg-warn-soft p-3 text-sm text-warn">{loadError}</div>
+      )}
 
       <p className="mb-1 text-xs text-ink-faint">
         {filtered.length > 100
