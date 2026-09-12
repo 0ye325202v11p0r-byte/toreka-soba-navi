@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { isAdminUser } from "@/lib/adminAuth";
 import SetupNotice from "@/components/SetupNotice";
 
 export const metadata: Metadata = {
@@ -23,6 +24,15 @@ export default async function SyncStatusPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login?next=/admin/sync-status");
+  // Owner-only gate (self-review, 2026-09-12) — this page used to be
+  // reachable by ANY authenticated user (login is open passwordless
+  // signup), exposing internal cron run history and raw error_sample text
+  // to anyone who created an account. notFound() rather than redirecting to
+  // /login again, since a non-admin logged-in user isn't missing
+  // authentication — the page just isn't theirs to see. See isAdminUser()
+  // for why this fails closed (denies everyone, owner included) when
+  // ADMIN_EMAIL isn't configured.
+  if (!isAdminUser(user.email)) notFound();
 
   const { data: runs, error: runsError } = await supabase
     .from("sync_runs")
