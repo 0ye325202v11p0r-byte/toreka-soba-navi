@@ -90,6 +90,13 @@ export function buildDashboardSummary(
     gainers,
     losers,
     untrackedCount,
-    hasNothing: pnl.holdings.length === 0 && watchlistItems.length === 0,
+    // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
+    // 2026-09-13, found while re-checking this feature without Codex's
+    // parallel verification): a user who bought and later fully sold
+    // everything has pnl.holdings.length === 0 despite having real trading
+    // history — this used to show the brand-new-user "まだ何もありません"
+    // invitation to someone who has actually used the app extensively,
+    // just doesn't currently hold anything.
+    hasNothing: transactions.length === 0 && watchlistItems.length === 0,
   };
 }

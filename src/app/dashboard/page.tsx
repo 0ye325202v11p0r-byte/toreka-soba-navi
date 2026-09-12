@@ -115,7 +115,16 @@ export default async function DashboardPage() {
         </div>
       ) : (
         <>
-          {summary.holdingsCount > 0 && (
+          {/* Shown whenever there's ANY P&L history to report — not just
+              current holdings. A user who bought and later fully sold
+              everything has holdingsCount===0 but a real realizedPnl;
+              gating this purely on holdingsCount would hide their entire
+              trading result the moment they held nothing, right after
+              hasNothing's own fix for the identical blind spot (self-
+              review, 2026-09-13). 保有評価額/含み損益 correctly read as
+              ¥0 in that case — an honest "nothing held right now," not a
+              missing number. */}
+          {(summary.holdingsCount > 0 || summary.realizedPnl !== 0) && (
             <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <StatBox label="保有評価額" value={yen(summary.currentValue)} />
               <StatBox label="含み損益" value={yen(summary.unrealizedPnl)} tone={summary.unrealizedPnl} />

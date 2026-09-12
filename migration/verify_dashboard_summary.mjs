@@ -148,5 +148,25 @@ function watchItem(id, cardId, rule) {
   assert(!s.gainers.some((c) => c.id === "untracked"), "S3: the null-pct_vs_avg30 card never appears among gainers");
 }
 
+// Scenario 4 (self-review, 2026-09-13 — found while re-checking this
+// feature without Codex's parallel verification): a user who bought and
+// later fully sold everything, with no active watchlist items, must NOT
+// be shown the brand-new-user "hasNothing" empty state — they have real
+// trading history (a nonzero realizedPnl), even though pnl.holdings.length
+// is 0. hasNothing used to check holdings.length instead of
+// transactions.length, which collapsed these two very different users
+// into the same "start here" invitation.
+{
+  const cards = [card("c1", { current_price: 1500 })];
+  const transactions = [
+    txn("c1", "buy", 2, 1000, "2026-01-01"),
+    txn("c1", "sell", 2, 1200, "2026-02-01"),
+  ];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(s.hasNothing, false, "S4: a fully-sold-out user with real trading history is NOT the empty state");
+  assertEqual(s.holdingsCount, 0, "S4: holdingsCount is correctly 0 (nothing currently held)");
+  assertEqual(s.realizedPnl, 400, "S4: realizedPnl correctly reflects the completed round-trip (2*(1200-1000))");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;
