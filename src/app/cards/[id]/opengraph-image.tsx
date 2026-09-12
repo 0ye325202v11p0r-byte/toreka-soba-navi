@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { createClient } from "@supabase/supabase-js";
 import { yen, pct } from "@/lib/format";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -21,11 +22,22 @@ export default async function CardOpengraphImage({ params }: { params: Promise<{
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   );
-  const { data: card } = await supabase
+  const { data: rawCard } = await supabase
     .from("cards")
-    .select("name, rarity, set_name, current_price, pct_vs_avg30, judgment")
+    .select("name, rarity, set_name, current_price, pct_vs_avg30, judgment, data_quality")
     .eq("id", id)
     .single();
+
+  // Emergency kill-switch (see src/lib/appSettings.ts) — this route fetches
+  // independently of src/app/cards/[id]/page.tsx (which already 404s a
+  // disabled yuyu-tei-sourced card), so it needs its own check: otherwise
+  // a direct request for this specific image URL would still render the
+  // card's name/price even while the page itself is taken down (found
+  // during a broader pass after shipping the kill-switch).
+  const card =
+    rawCard && rawCard.data_quality === "partial" && !(await isYuyuteiSourceEnabled(supabase))
+      ? null
+      : rawCard;
 
   const name = card?.name ?? "トレカ相場ナビ";
   // rarity/set_name are non-null for every card today, but the DB schema
