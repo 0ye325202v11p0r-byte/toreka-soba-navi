@@ -11,7 +11,11 @@ export const metadata: Metadata = {
   description: "価格が指定の条件を満たしたら知らせる、監視リストです。",
 };
 
-export default async function WatchlistPage() {
+export default async function WatchlistPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ card?: string }>;
+}) {
   if (!isSupabaseConfigured()) {
     return (
       <div>
@@ -60,14 +64,24 @@ export default async function WatchlistPage() {
     return all;
   }
 
-  const [{ data: items }, cards] = await Promise.all([
+  const [{ data: items }, cards, { card: requestedCardId }] = await Promise.all([
     supabase
       .from("watchlist_items")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     fetchAllCards(),
+    searchParams,
   ]);
+
+  // Quick-add from a card detail page's "＋ ウォッチリストに追加" link
+  // (?card=ID, added 2026-09-13) — validated against the real fetched
+  // `cards` list rather than trusted as-is, since this comes from a URL
+  // query param an attacker or a stale bookmark could set to anything.
+  // Falling through to unselected (undefined) for an unrecognized id keeps
+  // this exactly as safe as the picker's own existing "unknown card"
+  // handling elsewhere.
+  const initialCardId = cards?.some((c) => c.id === requestedCardId) ? requestedCardId : undefined;
 
   return (
     <div>
@@ -75,7 +89,7 @@ export default async function WatchlistPage() {
       <p className="mb-6 text-sm text-ink-muted">
         条件を登録すると、毎日の価格更新後に自動でチェックされ、成立していればこのページに表示されます。メール通知（Phase 4）は未実装のため、今のところこのページを見に来る必要があります。
       </p>
-      <WatchlistClient initialItems={items ?? []} cards={cards ?? []} />
+      <WatchlistClient initialItems={items ?? []} cards={cards ?? []} initialCardId={initialCardId} />
     </div>
   );
 }

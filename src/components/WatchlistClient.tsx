@@ -37,15 +37,28 @@ function ruleIsMet(rule: WatchlistAlertRule, card: CardOption | undefined): bool
 export default function WatchlistClient({
   initialItems,
   cards,
+  initialCardId,
 }: {
   initialItems: WatchlistItem[];
   cards: CardOption[];
+  // Pre-selects the picker when arriving via a card detail page's "＋
+  // ウォッチリストに追加" link (?card=ID — added 2026-09-13, see
+  // cards/[id]/page.tsx). Without this, that link's only actual effect was
+  // navigating here and leaving the user to re-search for the exact same
+  // card they just came from — the entire point of a quick-add link.
+  // Server-validated by watchlist/page.tsx (only passed through if it
+  // matches a real card in `cards`), so this is never an id the picker
+  // itself wouldn't also recognize as valid.
+  initialCardId?: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
   // Starts unselected (not cards[0]) — see PortfolioClient.tsx's cardId
-  // for the same fix and rationale (UX review, 2026-09-12).
-  const [cardId, setCardId] = useState("");
+  // for the same fix and rationale (UX review, 2026-09-12). initialCardId
+  // is the one deliberate exception: a real, server-validated choice the
+  // user already made by clicking a specific card's quick-add link, not an
+  // arbitrary default.
+  const [cardId, setCardId] = useState(initialCardId ?? "");
   const [ruleType, setRuleType] = useState<WatchlistAlertRule["type"]>("pct_vs_avg30");
   const [op, setOp] = useState<"lte" | "gte">("lte");
   const [value, setValue] = useState(-15);

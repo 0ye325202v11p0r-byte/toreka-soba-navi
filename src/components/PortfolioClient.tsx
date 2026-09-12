@@ -23,10 +23,15 @@ export default function PortfolioClient({
   transactions,
   cards,
   pnl,
+  initialCardId,
 }: {
   transactions: Transaction[];
   cards: CardOption[];
   pnl: PnlSummary;
+  // Pre-selects the picker when arriving via a card detail page's "＋
+  // 取引を記録" link (?card=ID — added 2026-09-13, see
+  // cards/[id]/page.tsx). Server-validated by portfolio/page.tsx.
+  initialCardId?: string;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -34,8 +39,10 @@ export default function PortfolioClient({
   // let a user who never touched the CardPicker submit a transaction for a
   // card they never chose, since the closed picker showed that card's name
   // indistinguishably from a deliberate selection (found in UX review,
-  // 2026-09-12).
-  const [cardId, setCardId] = useState("");
+  // 2026-09-12). initialCardId is the one deliberate exception — a real,
+  // server-validated choice the user already made via a specific card's
+  // quick-add link, not an arbitrary default.
+  const [cardId, setCardId] = useState(initialCardId ?? "");
   const [type, setType] = useState<TransactionType>("buy");
   const [quantity, setQuantity] = useState(1);
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");

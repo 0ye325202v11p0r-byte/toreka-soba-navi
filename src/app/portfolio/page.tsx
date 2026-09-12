@@ -14,7 +14,11 @@ export const metadata: Metadata = {
   description: "保有カードの含み損益・実現損益を自動計算します。",
 };
 
-export default async function PortfolioPage() {
+export default async function PortfolioPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ card?: string }>;
+}) {
   if (!isSupabaseConfigured()) {
     return (
       <div>
@@ -106,7 +110,16 @@ export default async function PortfolioPage() {
     return all;
   }
 
-  const [transactions, cards] = await Promise.all([fetchAllTransactions(), fetchAllCards()]);
+  const [transactions, cards, { card: requestedCardId }] = await Promise.all([
+    fetchAllTransactions(),
+    fetchAllCards(),
+    searchParams,
+  ]);
+  // Quick-add from a card detail page's "＋ 取引を記録" link (?card=ID,
+  // added 2026-09-13) — validated against the real fetched `cards` list,
+  // never trusted as-is from the URL. See watchlist/page.tsx for the
+  // identical pattern.
+  const initialCardId = cards.some((c) => c.id === requestedCardId) ? requestedCardId : undefined;
 
   const pnl = computePnl(transactions);
 
@@ -156,7 +169,7 @@ export default async function PortfolioPage() {
           <PortfolioValueChart points={valueHistory} />
         </div>
       )}
-      <PortfolioClient transactions={transactions} cards={cards} pnl={pnl} />
+      <PortfolioClient transactions={transactions} cards={cards} pnl={pnl} initialCardId={initialCardId} />
     </div>
   );
 }

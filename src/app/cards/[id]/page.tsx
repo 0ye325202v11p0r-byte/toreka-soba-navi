@@ -203,14 +203,45 @@ export default async function CardDetailPage({
               </p>
             )}
           </div>
-          <div className="mt-2 flex gap-3 text-xs">
+          <div className="mt-2 flex flex-wrap gap-3 text-xs">
             <Link href="/dashboard" className="text-accent-strong hover:underline">
               ダッシュボードで見る →
             </Link>
             <Link href="/portfolio" className="text-accent-strong hover:underline">
               ポートフォリオで見る →
             </Link>
+            {/* Quick-add (2026-09-13): always offered here too, even for a
+                user who already holds/watches this card — buying more, or
+                adding a second watch threshold, are both legitimate. See
+                WatchlistClient.tsx/PortfolioClient.tsx's initialCardId for
+                how ?card= is consumed (server-validated, never trusted
+                as-is). */}
+            <Link href={`/watchlist?card=${c.id}`} className="text-accent-strong hover:underline">
+              ＋ ウォッチリストに追加
+            </Link>
+            <Link href={`/portfolio?card=${c.id}`} className="text-accent-strong hover:underline">
+              ＋ 取引を記録
+            </Link>
           </div>
+        </div>
+      )}
+
+      {!hasMyStatus && (
+        // No holding/watch/realized history for this card yet — still
+        // offer the same quick-add entry points (this is exactly the "I
+        // just found this card and want to start tracking it" moment the
+        // links exist for), just without the accent-colored "your status"
+        // framing above, since there's no status to report. Shown
+        // regardless of login state — an anonymous visitor just gets
+        // routed through /login first, same as clicking any other
+        // authenticated-only link on this site.
+        <div className="mb-6 flex flex-wrap gap-3 text-xs">
+          <Link href={`/watchlist?card=${c.id}`} className="text-accent hover:underline">
+            ＋ ウォッチリストに追加
+          </Link>
+          <Link href={`/portfolio?card=${c.id}`} className="text-accent hover:underline">
+            ＋ 取引を記録
+          </Link>
         </div>
       )}
 
