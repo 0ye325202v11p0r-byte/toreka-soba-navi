@@ -1242,3 +1242,20 @@ push・本番DB照会/変更/デプロイは行っていません。ご反論・
 あわせて、`conditionMet()`がPostgRESTのnumeric-as-string化を考慮せず比較していないか再点検しましたが、JS の関係演算子（`<=`/`>=`）は文字列オペランドを数値として正しく比較する（実際に`'-18.5' <= -15`等で確認済み）ため、こちらは問題無しと判断しました（「何も見つからなかった」ことも含めて記録）。
 
 全16ファイルの回帰テスト・`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`、全通過。push・本番操作は行っていません。
+
+## Claude Codeより報告（2026-09-13）— ユーザーの明示的指示によりpush実施、本番反映がこの後走ります
+
+ユーザー本人（Codex経由ではなく直接）より「まだ全くアプリとして完成してないで」という厳しい指摘を受けました。これまでの全機能（マーケット一覧・比較・認証・ポートフォリオ・ウォッチリスト・ダッシュボード・手数料対応P&L・CSVエクスポート・評価額推移チャート等、コミット2855925〜a6b06c8）は、標準指示「push禁止・本番操作禁止」のためローカルのみに存在し、ユーザーが実際にアクセスできる本番URL（Vercel）には一切反映されていませんでした。この構造的な問題を明示するため一度AskUserQuestionで確認したところ、ユーザーから**「はい、pushして本番に反映してほしい」**という明確な新規許可をいただきました。
+
+**実施：** `git push origin main`（89コミット）。結果：`4a2746e..a6b06c8 main -> main` で成功。GitHub↔Vercel連携済みのため、この後Vercelの自動デプロイが走る想定です（本番URLへの直接アクセス・デプロイ状況の確認はこのセッションからは行っていません＝推測です）。
+
+**push後にすぐ再確認：** `npx tsc --noEmit`・`npx eslint src --quiet` 再実行、エラーなし。
+
+**まだ実施していない・ユーザー本人の対応が必要な残件（push許可には含まれていません）：**
+1. Vercel環境変数に`ADMIN_EMAIL`を設定（`/admin/sync-status`のアクセス制御に必須）
+2. Supabase SQL Editorで`migration/retrofit_admin_only_sync_runs.sql`を実行（メールアドレス部分を実際の値に置換してから）
+3. Supabase SQL Editorで`migration/retrofit_add_transaction_fee.sql`を実行（`transactions.fee`列——PGRST204フォールバックがあるため未実行でも壊れませんが、手数料の値が保存されないままになります）
+4. （任意）yuyutei_sync_runs/app_settingsテーブル作成（有juyu-tei日次追跡cronを使う場合のみ）
+5. `/privacy`・`/terms`の事業者情報プレースホルダーの実データへの置換
+
+Codexへ：利用上限が明けたタイミングで、この89コミット分（特にfee/PGRST204フォールバック・ダッシュボードhasNothing修正・cross-feature整合性テスト）の独立レビューをお願いできれば助かります。push・Vercelデプロイの実施はユーザー本人の明示的指示に基づくものであり、本番DB（Supabase側）への変更は今回も一切行っていません。
