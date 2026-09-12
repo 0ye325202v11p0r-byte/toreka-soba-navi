@@ -950,3 +950,19 @@ Codexへ：ユーザーから「しばらくCodexの判断なしで、仮のCode
 **修正：** `Number.isInteger(quantity)`チェックを追加、`<input>`に`step={1}`を追加。`migration/verify_form_validation.mjs`に2件追加（小数1.5拒否／整数2は引き続き提出可能）、計13アサーション全PASS。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。フォーム検証は純粋関数のため本番DB照会は不要（既存のNode単体テストのみで検証）。コミットfa8317e（ローカルのみ、pushなし）。
 
 引き続き点検を継続します。
+
+## Claude Codeより緊急度の高い報告（2026-09-12）— `/admin/sync-status`が誰でも閲覧できる状態（本番で現在も有効）
+
+**⚠️ これは本番環境（https://toreka-soba-navi.vercel.app）に現在も存在する、実際に悪用可能な穴です。** README.mdの記載を確認したところ、Phase 1・2（ログイン・相場一覧・ポートフォリオ・cron）は既にVercelへデプロイ済みで、ログイン機能も本番で実際に稼働しています。
+
+**問題：** `/admin/sync-status/page.tsx`は`if (!user) redirect(...)`——「ログイン済みかどうか」しかチェックしておらず、「管理者かどうか」は一度も検証していませんでした。本サイトのログインはパスワードレスのメールリンク方式（`signInWithOtp`）で許可リストも無いため、**任意のメールアドレスで誰でも新規登録でき、登録した瞬間に`/admin/sync-status`が閲覧できてしまう状態**でした。閲覧内容にはクロンの実行履歴・成功/失敗件数・生のerror_sampleテキスト（内部カードID、遊々亭クロンのブロック状況を示唆する文言等）が含まれます。
+
+**修正（ローカルのみ・未デプロイ）：** `src/lib/adminAuth.ts`（新規、`isAdminUser()`——`process.env.ADMIN_EMAIL`との大小文字無視の一致判定、未設定時は本人含め誰も許可しないフェイルクローズ）を追加し、`admin/sync-status/page.tsx`にゲートを追加（非該当なら`notFound()`）。`.env.local`（gitignore対象）に実際の管理者メールアドレスを追加。`migration/verify_admin_auth.mjs`（新規10アサーション）全PASS。`npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。コミット21def2a（ローカルのみ）。
+
+**⚠️ この修正はまだ本番に反映されていません。** 反映には以下2つが必要で、いずれもこのセッションの制約（push禁止・本番操作禁止、および`git push`自体がツール権限で拒否される状態）の範囲外のため、**ユーザー自身の対応が必要です**：
+1. このローカルコミット（21def2a）を`git push`する
+2. Vercelダッシュボードの環境変数に`ADMIN_EMAIL`（`.env.local`に設定済みの値と同じ）を追加してから再デプロイする
+
+上記が完了するまでの間、本番の`/admin/sync-status`は引き続き「ログイン済みなら誰でも閲覧可能」な状態のままです。実害の大きさ（現時点で実際に第三者が悪用した形跡は確認できていません——未検証）と対応の優先度は、ユーザーの判断をお願いします。
+
+引き続き点検を継続します。
