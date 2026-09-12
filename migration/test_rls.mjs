@@ -60,6 +60,64 @@ async function main() {
     subErr ? `ERROR (${subErr.message})` : `${subData.length === 0 ? "OK (empty)" : "FAIL — got " + subData.length + " rows"}`
   );
 
+  // 6-9 added 2026-09-12 alongside the yuyu-tei kill-switch (app_settings)
+  // and daily-tracking cron (yuyutei_sync_runs) tables. Both are new
+  // tables not yet created in production as of this writing — if either
+  // check below errors with something like "relation ... does not exist"
+  // rather than a clean pass/fail, that's expected until
+  // migration/README.md's manual setup step is done, not a real result.
+
+  // 6. Anonymous read of app_settings SHOULD succeed (intentionally public
+  // — src/lib/appSettings.ts needs to read this without authentication,
+  // from server components that may run for a logged-out visitor).
+  const { data: settingsData, error: settingsErr } = await supabase
+    .from("app_settings")
+    .select("key, value")
+    .limit(5);
+  console.log(
+    "6. anon can read app_settings:",
+    settingsErr ? `FAIL (${settingsErr.message})` : `OK (got ${settingsData.length} row(s))`
+  );
+
+  // 7. Anonymous write to app_settings should FAIL — this table is meant
+  // to be flipped only via the Supabase SQL Editor (table owner) or the
+  // service_role key, never by anything reachable with the public anon
+  // key. A write succeeding here would mean anyone could re-enable a
+  // takedown-disabled scraper, or disable it as harassment.
+  const { error: settingsWriteErr } = await supabase
+    .from("app_settings")
+    .update({ value: false })
+    .eq("key", "yuyutei_source_enabled");
+  console.log(
+    "7. anon CANNOT write app_settings (should fail):",
+    settingsWriteErr ? "OK (blocked)" : "FAIL — WRITE SUCCEEDED, THIS IS A SECURITY HOLE (anyone could flip the kill-switch)"
+  );
+
+  // 8. Anonymous read of yuyutei_sync_runs should return nothing — same
+  // authenticated-only policy as sync_runs (not anon-readable, unlike
+  // cards/price_snapshots/app_settings).
+  const { data: yuyuteiRunsData, error: yuyuteiRunsErr } = await supabase
+    .from("yuyutei_sync_runs")
+    .select("*");
+  console.log(
+    "8. anon reading yuyutei_sync_runs returns nothing:",
+    yuyuteiRunsErr
+      ? `ERROR (${yuyuteiRunsErr.message})`
+      : `${yuyuteiRunsData.length === 0 ? "OK (empty)" : "FAIL — got " + yuyuteiRunsData.length + " rows"}`
+  );
+
+  // 9. Anonymous write to yuyutei_sync_runs should FAIL — only the cron
+  // (service_role) may write here.
+  const { error: yuyuteiRunsWriteErr } = await supabase.from("yuyutei_sync_runs").insert({
+    total_count: 0,
+    success_count: 0,
+    fail_count: 0,
+  });
+  console.log(
+    "9. anon CANNOT insert yuyutei_sync_runs (should fail):",
+    yuyuteiRunsWriteErr ? "OK (blocked)" : "FAIL — INSERT SUCCEEDED, THIS IS A SECURITY HOLE"
+  );
+
   console.log("\n=== done ===");
 }
 
