@@ -258,9 +258,25 @@ create table if not exists public.sync_runs (
 
 alter table public.sync_runs enable row level security;
 
-create policy "authenticated users can view sync runs"
+-- Owner-only (self-review, 2026-09-12) — this used to be
+-- `auth.role() = 'authenticated'`, readable by ANY logged-in user. Combined
+-- with open passwordless signup (no allowlist on who can create an
+-- account), that meant literally anyone could read cron run history and
+-- raw error_sample text (internal card ids, scraper failure details) via
+-- the Supabase client directly — the app's own /admin/sync-status page
+-- gate (src/lib/adminAuth.ts) only restricts the Next.js PAGE, not the
+-- underlying table, and the anon/publishable key used by that client is
+-- public by design. A page-level check alone is not real access control
+-- when the row itself is still readable by anyone who bypasses the page.
+-- Replace the email literal below with your own before running — RLS
+-- policies can't read process.env, so this can't reference ADMIN_EMAIL
+-- directly; keep the two in sync by hand. See
+-- migration/retrofit_admin_only_sync_runs.sql for the ALTER needed on the
+-- already-created production table (this schema.sql definition only
+-- applies to a fresh `create table`).
+create policy "only admin can view sync runs"
   on public.sync_runs for select
-  using (auth.role() = 'authenticated');
+  using ((auth.jwt() ->> 'email') = 'REPLACE_WITH_YOUR_ADMIN_EMAIL');
 
 -- no write policy for anon/authenticated: only the cron job (service_role)
 -- writes here.
@@ -291,9 +307,16 @@ create table if not exists public.yuyutei_sync_runs (
 
 alter table public.yuyutei_sync_runs enable row level security;
 
-create policy "authenticated users can view yuyutei sync runs"
+-- Owner-only, same reasoning and same email literal as sync_runs' policy
+-- above (self-review, 2026-09-12) — see that comment for why
+-- `auth.role() = 'authenticated'` alone was not real access control.
+-- Unlike sync_runs, this table has not been created in production yet, so
+-- (as long as you create it via this schema.sql block, not a copy made
+-- before this fix) no separate retrofit ALTER is needed here — just
+-- replace the email literal before running.
+create policy "only admin can view yuyutei sync runs"
   on public.yuyutei_sync_runs for select
-  using (auth.role() = 'authenticated');
+  using ((auth.jwt() ->> 'email') = 'REPLACE_WITH_YOUR_ADMIN_EMAIL');
 
 -- no write policy for anon/authenticated: only the cron job (service_role)
 -- writes here.

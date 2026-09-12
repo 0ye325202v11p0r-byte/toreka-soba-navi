@@ -16,11 +16,26 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 
 `/api/cron/refresh-yuyutei-prices`はコード・テストとも完成していますが、**本番へは一切反映していません**（push・デプロイ・本番DB変更は今回のセッションで意図的に行っていません）。実際に有効化するには、ユーザー自身が以下を順に行う必要があります：
 
-1. Supabase SQL Editorで`supabase/schema.sql`の`yuyutei_sync_runs`テーブル定義（`create table if not exists`のブロック）と`app_settings`テーブル定義（同ブロック内の初期行insertまで含む）を実行する（どちらも新規テーブルなので、既存テーブルへの影響なし）。
+1. Supabase SQL Editorで`supabase/schema.sql`の`yuyutei_sync_runs`テーブル定義（`create table if not exists`のブロック）と`app_settings`テーブル定義（同ブロック内の初期行insertまで含む）を実行する（どちらも新規テーブルなので、既存テーブルへの影響なし）。**実行前に、`yuyutei_sync_runs`のポリシー内`'REPLACE_WITH_YOUR_ADMIN_EMAIL'`を実際の管理者メールアドレス（`.env.local`の`ADMIN_EMAIL`と同じ値）に置き換えること**——詳細は下記「🔒 `/admin/sync-status`のアクセス制御修正」参照。
 2. このリポジトリを通常通りgit push（→Vercelが自動デプロイ）。これで`vercel.json`に追加済みの新規cronエントリ（`/api/cron/refresh-yuyutei-prices`、毎日UTC20:30）が有効になります。
 3. デプロイ後、`/admin/sync-status`の「参考価格（yuyu-tei.jp・単一店舗）」セクションで初回実行を確認してください。
 
 これらを行うまでは、遊々亭ソースの2,426件は引き続き登録時点の価格のまま自動更新されません（現状と変わりません）。
+
+## 🔒 `/admin/sync-status`のアクセス制御修正（2026-09-12、セルフレビューで発見・未反映）
+
+**⚠️ これは本番（https://toreka-soba-navi.vercel.app、既にデプロイ・稼働中）に現在も存在する、実際に悪用可能な穴です。** `/admin/sync-status`は「ログイン済みかどうか」しかチェックしておらず、「管理者かどうか」は一度も検証していませんでした。本サイトのログインはパスワードレスのメールリンク方式（`signInWithOtp`）で許可リストも無いため、**任意のメールアドレスで誰でも新規登録した瞬間に、このページ（クロンの実行履歴・成功/失敗件数・内部カードIDを含む生のエラーサンプル）が閲覧できてしまう状態**でした。
+
+さらに、ページ側のチェックだけでは不十分です。`sync_runs`/`yuyutei_sync_runs`テーブルのRLSポリシーが`auth.role() = 'authenticated'`（＝ログイン済みなら誰でも）のままだと、Supabaseの公開anonキー＋自分のログインセッションを使って、`/admin/sync-status`というページ自体を経由せずに、ブラウザの開発者ツールから直接テーブルを読むことができてしまいます。**ページの表示を止めるだけでなく、DB側のRLSポリシー自体を管理者のみに絞る必要があります。**
+
+**有効化に必要な作業（このセッションでは実行不可・ユーザー自身の対応が必要）：**
+1. Supabaseダッシュボードで、`migration/retrofit_admin_only_sync_runs.sql`の`'REPLACE_WITH_YOUR_ADMIN_EMAIL'`を実際の管理者メールアドレスに置き換えてから、SQL Editorで実行する（既存の`sync_runs`テーブル向け——`yuyutei_sync_runs`は上記手順1でschema.sqlから新規作成する際に同様の置き換えを行う）。
+2. Vercelの環境変数に`ADMIN_EMAIL`（同じメールアドレス）を追加する。
+3. このセッションが作成したコミット（`src/lib/adminAuth.ts`・`admin/sync-status/page.tsx`・`supabase/schema.sql`の該当箇所）を含めて`git push`し、Vercelに再デプロイさせる。
+
+3つとも完了するまでは、本番の`/admin/sync-status`は引き続き「ログイン済みなら誰でも閲覧可能」な状態のままです。
+
+**検証：** `src/lib/adminAuth.ts`の`isAdminUser()`は純粋関数として`migration/verify_admin_auth.mjs`（10アサーション）で検証済み（`ADMIN_EMAIL`未設定時は本人を含め誰も許可しないフェイルクローズを含む）。RLSポリシー自体（`auth.jwt() ->> 'email'`による比較）は本番DB照会禁止のため未実行・構文レビューのみ。
 
 ## 🛑 緊急停止スイッチ（`app_settings`、2026-09-12追加）
 
@@ -59,7 +74,7 @@ update public.app_settings set value = 'false'::jsonb
 | `backfill_source_urls.mjs` | 各カードの `card_number`+`set_name`+`rarity` から onepiece-card-atari.jp のURLを自動生成し `source_url` を埋める（Phase 2の自動更新に必須） | 新しくカードを追加した時に再実行すると便利 |
 | `fix_c2.mjs` / `fix_null_cardnumbers.mjs` | データ品質監査で見つかった個別カードの誤りを直した使い捨てスクリプト（詳細はgitログ参照） | 再実行不要（履歴として残してあるだけ） |
 | `audit_supabase_data.mjs` | 重複・極端値・欠落フィールド・スナップショット0件のカードなどを検出する統計的異常検知 | 大量にカードを追加/更新した後に実行すると良い |
-| `test_rls.mjs` | anon（公開）キーだけを使い、RLS/権限設定が意図通り機能しているかを検証するセキュリティテスト。2026-09-12、`app_settings`（anon読み取り可・書き込み不可——書き込み可だと誰でも緊急停止スイッチを操作できてしまう）・`yuyutei_sync_runs`（sync_runsと同じくauthenticated限定、anonからは空）のチェックを追加（項目6-9） | スキーマやRLSポリシーを変更した後は必ず再実行すること。**本番DB照会禁止の期間中は実行していない**（`app_settings`/`yuyutei_sync_runs`テーブルがまだ本番に存在しないため、項目6-9は現状エラーになる想定——テーブル作成後、本番アクセスが許可されたタイミングで実行すること） |
+| `test_rls.mjs` | anon（公開）キーだけを使い、RLS/権限設定が意図通り機能しているかを検証するセキュリティテスト。2026-09-12、`app_settings`（anon読み取り可・書き込み不可——書き込み可だと誰でも緊急停止スイッチを操作できてしまう）・`yuyutei_sync_runs`（anonからは空）のチェックを追加（項目6-9）。同日、`sync_runs`/`yuyutei_sync_runs`のポリシーを「authenticated全員」から「管理者のみ」に修正した際、項目8のコメントも更新——**anonキーだけのテストでは、この2つのポリシーの違い（authenticated全員 vs 管理者のみ）を区別できない**（anonはどちらでも0件）ため、「ログイン済みだが管理者ではない」ユーザーが実際にブロックされることの検証は、このスクリプトではまだ行えていない | スキーマやRLSポリシーを変更した後は必ず再実行すること。**本番DB照会禁止の期間中は実行していない**（`app_settings`/`yuyutei_sync_runs`テーブルがまだ本番に存在しないため、項目6-9は現状エラーになる想定——テーブル作成後、本番アクセスが許可されたタイミングで実行すること） |
 | `verify_pnl_logic.mjs` | `src/lib/pnl.ts` の実体を直接importして、手計算した期待値と突き合わせる検証スクリプト。2026-09-11に独立レビューの指摘を受け、手書きのコピー実装を検証する方式から本体を直接importする方式に変更（コピーだと本体が変わってもテストが追従しない）。2026-09-12、独立レビュー（Codex）のpnl.tsコードレビューを受けてカバレッジを点検し、未検証だった2ケースを追加：①同日タイブレーク（同じtransaction_dateの2件の買付で、入力配列の並び順ではなくcreated_atの早い方がFIFOで先に消費されることを確認。配列順で消費した場合と結果が異なるよう設計し、退行を検出できることを確認済み）、②computePnlが入力配列・オブジェクトを変更しないこと（JSON比較で呼び出し前後が完全一致することを確認）。単純購入・利益確定売却・複数ロットのFIFO消費順（別日）・複数カードの独立性・オーバーセル時の安全性と合わせて計7シナリオ・18アサーション | `pnl.ts` のロジックを変更したら必ず再実行すること（DB接続不要）。`node --experimental-strip-types migration/verify_pnl_logic.mjs` で実行（Node 24の型ストリッピング機能を使って.tsを直接import。MODULE_TYPELESS_PACKAGE_JSONという警告がstderrに出るが無害） |
 | `add_worlds_strongest_warriors.mjs` | sitemap-cards.xmlから発掘した「世界最強の戦士」(OP17)セットの新規カードを、個別ページのWebFetch検証済みデータ（カード名・価格・21日分の価格履歴）でSupabaseに追加した使い捨てスクリプト | 再実行不要（既に実行済み） |
 | `find_new_candidates.mjs` | サイト全体の`sitemap-cards.xml`（生XMLを直接取得・自前パース。WebFetchの要約は大規模リストで抽出漏れ・混同が起きたため不使用）を、既存Supabaseデータ（card_number+rarity）と突き合わせ、未収録の候補一覧を`new_candidates.json`に出力する | カードデータをさらに拡充したくなったら再実行。事前に`node migration/sitemap-cards-raw.xml`相当の生XMLを取得する処理を内包していないので、実行前に別途sitemapを取得する必要がある（スクリプト冒頭のコメント参照） |

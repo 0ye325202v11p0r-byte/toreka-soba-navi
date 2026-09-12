@@ -93,9 +93,15 @@ async function main() {
     settingsWriteErr ? "OK (blocked)" : "FAIL — WRITE SUCCEEDED, THIS IS A SECURITY HOLE (anyone could flip the kill-switch)"
   );
 
-  // 8. Anonymous read of yuyutei_sync_runs should return nothing — same
-  // authenticated-only policy as sync_runs (not anon-readable, unlike
-  // cards/price_snapshots/app_settings).
+  // 8. Anonymous read of yuyutei_sync_runs should return nothing. Policy
+  // updated 2026-09-12 (self-review) from "any authenticated user" to
+  // "only the admin email" (see supabase/schema.sql / adminAuth.ts) — an
+  // anon-key check like this one can't distinguish those two policies
+  // (anon gets zero rows either way, since auth.jwt()->>'email' is null
+  // with no session), so this alone does NOT verify the fix. Verifying
+  // that an authenticated-but-non-admin user is now also blocked requires
+  // a real second test account signed in via the browser client, not the
+  // anon key this script uses — not done as part of this check.
   const { data: yuyuteiRunsData, error: yuyuteiRunsErr } = await supabase
     .from("yuyutei_sync_runs")
     .select("*");
