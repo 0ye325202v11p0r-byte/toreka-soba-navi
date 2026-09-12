@@ -728,3 +728,37 @@ Codexへ：前項の直後、ユーザーから「それで市場のデータに
 **ユーザーの問い自体への回答：** 正直に言うと、「相場」と呼べるのはカタログの26%（`data_quality: 'real'`、複数店舗平均・毎日追跡）のみで、残り74%（遊々亭ソース）は今のアーキテクチャのままでは「相場」ではなく「参考価格」です。今回はそう見えないように隠す方向ではなく、そう言い切らないように正直に書き直す方向で対応しました。74%を本当に「相場」と呼べる状態に引き上げるには遊々亭ソースの日次自動追跡が必要で、法務リスクの判断待ちというブロッカーは外れたものの、Vercel Hobbyの実行時間・頻度制限という別の技術的制約が残っており、対象件数を実質3倍にする規模の変更です。これは今回のセッション内で独断で着手するには大きすぎる技術決定だと判断し、実装はしていません。ご指示があれば次に着手します。
 
 push・本番DB照会/変更・デプロイは行っていません。
+
+## Claude Codeより完了報告（2026-09-12）— 遊々亭ソースの日次自動追跡を実装（コード完成、未デプロイ）
+
+Codexへ：ユーザーから「相場になるように最善策を考えて全部実行しろ」という指示があり、カタログの74%（遊々亭ソース）を実際に日次追跡できるようにする機能を実装しました。**コード・テストは完成していますが、本番へは一切反映していません**（push・デプロイ・本番DB変更は行っていません）。
+
+**設計判断：**
+1. yuyu-teiは1セット=1フェッチで全カードの価格が取れる構造（既存`scrape_yuyutei.mjs`で確認済み）なので、2,426件の個別fetchではなく約57セットの日次再取得で足ります。実装前に`https://yuyu-tei.jp/sell/opc/s/op01`を1回だけ読み取り専用で取得し、既存の`parseSetPage`正規表現が今も134件マッチすることを確認しました。
+2. `data_quality`は`'partial'`のまま変更していません。「実測ソースの有無」（real/partial/flatの軸）と「cronの自動追跡対象か」（`isAutoTracked()`の軸）は別概念だという、前回の2位対応で確立した分離をそのまま踏襲しています——yuyu-teiは追跡されても常に単一店舗のままなので、軸Aは変わりません。
+
+**新規実装：**
+- `src/lib/yuyuteiParser.ts`：`scrape_yuyutei.mjs`からHTML解析ロジックを抽出・共有化（`migration/scrape_yuyutei.mjs`もこちらをimportするよう変更、挙動は同一）
+- `src/app/api/cron/refresh-yuyutei-prices/route.ts`：3フェーズ構成（①全setページfetch→Mapに今日の価格を蓄積、②既存partialカードをupdated_at昇順でページネーション読み取り、③カード毎にupsert/history read/updateで`computeStats()`適用）。refresh-prices/check-watchlistで確立した「全てのI/Oの直前で時間予算を再チェックする」設計をそのまま踏襲しています。
+- `src/lib/format.ts`：`isAutoTracked()`が`data_quality==='partial'`も対象に含むよう更新（両cronの実際のスコープを反映）
+- `src/components/TodaysPicks.tsx`：`data_quality==='real'`限定から`MoverStrip.tsx`と同じ`data_quality!=='flat'`パターンに変更し、追跡されたpartialカードも「今日の狙い目」に含めるように
+- `src/components/MarketTable.tsx`：品質フィルターの「1店舗単発」表記を「1店舗」に修正
+- `src/app/admin/sync-status/page.tsx`：`yuyutei_sync_runs`用セクション追加（テーブル未作成時でもページがクラッシュしないよう例外的にエラーを握りつぶす設計）
+- `supabase/schema.sql`：`yuyutei_sync_runs`テーブル追加（新規テーブルなので既存テーブルへの影響なし。本番未反映）
+- `vercel.json`：新規cronエントリ追加（毎日UTC20:30。未デプロイにつき無効のまま）
+
+**検証：**
+- `migration/verify_yuyutei_parser.mjs`（新規、17アサーション）：実際にyuyu-tei.jpから取得した本物のHTML断片で検証
+- `migration/verify_refresh_yuyutei_prices.mjs`（新規、30アサーション）：route.ts本体を実importし、3フェーズそれぞれでの時間予算切れ・一部setのfetch失敗・カードのソース未検出・`yuyutei_sync_runs`書き込み失敗を検証。`setTimeout`もモックし、ルート内の`sleep(1500)`×57回が実時間を消費しないようにしています（予算判定は仮想`Date.now()`が担うため）
+- `migration/verify_data_quality.mjs`：`isAutoTracked()`のpartial判定が仕様通りtrueに変わったことを反映しT4を更新
+- `npx tsc --noEmit`/`npx eslint src --quiet`/`npm run build`全通過。TodaysPicks/MarketTableの表示変更は一時スクラッチページ（削除済み）でSupabase通信0件を確認しつつ検証
+
+**本番へは一切反映していないことの明記：**
+- push・デプロイをしていません（`vercel.json`の新規cronエントリは無効のまま）
+- Supabaseに`yuyutei_sync_runs`テーブルを作成していません（本番DB変更のため）
+- 実際のyuyu-tei.jpへは検証目的の読み取り1回のみで、本物の自動scrapeループは一度も動かしていません
+- 有効化手順（Supabase SQL Editorでのテーブル作成→git push）は`migration/README.md`に明記しました
+
+**未検証点：** Vercel実機での実際のタイミング（57セットのfetch+~2,400件の書き込みが実際に290秒枠内にどこまで収まるか）は、このテストの対象外です（refresh-prices/check-watchlistの既存テストと同じ限界）。本番デプロイ後の初回実行結果は、ユーザーが`/admin/sync-status`で確認する必要があります。
+
+コミット4552061。再検証をお願いします。
