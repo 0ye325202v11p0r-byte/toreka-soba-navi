@@ -89,10 +89,23 @@ function makeSupabaseMock({
   updateAdvanceMs = 0,
   updateShouldFail = () => false,
   syncRunShouldFail = false,
+  yuyuteiSourceEnabled = true,
 }) {
-  const calls = { cardsPages: 0, upserts: 0, historySelects: 0, updates: 0, syncRunInsert: 0 };
+  const calls = { cardsPages: 0, upserts: 0, historySelects: 0, updates: 0, syncRunInsert: 0, appSettingsReads: 0 };
   const mock = {
     from(table) {
+      if (table === "app_settings") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => {
+                calls.appSettingsReads++;
+                return { data: { value: yuyuteiSourceEnabled }, error: null };
+              },
+            }),
+          }),
+        };
+      }
       if (table === "cards") {
         return {
           select: () => {
@@ -226,6 +239,26 @@ const twoMatchingCards = [
   assert(body?.notFoundInFetch === 0, "control: both cards' URLs were found in the fetch results");
   assert(calls.updates === 2, "control: cards.update() called exactly once per successful card");
   assert(body?.syncRunLogged === true, "control: yuyutei_sync_runs insert succeeds");
+}
+
+// Scenario 0 (emergency kill-switch, see src/lib/appSettings.ts): when
+// yuyutei_source_enabled is explicitly false, the route must return
+// immediately after that one check — zero requests to yuyu-tei.jp, zero
+// cards reads, zero DB writes of any kind. This is the "stop sending them
+// traffic" half of complying with a takedown request; it must not depend
+// on the time budget or any other later logic to take effect.
+{
+  const { body, threw, calls } = await run("kill-switch: yuyutei_source_enabled is false", {
+    allCards: twoMatchingCards,
+    yuyuteiSourceEnabled: false,
+  });
+  assert(!threw, "S0: no throw");
+  assert(body?.disabled === true, "S0: response reports disabled:true");
+  assert(fetchCallCount === 0, "S0: zero requests to yuyu-tei.jp — not even one set page");
+  assert(calls.cardsPages === 0, "S0: cards are never read");
+  assert(calls.upserts === 0 && calls.updates === 0, "S0: no price_snapshots/cards writes");
+  assert(calls.syncRunInsert === 0, "S0: not even the sync-run log is written (nothing ran to log)");
+  assert(calls.appSettingsReads === 1, "S0: exactly one app_settings check happened, before anything else");
 }
 
 // Scenario 1: the set-fetch phase itself runs out of budget partway

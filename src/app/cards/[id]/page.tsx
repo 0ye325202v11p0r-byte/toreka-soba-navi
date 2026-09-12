@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { yen, pct, judgmentClasses, dataQualityLabel, isAutoTracked } from "@/lib/format";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 import type { Card, PriceSnapshot } from "@/lib/types";
 import { SITE_URL } from "@/lib/site";
 import PriceChart from "@/components/PriceChart";
@@ -58,6 +59,15 @@ export default async function CardDetailPage({
   if (!card) notFound();
 
   const c = card as Card;
+
+  // Emergency kill-switch (see src/lib/appSettings.ts) — the "stop
+  // republishing their data" half of complying with a yuyu-tei takedown
+  // request. A direct link to a specific yuyu-tei-sourced card must 404
+  // just as thoroughly as it's excluded from the market list.
+  if (c.data_quality === "partial" && !(await isYuyuteiSourceEnabled(supabase))) {
+    notFound();
+  }
+
   const dq = dataQualityLabel(c.data_quality);
   const history = (snapshots ?? []) as PriceSnapshot[];
 

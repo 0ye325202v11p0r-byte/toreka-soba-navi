@@ -3,6 +3,35 @@
 
 create extension if not exists "pgcrypto";
 
+-- ============ app_settings ============
+-- Emergency kill-switch storage, added 2026-09-12 alongside the yuyu-tei
+-- daily-tracking cron — see src/lib/appSettings.ts for the full rationale
+-- and the exact UPDATE statement used to flip it. Publicly readable
+-- (anon+authenticated) so both server components and the cron route can
+-- check it without needing the service_role key; write access is
+-- intentionally left to the Supabase SQL Editor only (no anon/authenticated
+-- write policy, no app-facing UI to change it) — this is meant to be
+-- flipped in a hurry directly by whoever needs to, not through a feature
+-- that itself might be down.
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.app_settings enable row level security;
+
+create policy "app settings are publicly readable"
+  on public.app_settings for select
+  using (true);
+
+-- no write policy for anon/authenticated: only the Supabase SQL Editor
+-- (as the table owner) or the service_role key may write here.
+
+insert into public.app_settings (key, value)
+values ('yuyutei_source_enabled', 'true'::jsonb)
+on conflict (key) do nothing;
+
 -- ============ cards ============
 create table if not exists public.cards (
   id text primary key,
@@ -278,6 +307,9 @@ grant usage on schema public to anon, authenticated, service_role;
 
 grant select on public.cards, public.price_snapshots to anon, authenticated;
 grant select, insert, update, delete on public.cards, public.price_snapshots to service_role;
+
+grant select on public.app_settings to anon, authenticated;
+grant select, insert, update, delete on public.app_settings to service_role;
 
 grant select, insert, update on public.profiles to authenticated;
 grant select, insert, update, delete on public.profiles to service_role;

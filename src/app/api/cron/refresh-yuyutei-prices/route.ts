@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { computeStats } from "@/lib/priceStats";
 import { parseSetPage, ALL_YUYUTEI_SETS, YUYUTEI_USER_AGENT } from "@/lib/yuyuteiParser";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
 // Daily price tracking for the 2,426 yuyu-tei-sourced (data_quality='partial')
 // cards added by migration/scrape_yuyutei.mjs. Until this route existed,
@@ -69,6 +70,16 @@ export async function GET(request: Request) {
   }
 
   const supabase = adminClient();
+
+  // Emergency kill-switch (see src/lib/appSettings.ts) — checked before
+  // ANY request to yuyu-tei.jp, including the very first one. This is the
+  // "stop sending them traffic" half of complying with a takedown request;
+  // src/app/page.tsx and src/app/cards/[id]/page.tsx handle the "stop
+  // republishing their data" half separately.
+  if (!(await isYuyuteiSourceEnabled(supabase))) {
+    return NextResponse.json({ disabled: true, reason: "yuyutei_source_enabled is false in app_settings" });
+  }
+
   const startedAt = new Date().toISOString();
   const startTime = Date.now(); // before any network/DB I/O, so the budget covers all of it
   const remainingMs = () => TIME_BUDGET_MS - (Date.now() - startTime);

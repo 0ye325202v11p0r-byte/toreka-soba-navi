@@ -6,6 +6,7 @@ import SetupNotice from "@/components/SetupNotice";
 import TodaysPicks from "@/components/TodaysPicks";
 import MoverStrip from "@/components/MoverStrip";
 import MarketTable from "@/components/MarketTable";
+import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
 export const revalidate = 60;
 
@@ -53,6 +54,15 @@ export default async function MarketListPage() {
       if (!data || data.length < pageSize) break;
       from += pageSize;
     }
+  }
+
+  // Emergency kill-switch (see src/lib/appSettings.ts) — the "stop
+  // republishing their data" half of complying with a yuyu-tei takedown
+  // request. Filtered here (not per-component) so every child
+  // (TodaysPicks/MoverStrip/MarketTable) automatically stops seeing
+  // 'partial' cards without each needing its own check.
+  if (!error && !(await isYuyuteiSourceEnabled(supabase))) {
+    cards = cards.filter((c) => c.data_quality !== "partial");
   }
 
   return (
