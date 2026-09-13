@@ -236,7 +236,7 @@ export default function WatchlistClient({
           flash of the wrong button). */}
       {pushStatus === "off" && (
         <div className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft p-3 text-sm">
-          <span>🔔 条件が成立したら、このブラウザに通知を送れます。</span>
+          <span>🔔 条件が成立したときと、週1回の成績サマリーを、このブラウザに通知します。</span>
           <button
             type="button"
             onClick={enablePush}

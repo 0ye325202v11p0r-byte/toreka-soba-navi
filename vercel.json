@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/check-watchlist",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "30 21 * * 0"
     }
   ]
 }

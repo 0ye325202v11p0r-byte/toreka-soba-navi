@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import webpush from "web-push";
+import webpush, { pushConfigured } from "@/lib/webPushServer";
 import type { WatchlistAlertRule } from "@/lib/types";
 import { errorMessage } from "@/lib/errorMessage";
 import { adminClient } from "@/lib/supabase/admin";
@@ -18,23 +18,6 @@ const DB_TIMEOUT_MS = 10_000;
 // the budget check fires, plus the final response (found via independent
 // review, 2026-09-11/12 — see COORDINATION.md).
 const TIME_BUDGET_MS = 45_000;
-
-// Web Push (added 2026-09-13) needs no external account/API key (unlike
-// Resend) — VAPID keys are generated locally (see .env.local.example).
-// Both env vars are simply unset in production until someone sets them
-// there, which must NOT break the core "check conditions, update
-// last_triggered_at" job this route already does — push-sending is
-// entirely additive and skips itself silently when unconfigured.
-const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-const pushConfigured = Boolean(vapidPublicKey && vapidPrivateKey);
-if (pushConfigured) {
-  webpush.setVapidDetails(
-    `mailto:${process.env.ADMIN_EMAIL || "admin@example.invalid"}`,
-    vapidPublicKey!,
-    vapidPrivateKey!
-  );
-}
 
 // alert_rule is stored as JSONB with no schema-level constraint — the
 // WatchlistAlertRule TypeScript type is only a compile-time promise, not a

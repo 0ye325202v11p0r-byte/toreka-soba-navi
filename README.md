@@ -28,6 +28,8 @@ ONE PIECEカードゲームの価格トラッカー。Claude Artifactのプロ�
   - ウォッチリストページに「✅ 条件成立中」バッジと最終成立日時を表示
   - 🆕 **2026-09-13、ブラウザのプッシュ通知を実装済み（コード完成・未デプロイ）。** Resend等の外部アカウント登録が不要（VAPID鍵はローカルで生成）なため、Stripeとも無関係にすぐ着手できた。ウォッチリストページで「通知を有効にする」→ 条件が新たに成立した瞬間（既に成立中の条件を毎日再通知することはしない）に`check-watchlist`が端末へ直接プッシュ通知を送る。`watchlist_items.condition_was_met`（新規列）で前回チェック時の成立状態を追跡し、false→trueの遷移でのみ送信。**本番へのデプロイ・Vercel環境変数(`NEXT_PUBLIC_VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`)の設定・Supabaseでの`push_subscriptions`テーブル作成・`watchlist_items.condition_was_met`列追加は未実施**（`migration/retrofit_push_subscriptions.sql`・`migration/retrofit_add_watchlist_condition_was_met.sql`参照）。VAPID未設定・テーブル/列未作成のいずれの場合も、既存のウォッチリスト判定機能自体は壊れず、プッシュ送信のみ黙ってスキップされるよう設計済み（`check-watchlist/route.ts`のグレースフルデグレード、全19ファイルの回帰テストで確認済み）
   - 実際にテスト用の条件（成立する場合・しない場合の両方）を一時的に登録して動作確認済み（本番データへの影響なし、確認後に削除）
+  - 🆕 **2026-09-13、週次サマリー通知（`/api/cron/weekly-digest`）を追加（コード完成・未デプロイ）。** ウォッチリストの条件成立通知とは異なる種類の仕組み——条件成立を待つ受動的な通知ではなく、`vercel.json`で毎週日曜21:30 UTC（価格更新cronの直後）に実行し、プッシュ通知を有効にしている全ユーザーへ「合計損益・ウォッチ条件成立件数・利益確定候補件数」を能動的に届ける。保有もウォッチ登録も無いユーザーには送信しない（`hasNothing`判定）。この通知種別を追加したことに伴い、ウォッチリストページの通知オプトイン文言も「条件成立時」だけでなく「週1回の成績サマリー」も届く旨に更新済み（同意していない通知種別を後から黙って追加しない）。`⚠️ 未確認：Vercel Hobbyプランのcron登録数の上限（過去バージョンでは2件までという情報がある）に、本プロジェクトの登録cron数（4件）が抵触する可能性がある。実際にVercelへデプロイして全cronが登録・実行されるかは未確認`。
+  - `src/lib/webPushServer.ts`（新規）にVAPID設定を共通化——`check-watchlist`と`weekly-digest`の2ルートが同じ設定を必要としたため。
 
 - ✅ **Vercelへのデプロイ** — 完了。本番URL: https://toreka-soba-navi.vercel.app（相場一覧・カード詳細で3,270件のデータが実際に表示されていることを確認済み）
 
