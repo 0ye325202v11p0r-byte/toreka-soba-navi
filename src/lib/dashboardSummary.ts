@@ -2,6 +2,7 @@ import { computePnl } from "./pnl";
 import { conditionMet } from "./watchlistRule";
 import { isAutoTracked } from "./format";
 import { computePortfolioValuation } from "./portfolioValuation";
+import { computeMarketBenchmark, type MarketBenchmarkResult } from "./marketBenchmark";
 import type { Transaction, WatchlistItem, DashboardCardInfo } from "./types";
 
 /**
@@ -57,6 +58,12 @@ export interface DashboardSummary {
   // elsewhere), so flagging it here would contradict that label and alarm
   // the user over normal, by-design behavior.
   staleCard: StaleCardInfo | null;
+  // "あなたのポートフォリオ vs 市場平均" (added 2026-09-13) — see
+  // marketBenchmark.ts for why this specific comparison is the actual
+  // differentiated value this app can offer that a plain price-checking
+  // site can't: it needs both this user's own holdings AND a catalog-wide
+  // sample, which only an app already tracking both ever has.
+  benchmark: MarketBenchmarkResult;
   hasNothing: boolean;
 }
 
@@ -91,7 +98,12 @@ export function buildDashboardSummary(
   cards: DashboardCardInfo[],
   // Injectable for deterministic tests (never a bare `new Date()` used
   // internally without a way to override it) — real callers simply omit it.
-  now: Date = new Date()
+  now: Date = new Date(),
+  // A sample of pct_vs_avg30 across the whole catalog (not just this
+  // user's relevant cards) — "the market," for the benchmark comparison.
+  // Optional/defaulted to [] so every existing caller/test that doesn't
+  // care about the benchmark doesn't need updating just to keep compiling.
+  catalogPctValues: number[] = []
 ): DashboardSummary {
   const pnl = computePnl(transactions);
   const cardById = new Map(cards.map((c) => [c.id, c]));
@@ -136,6 +148,7 @@ export function buildDashboardSummary(
 
   const untrackedCount = relevantCards.filter((c) => !isAutoTracked(c)).length;
   const staleCard = findStalestTrackedCard(relevantCards, now);
+  const benchmark = computeMarketBenchmark(pnl.holdings, cardById, catalogPctValues);
 
   return {
     currentValue,
@@ -149,6 +162,7 @@ export function buildDashboardSummary(
     untrackedCount,
     unpricedHoldingsCount: valuation.unpricedHoldingsCount,
     staleCard,
+    benchmark,
     // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
     // 2026-09-13, found while re-checking this feature without Codex's
     // parallel verification): a user who bought and later fully sold

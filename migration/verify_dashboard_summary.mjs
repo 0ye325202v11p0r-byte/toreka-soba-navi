@@ -281,5 +281,32 @@ function watchItem(id, cardId, rule) {
   assertEqual(s.staleCard?.name, "古い方", "S11: the MOST stale card is reported, not just the first one found");
 }
 
+// Scenario 12 (differentiation feature, 2026-09-13 — "あなたのポートフォリオ
+// vs 市場平均"): end-to-end wiring through buildDashboardSummary itself,
+// not just marketBenchmark.ts's own unit tests — confirms the real
+// cardById map built inside buildDashboardSummary (not a hand-copied one)
+// is what actually reaches computeMarketBenchmark().
+{
+  const cards = [card("c1", { current_price: 1200, pct_vs_avg30: 20 })]; // bought at 1000
+  const transactions = [txn("c1", "buy", 1, 1000, "2026-01-01")];
+  const catalogPctValues = [0, 10, -10, 20]; // avg = 5
+  const s = buildDashboardSummary(transactions, [], cards, new Date(), catalogPctValues);
+  assertEqual(s.benchmark.portfolioAvgPct, 20, "S12: portfolioAvgPct reflects the one held, tracked card");
+  assertEqual(s.benchmark.marketAvgPct, 5, "S12: marketAvgPct is the mean of the supplied catalog sample");
+  assertEqual(s.benchmark.excludedHoldingsCount, 0, "S12: the one holding contributed, nothing excluded");
+}
+
+// Scenario 13: catalogPctValues omitted entirely (the default []) — every
+// pre-existing call site/test that doesn't pass it must keep working,
+// with the benchmark simply reporting "nothing to compare" rather than
+// throwing or requiring every caller to be updated.
+{
+  const cards = [card("c1", { current_price: 1200, pct_vs_avg30: 20 })];
+  const transactions = [txn("c1", "buy", 1, 1000, "2026-01-01")];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(s.benchmark.marketAvgPct, null, "S13: omitting catalogPctValues defaults to an empty sample -> null, not a crash");
+  assertEqual(s.benchmark.portfolioAvgPct, 20, "S13: the portfolio side still computes normally regardless of the catalog side");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;

@@ -86,7 +86,34 @@ export default async function DashboardPage() {
     cards = (data ?? []) as DashboardCardInfo[];
   }
 
-  const summary = buildDashboardSummary(transactions, watchlistItems, cards);
+  // "あなたのポートフォリオ vs 市場平均" (added 2026-09-13) needs a
+  // catalog-wide sample distinct from `cards` above (which is deliberately
+  // scoped to only this user's relevant cards) — a single column across
+  // every auto-tracked card, not the full ~3,270-row catalog with all
+  // columns the public market list pages through. A read failure here must
+  // not break the rest of the dashboard (this is a nice-to-have comparison,
+  // not core P&L data) — fails open to an empty sample, which
+  // computeMarketBenchmark() already treats as "nothing to compare" (null),
+  // not a fabricated 0%.
+  // Not paginated past PostgREST's 1000-row default cap, unlike this
+  // project's other catalog-wide reads — deliberately, for now: 'real'
+  // data_quality cards number 844 as of 2026-09-13, comfortably under the
+  // cap, and a silently-truncated SAMPLE for a benchmark AVERAGE degrades
+  // to "averaged over most of the catalog instead of all of it" (still a
+  // real, representative number), not the "confidently wrong, presented as
+  // complete" failure mode the 1000-row bug class usually causes elsewhere
+  // in this codebase. Revisit if the real-tracked count approaches 1000.
+  let catalogPctValues: number[] = [];
+  {
+    const { data } = await supabase
+      .from("cards")
+      .select("pct_vs_avg30")
+      .eq("data_quality", "real")
+      .not("pct_vs_avg30", "is", null);
+    catalogPctValues = (data ?? []).map((c) => Number(c.pct_vs_avg30));
+  }
+
+  const summary = buildDashboardSummary(transactions, watchlistItems, cards, new Date(), catalogPctValues);
 
   return (
     <div>
@@ -144,6 +171,27 @@ export default async function DashboardPage() {
               ⚠️ {summary.staleCard.name}の価格が{formatDateTime(summary.staleCard.updatedAt)}
               から更新されていません。自動更新は通常毎日行われるため、価格が古い可能性があります。
             </p>
+          )}
+
+          {summary.benchmark.portfolioAvgPct !== null && summary.benchmark.marketAvgPct !== null && (
+            <div className="mb-6 rounded-lg border border-border bg-bg-elevated p-4">
+              <h2 className="mb-2 text-sm font-bold text-ink-muted">📊 あなたの成績 vs 市場平均</h2>
+              <div className="grid grid-cols-2 gap-3">
+                <StatBox
+                  label="あなたの保有（30日平均比・評価額加重）"
+                  value={pct(summary.benchmark.portfolioAvgPct)}
+                  tone={summary.benchmark.portfolioAvgPct}
+                />
+                <StatBox label="市場平均（実測データ全体）" value={pct(summary.benchmark.marketAvgPct)} />
+              </div>
+              <p className="mt-2 text-xs text-ink-faint">
+                {summary.benchmark.portfolioAvgPct >= summary.benchmark.marketAvgPct
+                  ? "あなたの保有は市場平均を上回っています。"
+                  : "あなたの保有は市場平均を下回っています。"}
+                {summary.benchmark.excludedHoldingsCount > 0 &&
+                  ` （${summary.benchmark.excludedHoldingsCount}件は価格未取得・自動更新対象外のため集計に含まれていません）`}
+              </p>
+            </div>
           )}
 
           {summary.triggeredItems.length > 0 && (
