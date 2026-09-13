@@ -62,6 +62,13 @@ export interface DashboardCardInfo {
   // Added 2026-09-13 (differentiation feature #4) for profitTaking.ts's
   // "judgment === 割高" check.
   judgment: Judgment | null;
+  // Added 2026-09-13 (differentiation feature #6, "史上最高値・最安値更新")
+  // — see priceRecord.ts. Optional in practice until
+  // migration/retrofit_add_price_records.sql is run against production;
+  // callers read this via a `?? null`-style coalesce on a select("*") row
+  // rather than naming it in an explicit column list, so a page never
+  // errors just because the column doesn't exist in production yet.
+  record_status: "high" | "low" | null;
 }
 
 export interface PriceSnapshot {

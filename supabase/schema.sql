@@ -55,6 +55,24 @@ create table if not exists public.cards (
   ai_verdict_text text,
   ai_verdict_at date,
   source_note text,
+  -- "史上最高値・最安値更新" (added 2026-09-13, differentiation feature #6)
+  -- — all_time_high_price/all_time_low_price are incrementally maintained
+  -- by refresh-prices' cron on every daily update (not recomputed from full
+  -- price_snapshots history each time); record_status/record_status_date
+  -- are recomputed to null on every run where the new price does NOT beat
+  -- the known record, so a non-null record_status always means "as of the
+  -- most recent price update, this was a genuinely new record" — never a
+  -- stale flag left over from days ago. See src/lib/priceRecord.ts and
+  -- src/lib/priceRecordUpdate.ts for the exact logic and the lazy-seeding
+  -- design (no separate one-time backfill script needed: a card with null
+  -- all_time_high_price/all_time_low_price gets seeded from its full
+  -- history the first time refresh-prices processes it after this column
+  -- exists). NOT YET APPLIED to the already-created production table — see
+  -- migration/retrofit_add_price_records.sql.
+  all_time_high_price numeric,
+  all_time_low_price numeric,
+  record_status text check (record_status is null or record_status in ('high', 'low')),
+  record_status_date date,
   updated_at timestamptz default now(),
   created_at timestamptz default now()
 );

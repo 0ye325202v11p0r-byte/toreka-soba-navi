@@ -236,7 +236,7 @@ export default function WatchlistClient({
           flash of the wrong button). */}
       {pushStatus === "off" && (
         <div className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft p-3 text-sm">
-          <span>🔔 条件が成立したときと、週1回の成績サマリーを、このブラウザに通知します。</span>
+          <span>🔔 条件が成立したとき・保有/ウォッチ中のカードが史上最高値/最安値を更新したとき・週1回の成績サマリーを、このブラウザに通知します。</span>
           <button
             type="button"
             onClick={enablePush}

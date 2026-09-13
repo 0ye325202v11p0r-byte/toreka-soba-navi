@@ -57,6 +57,7 @@ function card(id, overrides = {}) {
     source_url: `https://example.invalid/${id}`,
     updated_at: "2026-09-13T00:00:00.000Z",
     judgment: null,
+    record_status: null,
     ...overrides,
   };
 }
@@ -354,6 +355,30 @@ function watchItem(id, cardId, rule) {
     s.profitTakingCandidates.map((c) => c.cardId),
     ["gain-and-overvalued"],
     "S14: only the held card that is BOTH gaining AND judgment 割高 is flagged, via the real buildDashboardSummary wiring"
+  );
+}
+
+// Scenario 15 (differentiation feature #6, 2026-09-13 — "史上最高値・最安値
+// 更新"): end-to-end wiring through buildDashboardSummary, confirming
+// findPriceRecordAlerts() runs against the real relevantCards computed
+// inside the function (held + watched, in that combined order) and that a
+// card with no record_status set is correctly excluded.
+{
+  const cards = [
+    card("held-high", { record_status: "high" }),
+    card("watched-low", { record_status: "low" }),
+    card("no-record", { record_status: null }),
+  ];
+  const transactions = [txn("held-high", "buy", 1, 1000, "2026-01-01")];
+  const watchlistItems = [watchItem("w1", "watched-low", { type: "price", op: "gte", value: 0 })];
+  const s = buildDashboardSummary(transactions, watchlistItems, cards);
+  assertEqual(
+    s.priceRecords,
+    [
+      { cardId: "held-high", cardName: "カードheld-high", status: "high" },
+      { cardId: "watched-low", cardName: "カードwatched-low", status: "low" },
+    ],
+    "S15: priceRecords lists both the held and watched cards with a set record_status, excluding the one with none"
   );
 }
 

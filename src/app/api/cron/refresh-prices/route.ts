@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { computeStats } from "@/lib/priceStats";
+import { resolvePriceRecord } from "@/lib/priceRecordUpdate";
 import { errorMessage } from "@/lib/errorMessage";
 import { adminClient } from "@/lib/supabase/admin";
 import { sleep } from "@/lib/sleep";
@@ -84,9 +85,16 @@ export async function GET(request: Request) {
   // rather than per-card — deliberately kept as its own route/function
   // rather than merged into this one, so the two sources' very different
   // fetch shapes and time budgets don't have to share a single loop.
+  // select("*") rather than an explicit column list specifically so
+  // all_time_high_price/all_time_low_price (may not exist in production
+  // yet — see migration/retrofit_add_price_records.sql) never cause this
+  // query to error: PostgREST's `*` simply omits a column that doesn't
+  // exist rather than rejecting the request the way naming it explicitly
+  // would — same pattern check-watchlist/route.ts already uses for
+  // condition_was_met.
   let query = supabase
     .from("cards")
-    .select("id, name, source_url, history_is_estimated")
+    .select("*")
     .not("source_url", "is", null)
     .eq("data_quality", "real")
     .order("updated_at", { ascending: true })
@@ -97,6 +105,17 @@ export async function GET(request: Request) {
   if (cardsErr || !cards) {
     return NextResponse.json({ error: cardsErr ? errorMessage(cardsErr) : "no cards" }, { status: 500 });
   }
+
+  // Whether all_time_high_price/all_time_low_price/record_status actually
+  // exist on production's cards table right now — inferred the same way
+  // check-watchlist/route.ts infers condition_was_met's presence: from
+  // whether the raw key was present on the first row (select("*") includes
+  // every EXISTING column's key always, even when null; a column that
+  // doesn't exist at all is simply absent as a key). Gates whether the
+  // per-card update below may safely include these fields — including them
+  // in an update payload when the columns don't exist would fail the
+  // update outright (unlike select("*"), UPDATE must name real columns).
+  const hasPriceRecordColumns = cards.length > 0 && "all_time_high_price" in cards[0];
 
   // Deliberately UTC, not JST — see the snapshot_date comment in
   // supabase/schema.sql (raised by Codex, 2026-09-12) for why this stays
@@ -187,12 +206,55 @@ export async function GET(request: Request) {
         ? { history_is_estimated: false, source_note: TRACKED_NOTE }
         : {};
 
+      // "史上最高値・最安値更新" (differentiation feature #6) — best-effort,
+      // additive: a failure here must never fail the whole card update, so
+      // it's wrapped in its own try/catch and simply omitted from the
+      // payload on error (the record just doesn't advance this run, same
+      // as any other transient read hiccup this route already tolerates).
+      let recordFields: Record<string, unknown> = {};
+      if (hasPriceRecordColumns) {
+        try {
+          if (remainingMs() <= 0) throw new Error("time budget exhausted before record lookup");
+          const recordTimeoutMs = Math.max(1000, Math.min(DB_TIMEOUT_MS, remainingMs()));
+          const record = await resolvePriceRecord(
+            {
+              async fetchAllPrices(cardId: string) {
+                const { data, error } = await supabase
+                  .from("price_snapshots")
+                  .select("price")
+                  .eq("card_id", cardId)
+                  .abortSignal(AbortSignal.timeout(recordTimeoutMs));
+                if (error) throw error;
+                return (data ?? []).map((r) => Number(r.price));
+              },
+            },
+            card.id,
+            stats.current_price,
+            card.all_time_high_price === null || card.all_time_high_price === undefined
+              ? null
+              : Number(card.all_time_high_price),
+            card.all_time_low_price === null || card.all_time_low_price === undefined
+              ? null
+              : Number(card.all_time_low_price)
+          );
+          recordFields = {
+            all_time_high_price: record.newHigh,
+            all_time_low_price: record.newLow,
+            record_status: record.status,
+            record_status_date: record.status ? today : null,
+          };
+        } catch {
+          recordFields = {};
+        }
+      }
+
       if (remainingMs() <= 0) throw new Error("time budget exhausted before card update");
       const { error: updateErr } = await supabase
         .from("cards")
         .update({
           ...stats,
           ...estimationFields,
+          ...recordFields,
           ai_verdict: stats.judgment,
           ai_verdict_text: verdictText,
           ai_verdict_at: today,

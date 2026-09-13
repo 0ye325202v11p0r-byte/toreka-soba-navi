@@ -9,6 +9,10 @@
       "schedule": "30 20 * * *"
     },
     {
+      "path": "/api/cron/check-price-records",
+      "schedule": "45 20 * * *"
+    },
+    {
       "path": "/api/cron/check-watchlist",
       "schedule": "0 21 * * *"
     },

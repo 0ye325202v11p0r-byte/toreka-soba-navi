@@ -4,6 +4,7 @@ import { isAutoTracked } from "./format";
 import { computePortfolioValuation } from "./portfolioValuation";
 import { computeMarketBenchmark, type MarketBenchmarkResult } from "./marketBenchmark";
 import { findProfitTakingCandidates, type ProfitTakingCandidate } from "./profitTaking";
+import { findPriceRecordAlerts, type PriceRecordAlert } from "./priceRecordAlerts";
 import type { Transaction, WatchlistItem, DashboardCardInfo } from "./types";
 
 /**
@@ -71,6 +72,12 @@ export interface DashboardSummary {
   // required). Sorted by gainPct descending; caller decides how many to
   // show.
   profitTakingCandidates: ProfitTakingCandidate[];
+  // "史上最高値・最安値更新" (added 2026-09-13, differentiation feature #6)
+  // — see priceRecordAlerts.ts. A genuine retention TRIGGER (like
+  // triggeredItems above), not another reward-only analysis widget: the
+  // fact itself ("this specific card just hit a record") is what pulls a
+  // user back, independent of whether they also get the push notification.
+  priceRecords: PriceRecordAlert[];
   hasNothing: boolean;
 }
 
@@ -171,6 +178,7 @@ export function buildDashboardSummary(
   const staleCard = findStalestTrackedCard(relevantCards, now);
   const benchmark = computeMarketBenchmark(pnl.holdings, cardById, catalogPctValues);
   const profitTakingCandidates = findProfitTakingCandidates(pnl.holdings, cardById);
+  const priceRecords = findPriceRecordAlerts(relevantCards);
 
   return {
     currentValue,
@@ -186,6 +194,7 @@ export function buildDashboardSummary(
     staleCard,
     benchmark,
     profitTakingCandidates,
+    priceRecords,
     // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
     // 2026-09-13, found while re-checking this feature without Codex's
     // parallel verification): a user who bought and later fully sold

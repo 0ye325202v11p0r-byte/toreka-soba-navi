@@ -78,12 +78,28 @@ export default async function DashboardPage() {
 
   let cards: DashboardCardInfo[] = [];
   if (relevantCardIds.length > 0) {
-    const { data, error } = await supabase
-      .from("cards")
-      .select("id, name, current_price, pct_vs_avg30, data_quality, source_url, updated_at, judgment")
-      .in("id", relevantCardIds);
+    // select("*") rather than an explicit column list specifically so
+    // record_status (may not exist in production yet — see
+    // migration/retrofit_add_price_records.sql) never causes this query to
+    // error: PostgREST's `*` simply omits a column that doesn't exist
+    // rather than rejecting the request the way naming it explicitly
+    // would. `?? null` below is the read-side equivalent of check-watchlist
+    // /route.ts's write-side "in rawRows[0]" presence check — a SELECT
+    // never errors on a missing key the way an UPDATE naming it would, so
+    // there's no need for a separate hasColumn flag on this read path.
+    const { data, error } = await supabase.from("cards").select("*").in("id", relevantCardIds);
     if (error) throw error;
-    cards = (data ?? []) as DashboardCardInfo[];
+    cards = (data ?? []).map((c) => ({
+      id: c.id,
+      name: c.name,
+      current_price: c.current_price,
+      pct_vs_avg30: c.pct_vs_avg30,
+      data_quality: c.data_quality,
+      source_url: c.source_url,
+      updated_at: c.updated_at,
+      judgment: c.judgment,
+      record_status: c.record_status ?? null,
+    })) as DashboardCardInfo[];
   }
 
   // "あなたのポートフォリオ vs 市場平均" (added 2026-09-13) needs a
@@ -171,6 +187,26 @@ export default async function DashboardPage() {
               ⚠️ {summary.staleCard.name}の価格が{formatDateTime(summary.staleCard.updatedAt)}
               から更新されていません。自動更新は通常毎日行われるため、価格が古い可能性があります。
             </p>
+          )}
+
+          {summary.priceRecords.length > 0 && (
+            <div className="mb-6 rounded-lg border border-accent bg-bg-elevated p-4">
+              <h2 className="mb-2 text-sm font-bold text-accent">🏆 価格更新アラート</h2>
+              <ul className="space-y-1 text-sm">
+                {summary.priceRecords.map((r) => (
+                  <li key={r.cardId}>
+                    <Link href={`/cards/${r.cardId}`} className="font-medium text-ink hover:text-accent hover:underline">
+                      {r.cardName}
+                    </Link>
+                    {r.status === "high" ? (
+                      <span className="ml-2 text-good">が史上最高値を更新しました</span>
+                    ) : (
+                      <span className="ml-2 text-warn">が史上最安値を更新しました</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {summary.benchmark.portfolioAvgPct !== null && summary.benchmark.marketAvgPct !== null && (
