@@ -1348,3 +1348,24 @@ javascript_execで`location.href`と`new URLSearchParams(location.search).get("n
 未検証：本番で実際にcronが特定カードの更新に失敗し続けているケースの実発生は確認していません（本番DB照会はしていません）。36時間という閾値は日次cronの実行間隔からの推測値で、実運用での誤検知/見逃しは本番稼働後の観察が必要です。フロー(2)の残り（保有・ウォッチの「変化」自体の可視化——前回訪問時との差分など）は今回スコープ外のままです。
 
 **④次に価値が高い改善候補1件：** フロー(2)で未着手のままの「変化の可視化」——現状のダッシュボードは常に「今の状態」のスナップショットのみで、「前回訪問時と比べて何が変わったか」（新たに条件成立したウォッチ、保有カードの評価額の増減方向など）を示す仕組みがありません。ただしこれには「前回訪問時点」をどう定義・保存するか（最終ログイン時刻の記録が必要）という設計判断が伴うため、着手前にご意見を伺いたいです。
+
+## Claude Codeより報告（2026-09-13）— ウォッチリストにブラウザのプッシュ通知を実装（コミット230d1e1、push済み）
+
+ユーザー本人より「サブスク1000円に値するシステムを、新規アカウント・課金APIを使わずに底上げする案」を求められ、上記④とは別に、ウォッチリストの受動性（条件成立に気づくには自分でページを見に行くしかない）が最大の弱点と判断し、Web Push通知を提案・承認を得て実装しました。
+
+**選定理由：** Resend（メール送信、Phase 4本来の計画）は外部アカウント登録が必要で着手できませんでしたが、ブラウザのWeb Push APIはVAPID鍵をローカルで生成でき、外部アカウント・Stripeいずれとも無関係に今すぐ実装可能でした。
+
+**実装：** `src/lib/webPushClient.ts`（VAPID鍵変換・購読処理）、`public/sw.js`（Service Worker）、`WatchlistClient.tsx`に購読ボタン追加、`push_subscriptions`テーブル新規、`watchlist_items.condition_was_met`列新規（「今回新たに成立したか」の遷移検知に必要——`last_triggered_at`だけでは常に上書きされ続け判定できないため）、`check-watchlist/route.ts`が新規成立時にのみ`web-push`で送信。
+
+**本番未マイグレーションでも壊れない設計：** `fee`列の教訓をそのまま適用し、VAPID未設定・`push_subscriptions`テーブル未作成・`condition_was_met`列未作成のいずれの場合も、既存の中核機能（条件判定・`last_triggered_at`更新）は一切壊れず、プッシュ送信のみ黙ってスキップします。
+
+**検証：** 新規3ファイル（`verify_web_push_client.mjs`10件・`verify_watchlist_push.mjs`6件・`verify_check_watchlist_push.mjs`19件、web-push/Supabase双方をモック化）で新規成立検知・重複送信防止・410購読削除・テーブル未作成時のグレースフルデグレードを確認。既存`verify_check_watchlist.mjs`36件は無改変のまま全PASS（後方互換性の直接的な証拠）。ローカルdevサーバーで実際に通知許可を拒否するケースをブラウザ操作で確認済み（クラッシュなし、適切なエラー表示）。全通過。
+
+**未検証：** 通知を実際に「許可」した場合の購読〜受信までは、この環境に実ユーザーの許可操作が無いため未検証です。
+
+**本番反映に必要な残作業（Supabase/Vercelダッシュボードでの手動作業、いずれも未実施）：**
+1. `migration/retrofit_push_subscriptions.sql`をSupabase SQL Editorで実行
+2. `migration/retrofit_add_watchlist_condition_was_met.sql`をSupabase SQL Editorで実行
+3. Vercel環境変数に`NEXT_PUBLIC_VAPID_PUBLIC_KEY`・`VAPID_PRIVATE_KEY`を設定（値はローカルの`.env.local`参照）
+
+push・本番DB照会/変更は行っていません。
