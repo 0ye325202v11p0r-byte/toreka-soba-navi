@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
 import SetupNotice from "@/components/SetupNotice";
 
@@ -57,6 +58,11 @@ function LoginForm() {
       // for.
       setEmail(trimmedEmail);
       setStatus("sent");
+      // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — 有料化
+      // 前の今、実際に需要があるかを検証する唯一の手がかりはページビュー
+      // ではなく行動データ。email自体は個人情報なのでプロパティに含めない
+      // （何人がここまで来たかだけを数える、誰が来たかは数えない）。
+      track("login_link_requested");
     }
   }
 

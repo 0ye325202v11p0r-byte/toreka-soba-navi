@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
 import { yen, dataQualityLabel, isAutoTracked, todayInTokyo } from "@/lib/format";
 import { canSubmitTransaction } from "@/lib/formValidation";
@@ -136,6 +137,10 @@ export default function PortfolioClient({
       }
       setPricePerUnit("");
       setFee("");
+      // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — このアプリ
+      // が実際に使われているかを検証する行動シグナル。カードIDや金額は
+      // プロパティに含めない（何件記録されたかだけを数える）。
+      track("transaction_added", { type });
       router.refresh();
     } catch {
       setErrorMsg("通信エラーが発生しました。もう一度お試しください。");

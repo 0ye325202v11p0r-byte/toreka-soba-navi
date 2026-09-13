@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
 import { pct, yen, dataQualityLabel, isAutoTracked, formatDateTime } from "@/lib/format";
 import { canSubmitWatchItem } from "@/lib/formValidation";
@@ -141,6 +142,11 @@ export default function WatchlistClient({
         return;
       }
       setPushStatus("on");
+      // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — 差別化
+      // 機能群（史上最高値アラート・週次ダイジェスト等）に本当に価値を
+      // 感じているかは、プッシュ通知を有効にする人がどれだけいるかで
+      // ある程度検証できる。
+      track("push_enabled");
     } catch {
       setPushError("通信エラーが発生しました。もう一度お試しください。");
     } finally {
@@ -197,6 +203,9 @@ export default function WatchlistClient({
         setErrorMsg(`登録に失敗しました：${error.message}`);
         return;
       }
+      // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — カードIDや
+      // 条件の値はプロパティに含めない（何件登録されたかだけを数える）。
+      track("watchlist_item_added");
       router.refresh();
     } catch {
       setErrorMsg("通信エラーが発生しました。もう一度お試しください。");
