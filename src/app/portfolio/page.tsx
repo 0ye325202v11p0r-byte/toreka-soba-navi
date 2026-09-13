@@ -31,11 +31,20 @@ export default async function PortfolioPage({
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ data: { user } }, { card: requestedCardId }] = await Promise.all([
+    supabase.auth.getUser(),
+    searchParams,
+  ]);
 
-  if (!user) redirect("/login?next=/portfolio");
+  // Forward ?card=ID through the login redirect (Codex independent review,
+  // 2026-09-13 — see the identical fix/comment in watchlist/page.tsx). A
+  // first-time visitor arriving via a card's "＋ 取引を記録" link was being
+  // sent to a bare /login?next=/portfolio, losing which card they picked
+  // and forcing them to search for and re-select it after logging in.
+  if (!user) {
+    const next = requestedCardId ? `/portfolio?card=${encodeURIComponent(requestedCardId)}` : "/portfolio";
+    redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
   const userId = user.id; // narrow once, outside the closures below — TS
   // can't carry the `user` non-null narrowing through a nested function
 
@@ -112,11 +121,7 @@ export default async function PortfolioPage({
     return all;
   }
 
-  const [transactions, cards, { card: requestedCardId }] = await Promise.all([
-    fetchAllTransactions(),
-    fetchAllCards(),
-    searchParams,
-  ]);
+  const [transactions, cards] = await Promise.all([fetchAllTransactions(), fetchAllCards()]);
   // Quick-add from a card detail page's "＋ 取引を記録" link (?card=ID,
   // added 2026-09-13) — validated against the real fetched `cards` list,
   // never trusted as-is from the URL. See watchlist/page.tsx for the

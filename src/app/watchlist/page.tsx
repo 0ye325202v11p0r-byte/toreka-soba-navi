@@ -26,11 +26,26 @@ export default async function WatchlistPage({
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [{ data: { user } }, { card: requestedCardId }] = await Promise.all([
+    supabase.auth.getUser(),
+    searchParams,
+  ]);
 
-  if (!user) redirect("/login?next=/watchlist");
+  // Forward ?card=ID through the login redirect (Codex independent review,
+  // 2026-09-13 — flow audit found this as the top-priority break: a
+  // first-time visitor who searches for a card, opens it, and clicks "＋
+  // ウォッチリストに追加" was being sent to a bare /login?next=/watchlist,
+  // losing which card they picked. After completing the magic-link login
+  // they landed on an empty watchlist form and had to search for and
+  // re-select the exact same card from scratch. The raw, unvalidated value
+  // is safe to forward as-is: the destination re-validates it against the
+  // real fetched `cards` list below (see initialCardId), and safeNextPath()
+  // in login/page.tsx already restricts `next` to a same-origin relative
+  // path regardless of what query string is appended to it.
+  if (!user) {
+    const next = requestedCardId ? `/watchlist?card=${encodeURIComponent(requestedCardId)}` : "/watchlist";
+    redirect(`/login?next=${encodeURIComponent(next)}`);
+  }
 
   // Supabase/PostgREST caps a single select() at 1000 rows by default; the
   // catalog passed 1000 cards in the 2026-09-11 expansion (3,270 total), so
@@ -64,14 +79,13 @@ export default async function WatchlistPage({
     return all;
   }
 
-  const [{ data: items }, cards, { card: requestedCardId }] = await Promise.all([
+  const [{ data: items }, cards] = await Promise.all([
     supabase
       .from("watchlist_items")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
     fetchAllCards(),
-    searchParams,
   ]);
 
   // Quick-add from a card detail page's "＋ ウォッチリストに追加" link
