@@ -31,16 +31,18 @@ function safeNextPath(raw: string | null): string {
 // hour the moment this app has any real traffic at all. Password auth
 // (with Supabase's "Confirm email" setting turned off — see
 // migration/PRODUCTION_SETUP_CHECKLIST.md) sends NO email at all for normal
-// signup/login, sidestepping the shared limit entirely. The tradeoff:
-// forgetting a password has no self-serve recovery yet (that would need its
-// own email-sending flow) — deliberately not built this round; the existing
-// 2/hour cap is actually fine for how rarely that specific flow would fire.
+// signup/login, sidestepping the shared limit entirely.
+//
+// "reset" mode (added 2026-09-13, second pass) does use the shared email
+// quota — but "I forgot my password" is a rare, low-frequency action for
+// any one user, unlike every-single-login, so it doesn't reintroduce the
+// original bottleneck the way keeping OTP-based login would have.
 function AuthForm() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting" | "error" | "reset_sent">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const router = useRouter();
   const next = safeNextPath(useSearchParams().get("next"));
@@ -49,7 +51,7 @@ function AuthForm() {
 
   const supabase = createClient();
 
-  function switchMode(nextMode: "login" | "signup") {
+  function switchMode(nextMode: "login" | "signup" | "reset") {
     setMode(nextMode);
     setStatus("idle");
     setErrorMsg("");
@@ -73,6 +75,26 @@ function AuthForm() {
 
     setStatus("submitting");
     setErrorMsg("");
+
+    if (mode === "reset") {
+      // No signOut/error branch needs a `user` check here — Supabase issues
+      // the same generic success response whether or not the address has
+      // an account, so this can never be used to probe which emails are
+      // registered (the same anti-enumeration behavior signInWithPassword's
+      // own error message deliberately does NOT have, but resetPasswordForEmail
+      // does, by Supabase's own design).
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        setStatus("error");
+        setErrorMsg(error.message);
+        return;
+      }
+      setStatus("reset_sent");
+      return;
+    }
+
     const { error } =
       mode === "signup"
         ? await supabase.auth.signUp({ email: trimmedEmail, password })
@@ -96,62 +118,93 @@ function AuthForm() {
     router.push(next);
   }
 
+  const title = mode === "signup" ? "新規登録" : mode === "reset" ? "パスワードの再設定" : "ログイン";
+
   return (
     <div className="mx-auto max-w-sm">
-      <h1 className="mb-4 text-xl font-bold">{mode === "signup" ? "新規登録" : "ログイン"}</h1>
+      <h1 className="mb-4 text-xl font-bold">{title}</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          type="email"
-          required
-          aria-label="メールアドレス"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@example.com"
-          autoComplete="email"
-          className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
-        />
-        <input
-          type="password"
-          required
-          minLength={MIN_PASSWORD_LENGTH}
-          aria-label="パスワード"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="パスワード（6文字以上）"
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
-        />
-        {mode === "signup" && (
+      {mode === "reset" && status === "reset_sent" ? (
+        <div className="rounded-lg bg-good-soft p-4 text-good">
+          {email} 宛にパスワード再設定用のリンクを送信しました（該当するアカウントが存在する場合）。メールをご確認ください。
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-3">
           <input
-            type="password"
+            type="email"
             required
-            minLength={MIN_PASSWORD_LENGTH}
-            aria-label="パスワード（確認）"
-            value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
-            placeholder="パスワード（確認）"
-            autoComplete="new-password"
+            aria-label="メールアドレス"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            autoComplete="email"
             className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
           />
+          {mode !== "reset" && (
+            <input
+              type="password"
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              aria-label="パスワード"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="パスワード（6文字以上）"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
+            />
+          )}
+          {mode === "signup" && (
+            <input
+              type="password"
+              required
+              minLength={MIN_PASSWORD_LENGTH}
+              aria-label="パスワード（確認）"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              placeholder="パスワード（確認）"
+              autoComplete="new-password"
+              className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
+            />
+          )}
+          <button
+            type="submit"
+            disabled={status === "submitting"}
+            className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
+          >
+            {status === "submitting"
+              ? "処理中…"
+              : mode === "signup"
+                ? "登録する"
+                : mode === "reset"
+                  ? "再設定リンクを送る"
+                  : "ログイン"}
+          </button>
+          {status === "error" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
+        </form>
+      )}
+
+      <div className="mt-4 space-y-2">
+        {mode === "login" && (
+          <button
+            type="button"
+            onClick={() => switchMode("reset")}
+            className="block text-sm text-accent hover:underline"
+          >
+            パスワードをお忘れですか？
+          </button>
         )}
         <button
-          type="submit"
-          disabled={status === "submitting"}
-          className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
+          type="button"
+          onClick={() => switchMode(mode === "signup" ? "login" : mode === "reset" ? "login" : "signup")}
+          className="block text-sm text-accent hover:underline"
         >
-          {status === "submitting" ? "処理中…" : mode === "signup" ? "登録する" : "ログイン"}
+          {mode === "signup"
+            ? "すでにアカウントをお持ちの方はこちら"
+            : mode === "reset"
+              ? "ログイン画面に戻る"
+              : "新規登録はこちら"}
         </button>
-        {status === "error" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
-      </form>
-
-      <button
-        type="button"
-        onClick={() => switchMode(mode === "signup" ? "login" : "signup")}
-        className="mt-4 text-sm text-accent hover:underline"
-      >
-        {mode === "signup" ? "すでにアカウントをお持ちの方はこちら" : "新規登録はこちら"}
-      </button>
+      </div>
     </div>
   );
 }
