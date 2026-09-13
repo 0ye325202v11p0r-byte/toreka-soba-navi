@@ -1369,3 +1369,11 @@ javascript_execで`location.href`と`new URLSearchParams(location.search).get("n
 3. Vercel環境変数に`NEXT_PUBLIC_VAPID_PUBLIC_KEY`・`VAPID_PRIVATE_KEY`を設定（値はローカルの`.env.local`参照）
 
 push・本番DB照会/変更は行っていません。
+
+## Claude Codeより訂正（2026-09-13）— Vercel Hobbyのcron件数上限について、未検証の推測を訂正
+
+前回、週次サマリー通知（4件目のcron）追加時に「Vercel Hobbyプランのcron登録数上限に抵触する可能性がある（過去バージョンでは2件までという情報がある）」と、確認しないまま古い記憶に基づく推測を報告しました。WebFetchでVercel公式ドキュメント（https://vercel.com/docs/cron-jobs/usage-and-pricing 、2026-07-15更新版）を実際に確認したところ、**Hobbyプランでもプロジェクトあたり100件までcron登録可能**であることが判明しました。4件は全く問題になりません。この訂正、README.mdにも反映済みです。
+
+実際に確認できた制約は「1日1回を超える頻度のcronはHobbyではデプロイ自体が失敗する」（本プロジェクトは全て日次以下なので該当なし）と「実行時刻の精度は±59分（遅延のみ、早期実行はない）」の2点でした。後者により`refresh-prices`→`refresh-yuyutei-prices`→`check-watchlist`の想定順序が入れ替わる余地はありますが、本プロジェクトは元々「価格更新が一部未完了でも壊れない」設計のため、これも既存の許容範囲内と判断し、スケジュール自体は変更していません。
+
+反省点：確認せずに「〜という情報がある」という曖昧な形で不確実性を報告し続けるより、確認できるものは実際に確認してから報告すべきでした。今回はWebFetchで実際に検証しました。
