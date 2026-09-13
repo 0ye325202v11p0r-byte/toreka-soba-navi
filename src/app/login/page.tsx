@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
 import SetupNotice from "@/components/SetupNotice";
@@ -9,6 +9,11 @@ import SetupNotice from "@/components/SetupNotice";
 const configured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// Minimum accepted by Supabase Auth's own default password policy — this is
+// only a client-side hint (Supabase itself rejects anything shorter with its
+// own error message regardless of this attribute).
+const MIN_PASSWORD_LENGTH = 6;
 
 // Only accept a same-site relative path (starts with exactly one "/", never
 // "//..." which browsers treat as protocol-relative — an open-redirect risk
@@ -18,86 +23,135 @@ function safeNextPath(raw: string | null): string {
   return raw;
 }
 
-function LoginForm() {
+// Switched from magic-link (OTP) to email+password auth (2026-09-13) — see
+// COORDINATION.md. Supabase's default (no custom SMTP configured) email
+// sender caps the WHOLE PROJECT at 2 auth emails/hour, shared across every
+// user's login attempt — fine for a single admin testing alone, but it
+// would start rejecting the 3rd person to try logging in within the same
+// hour the moment this app has any real traffic at all. Password auth
+// (with Supabase's "Confirm email" setting turned off — see
+// migration/PRODUCTION_SETUP_CHECKLIST.md) sends NO email at all for normal
+// signup/login, sidestepping the shared limit entirely. The tradeoff:
+// forgetting a password has no self-serve recovery yet (that would need its
+// own email-sending flow) — deliberately not built this round; the existing
+// 2/hour cap is actually fine for how rarely that specific flow would fire.
+function AuthForm() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const router = useRouter();
   const next = safeNextPath(useSearchParams().get("next"));
 
   if (!configured) return <SetupNotice />;
 
   const supabase = createClient();
 
+  function switchMode(nextMode: "login" | "signup") {
+    setMode(nextMode);
+    setStatus("idle");
+    setErrorMsg("");
+    setPassword("");
+    setPasswordConfirm("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
-    // Trimmed before sending, not just relied on the browser's <input
-    // type="email"> to have already done it — a leading/trailing space
-    // (e.g. pasted from an email signature) would otherwise let Supabase
-    // treat "owner@example.com" and " owner@example.com" as two different
-    // accounts, silently splitting one person's login across two rows and,
-    // for whoever's meant to be the site admin, breaking the exact-match
-    // (case-insensitive but not whitespace-tolerant on this side)
-    // comparison in isAdminUser() (self-review, 2026-09-12).
+    // Same reasoning as the pre-password version: trimmed before sending,
+    // not just relied on <input type="email">, so a stray leading/trailing
+    // space can never split one person's account across two rows or break
+    // isAdminUser()'s exact-match comparison (self-review, 2026-09-12).
     const trimmedEmail = email.trim();
-    // Preserves where the user was trying to go (e.g. /watchlist) before
-    // being sent here — without this, everyone lands on the home page after
-    // clicking the magic link, even if they were redirected here from a
-    // specific protected page.
-    const { error } = await supabase.auth.signInWithOtp({
-      email: trimmedEmail,
-      options: { emailRedirectTo: `${window.location.origin}${next}` },
-    });
+
+    if (mode === "signup" && password !== passwordConfirm) {
+      setStatus("error");
+      setErrorMsg("パスワードが一致しません。");
+      return;
+    }
+
+    setStatus("submitting");
+    setErrorMsg("");
+    const { error } =
+      mode === "signup"
+        ? await supabase.auth.signUp({ email: trimmedEmail, password })
+        : await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
+
     if (error) {
       setStatus("error");
       setErrorMsg(error.message);
-    } else {
-      // Reflects the same trimmed value actually sent to Supabase, so the
-      // confirmation message below never shows a different string (e.g.
-      // with a stray trailing space) than what the OTP was really issued
-      // for.
-      setEmail(trimmedEmail);
-      setStatus("sent");
-      // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — 有料化
-      // 前の今、実際に需要があるかを検証する唯一の手がかりはページビュー
-      // ではなく行動データ。email自体は個人情報なのでプロパティに含めない
-      // （何人がここまで来たかだけを数える、誰が来たかは数えない）。
-      track("login_link_requested");
+      return;
     }
+
+    // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — email自体は
+    // 個人情報なのでプロパティに含めない（何人がここまで来たかだけを
+    // 数える、誰が来たかは数えない）。
+    track(mode === "signup" ? "signup_completed" : "login_completed");
+    // router.refresh() first — server components (e.g. NavBar's login
+    // state) read the session from a cookie that signInWithPassword/signUp
+    // just set client-side; without a refresh they'd still render the
+    // pre-login state on the page `next` navigates to.
+    router.refresh();
+    router.push(next);
   }
 
   return (
     <div className="mx-auto max-w-sm">
-      <h1 className="mb-4 text-xl font-bold">ログイン / 新規登録</h1>
-      <p className="mb-4 text-sm text-ink-muted">
-        メールアドレスを入力すると、ログイン用のリンクが届きます（パスワード不要）。
-      </p>
+      <h1 className="mb-4 text-xl font-bold">{mode === "signup" ? "新規登録" : "ログイン"}</h1>
 
-      {status === "sent" ? (
-        <div className="rounded-lg bg-good-soft p-4 text-good">
-          {email} にログインリンクを送信しました。メールを確認してください。
-        </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <input
+          type="email"
+          required
+          aria-label="メールアドレス"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
+        />
+        <input
+          type="password"
+          required
+          minLength={MIN_PASSWORD_LENGTH}
+          aria-label="パスワード"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="パスワード（6文字以上）"
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
+        />
+        {mode === "signup" && (
           <input
-            type="email"
+            type="password"
             required
-            aria-label="メールアドレス"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            minLength={MIN_PASSWORD_LENGTH}
+            aria-label="パスワード（確認）"
+            value={passwordConfirm}
+            onChange={(e) => setPasswordConfirm(e.target.value)}
+            placeholder="パスワード（確認）"
+            autoComplete="new-password"
             className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
           />
-          <button
-            type="submit"
-            disabled={status === "sending"}
-            className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
-          >
-            {status === "sending" ? "送信中…" : "ログインリンクを送る"}
-          </button>
-          {status === "error" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
-        </form>
-      )}
+        )}
+        <button
+          type="submit"
+          disabled={status === "submitting"}
+          className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
+        >
+          {status === "submitting" ? "処理中…" : mode === "signup" ? "登録する" : "ログイン"}
+        </button>
+        {status === "error" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
+      </form>
+
+      <button
+        type="button"
+        onClick={() => switchMode(mode === "signup" ? "login" : "signup")}
+        className="mt-4 text-sm text-accent hover:underline"
+      >
+        {mode === "signup" ? "すでにアカウントをお持ちの方はこちら" : "新規登録はこちら"}
+      </button>
     </div>
   );
 }
@@ -105,7 +159,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={null}>
-      <LoginForm />
+      <AuthForm />
     </Suspense>
   );
 }

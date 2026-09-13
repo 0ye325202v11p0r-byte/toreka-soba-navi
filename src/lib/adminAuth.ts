@@ -3,8 +3,9 @@
 //
 // Found via self-review, 2026-09-12: /admin/sync-status/page.tsx only ever
 // checked `if (!user) redirect(...)` — ANY authenticated user, not just the
-// site owner, could view it. Because login is open passwordless signup
-// (supabase.auth.signInWithOtp with no allowlist — anyone can create an
+// site owner, could view it. Because login is open self-service signup with
+// no allowlist (originally passwordless OTP, switched to email+password
+// 2026-09-13 — see login/page.tsx — but either way anyone can create an
 // account with any email), this meant literally anyone who signed up could
 // see internal cron operational data: run history, success/failure counts,
 // and raw error_sample text (which can include internal card ids and, for
