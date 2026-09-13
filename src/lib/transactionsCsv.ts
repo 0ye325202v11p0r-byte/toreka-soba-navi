@@ -29,6 +29,22 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
+// Prevents CSV/Formula Injection (a well-known OWASP-documented issue,
+// found during a security self-review, 2026-09-13): Excel/Google Sheets
+// treats a cell starting with =, +, -, or @ as a formula rather than plain
+// text when a CSV is opened, up to and including arbitrary command
+// execution via DDE in older Excel versions. card_id/card_name originate
+// from onepiece-card-atari.jp/yuyu-tei.jp's own scraped catalog (see
+// escapeCsvField's comment above — this project already treats card names
+// as not-fully-trusted free text for the same reason), so a card whose
+// name happened to start with one of these characters could otherwise
+// trigger this the moment a user opens their own exported CSV. Prepending
+// a single quote makes spreadsheet software render the leading character
+// literally instead of interpreting it.
+function neutralizeFormulaInjection(value: string): string {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 // Total actually paid (buy) or received (sell), fee-inclusive — matches
 // src/lib/pnl.ts's own effective-cost/effective-proceeds calculation, so a
 // user reconciling this CSV against the in-app 含み損益/実現損益 sees
@@ -46,8 +62,8 @@ export function buildTransactionsCsv(rows: CsvTransactionRow[]): string {
       [
         row.transaction_date,
         row.type === "buy" ? "購入" : "売却",
-        escapeCsvField(row.card_id),
-        escapeCsvField(row.card_name),
+        escapeCsvField(neutralizeFormulaInjection(row.card_id)),
+        escapeCsvField(neutralizeFormulaInjection(row.card_name)),
         String(row.quantity),
         String(row.price_per_unit),
         String(row.fee),

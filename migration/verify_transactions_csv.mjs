@@ -97,5 +97,46 @@ function row(overrides = {}) {
   assertEqual(lines[2].startsWith("2026-01-15,売却,c2,"), true, "T8 second row is the sell for c2, in the given order");
 }
 
+// T9-T13 (security self-review, 2026-09-13): CSV/Formula Injection —
+// a card name starting with =, +, -, @, tab, or CR must be neutralized
+// with a leading single quote so Excel/Sheets never interprets it as a
+// formula. card_id gets the same treatment (T7 already established it
+// isn't special-cased for RFC 4180 escaping; formula-injection neutralizing
+// must be equally consistent across both fields).
+{
+  const csv = buildTransactionsCsv([row({ card_name: "=HYPERLINK(\"http://evil.example\",\"click\")" })]);
+  const lines = csv.split("\r\n");
+  assertEqual(
+    lines[1].includes("'=HYPERLINK"),
+    true,
+    "T9 a card name starting with = is neutralized with a leading single quote"
+  );
+}
+{
+  const csv = buildTransactionsCsv([row({ card_name: "+1234567890" })]);
+  assertEqual(csv.split("\r\n")[1].includes("'+1234567890"), true, "T10 a leading + is neutralized");
+}
+{
+  const csv = buildTransactionsCsv([row({ card_name: "-cmd|'/c calc'!A1" })]);
+  assertEqual(csv.split("\r\n")[1].includes("'-cmd"), true, "T11 a leading - is neutralized");
+}
+{
+  const csv = buildTransactionsCsv([row({ card_name: "@SUM(1+1)" })]);
+  assertEqual(csv.split("\r\n")[1].includes("'@SUM"), true, "T12 a leading @ is neutralized");
+}
+{
+  const csv = buildTransactionsCsv([row({ card_id: "=1+1" })]);
+  const lines = csv.split("\r\n");
+  assertEqual(lines[1].includes(",'=1+1,"), true, "T13 card_id is neutralized the same way as card_name, not just RFC-4180-escaped");
+}
+
+// T14: an ordinary card name (no leading trigger character) is never
+// touched by the neutralizer — this must be additive, not a blanket
+// mangling of every field.
+{
+  const csv = buildTransactionsCsv([row({ card_name: "モンキー・D・ルフィ" })]);
+  assertEqual(csv.split("\r\n")[1].includes("'モンキー"), false, "T14 an ordinary card name is left exactly as-is");
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) process.exitCode = 1;
