@@ -73,3 +73,42 @@ export function buildHoldingsBreakdown(
     bySet: groupBy(holdings, cardById, (c) => c.set_name ?? "弾不明"),
   };
 }
+
+/**
+ * "分散度" (diversification/concentration) check — added 2026-09-13 as a
+ * differentiation feature in the same spirit as marketBenchmark.ts: a plain
+ * price-checking site has no notion of "your portfolio," so it can never
+ * tell a user their holdings are concentrated in one product line. This
+ * app already computes the grouped values for the breakdown panel; this is
+ * just one more honest read of numbers it already has.
+ *
+ * Computed from `value` alone (never a fabricated total including unknown
+ * contributions) — a group's hasUnknownValue doesn't change how its KNOWN
+ * value counts toward concentration, it just means the true share could be
+ * somewhat different from what's shown; no separate caveat is layered on
+ * top here since the breakdown panel already discloses that per group.
+ */
+export interface ConcentrationInfo {
+  topLabel: string;
+  topSharePct: number; // 0-100, rounded to 1 decimal
+  isConcentrated: boolean;
+}
+
+// A round, easily-explained threshold: "half or more of your holdings'
+// value sits in a single set" is a concrete, defensible bar for a warning
+// — not tuned against any real usage data (there is none yet).
+const CONCENTRATION_THRESHOLD_PCT = 50;
+
+export function computeConcentration(groups: BreakdownGroup[]): ConcentrationInfo | null {
+  if (groups.length === 0) return null;
+  const totalValue = groups.reduce((sum, g) => sum + g.value, 0);
+  if (totalValue <= 0) return null; // nothing known to compute a share of — see cardHoldingValue's "unknown, not zero"
+  // groups is already sorted descending by value (see groupBy above), so
+  // the first entry is always the largest — re-deriving the max here
+  // instead of trusting incoming order would just be redundant work, but
+  // relying on undocumented caller behavior is fragile, so this is spelled
+  // out rather than silently assumed.
+  const top = [...groups].sort((a, b) => b.value - a.value)[0];
+  const topSharePct = Math.round((top.value / totalValue) * 1000) / 10;
+  return { topLabel: top.label, topSharePct, isConcentrated: topSharePct >= CONCENTRATION_THRESHOLD_PCT };
+}

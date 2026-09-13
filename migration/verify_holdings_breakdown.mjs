@@ -7,7 +7,7 @@
 import { register } from "node:module";
 register("./_test_mocks/loader.mjs", import.meta.url);
 
-const { buildHoldingsBreakdown } = await import("../src/lib/holdingsBreakdown.ts");
+const { buildHoldingsBreakdown, computeConcentration } = await import("../src/lib/holdingsBreakdown.ts");
 
 let pass = 0;
 let fail = 0;
@@ -124,6 +124,60 @@ function card(id, rarity, setName, price) {
     [{ label: "SR", cardCount: 2, quantity: 5, value: 2000, hasUnknownValue: true }],
     "T6: a mixed group sums only the priced card (2000), while hasUnknownValue:true signals it's a partial total"
   );
+}
+
+// computeConcentration() — differentiation feature (2026-09-13): "half or
+// more of your holdings' value sits in a single set/rarity."
+
+// T7: a clearly concentrated portfolio (one group is 80% of total value).
+{
+  const groups = [
+    { label: "big", cardCount: 1, quantity: 1, value: 800, hasUnknownValue: false },
+    { label: "small", cardCount: 1, quantity: 1, value: 200, hasUnknownValue: false },
+  ];
+  const result = computeConcentration(groups);
+  assertEqual(result, { topLabel: "big", topSharePct: 80, isConcentrated: true }, "T7: 80% in one group is flagged as concentrated");
+}
+
+// T8: a well-diversified portfolio (evenly split across 4 groups, 25% each)
+// must NOT be flagged.
+{
+  const groups = [
+    { label: "a", cardCount: 1, quantity: 1, value: 100, hasUnknownValue: false },
+    { label: "b", cardCount: 1, quantity: 1, value: 100, hasUnknownValue: false },
+    { label: "c", cardCount: 1, quantity: 1, value: 100, hasUnknownValue: false },
+    { label: "d", cardCount: 1, quantity: 1, value: 100, hasUnknownValue: false },
+  ];
+  const result = computeConcentration(groups);
+  assertEqual(result, { topLabel: "a", topSharePct: 25, isConcentrated: false }, "T8: an even 25%-each split across 4 groups is NOT flagged as concentrated");
+}
+
+// T9: exactly at the 50% threshold must be flagged (>=, not >).
+{
+  const groups = [
+    { label: "half", cardCount: 1, quantity: 1, value: 500, hasUnknownValue: false },
+    { label: "rest", cardCount: 1, quantity: 1, value: 500, hasUnknownValue: false },
+  ];
+  const result = computeConcentration(groups);
+  assertEqual(result.isConcentrated, true, "T9: exactly 50% is flagged as concentrated (boundary is inclusive)");
+}
+
+// T10: no groups at all (empty portfolio) -> null, not a crash or a
+// fabricated 0%/100%.
+assertEqual(computeConcentration([]), null, "T10: an empty group list returns null");
+
+// T11: all groups have zero total value (e.g. every holding's price is
+// unknown) -> null, since a "share of zero" is meaningless, not 0% or NaN.
+{
+  const groups = [{ label: "unknown", cardCount: 1, quantity: 1, value: 0, hasUnknownValue: true }];
+  assertEqual(computeConcentration(groups), null, "T11: zero total value returns null, not a fabricated percentage");
+}
+
+// T12: a single group (everything in one set) is 100% concentrated.
+{
+  const groups = [{ label: "only", cardCount: 3, quantity: 5, value: 999, hasUnknownValue: false }];
+  const result = computeConcentration(groups);
+  assertEqual(result, { topLabel: "only", topSharePct: 100, isConcentrated: true }, "T12: a single group is 100% concentrated");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

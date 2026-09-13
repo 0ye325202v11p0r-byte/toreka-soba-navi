@@ -1,5 +1,5 @@
 import { yen } from "@/lib/format";
-import type { BreakdownGroup } from "@/lib/holdingsBreakdown";
+import { computeConcentration, type BreakdownGroup } from "@/lib/holdingsBreakdown";
 
 // Two side-by-side breakdown boxes (レアリティ別／弾別), same visual weight
 // as the dashboard's StatBox/MoverBox — see dashboard/page.tsx. A pure
@@ -12,10 +12,18 @@ export default function HoldingsBreakdownPanel({
   byRarity: BreakdownGroup[];
   bySet: BreakdownGroup[];
 }) {
+  const concentration = computeConcentration(bySet);
   return (
-    <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
-      <BreakdownBox title="レアリティ別内訳" groups={byRarity} />
-      <BreakdownBox title="弾別内訳" groups={bySet} />
+    <div className="mb-6">
+      {concentration?.isConcentrated && (
+        <p className="mb-3 text-xs text-warn">
+          ⚠️ 保有評価額の{concentration.topSharePct}%が「{concentration.topLabel}」に集中しています。特定の弾の値動きに損益が左右されやすい状態です。
+        </p>
+      )}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <BreakdownBox title="レアリティ別内訳" groups={byRarity} />
+        <BreakdownBox title="弾別内訳" groups={bySet} />
+      </div>
     </div>
   );
 }
