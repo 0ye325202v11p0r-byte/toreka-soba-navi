@@ -47,8 +47,8 @@ export interface MarketListCard {
 // Subset of Card used by the dashboard (src/app/dashboard/page.tsx) — only
 // ever queried for the cards a specific user actually holds or watches
 // (never the full ~3,270-card catalog), so this is deliberately narrower
-// than MarketListCard: no rarity/set_name/judgment, since the dashboard
-// doesn't render them.
+// than MarketListCard: no rarity/set_name, since the dashboard doesn't
+// render them.
 export interface DashboardCardInfo {
   id: string;
   name: string;
@@ -59,6 +59,9 @@ export interface DashboardCardInfo {
   // Added 2026-09-13 (Codex UX review, cycle 2) for price-freshness display
   // on revisit — see dashboardSummary.ts's staleCard.
   updated_at: string;
+  // Added 2026-09-13 (differentiation feature #4) for profitTaking.ts's
+  // "judgment === 割高" check.
+  judgment: Judgment | null;
 }
 
 export interface PriceSnapshot {

@@ -56,6 +56,7 @@ function card(id, overrides = {}) {
     data_quality: "real",
     source_url: `https://example.invalid/${id}`,
     updated_at: "2026-09-13T00:00:00.000Z",
+    judgment: null,
     ...overrides,
   };
 }
@@ -306,6 +307,27 @@ function watchItem(id, cardId, rule) {
   const s = buildDashboardSummary(transactions, [], cards);
   assertEqual(s.benchmark.marketAvgPct, null, "S13: omitting catalogPctValues defaults to an empty sample -> null, not a crash");
   assertEqual(s.benchmark.portfolioAvgPct, 20, "S13: the portfolio side still computes normally regardless of the catalog side");
+}
+
+// Scenario 14 (differentiation feature #4, 2026-09-13 — "利益確定を検討して
+// もよいかもしれないカード"): end-to-end wiring through buildDashboardSummary,
+// confirming the real cardById map (built inside the function) reaches
+// findProfitTakingCandidates() correctly.
+{
+  const cards = [
+    card("gain-and-overvalued", { current_price: 1500, judgment: "割高" }), // bought at 1000 -> flagged
+    card("gain-but-fair", { current_price: 1500, judgment: "適正" }), // gain but not overvalued -> not flagged
+  ];
+  const transactions = [
+    txn("gain-and-overvalued", "buy", 1, 1000, "2026-01-01"),
+    txn("gain-but-fair", "buy", 1, 1000, "2026-01-01"),
+  ];
+  const s = buildDashboardSummary(transactions, [], cards);
+  assertEqual(
+    s.profitTakingCandidates.map((c) => c.cardId),
+    ["gain-and-overvalued"],
+    "S14: only the held card that is BOTH gaining AND judgment 割高 is flagged, via the real buildDashboardSummary wiring"
+  );
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

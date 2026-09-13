@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   if (relevantCardIds.length > 0) {
     const { data, error } = await supabase
       .from("cards")
-      .select("id, name, current_price, pct_vs_avg30, data_quality, source_url, updated_at")
+      .select("id, name, current_price, pct_vs_avg30, data_quality, source_url, updated_at, judgment")
       .in("id", relevantCardIds);
     if (error) throw error;
     cards = (data ?? []) as DashboardCardInfo[];
@@ -190,6 +190,27 @@ export default async function DashboardPage() {
                   : "あなたの保有は市場平均を下回っています。"}
                 {summary.benchmark.excludedHoldingsCount > 0 &&
                   ` （${summary.benchmark.excludedHoldingsCount}件は価格未取得・自動更新対象外のため集計に含まれていません）`}
+              </p>
+            </div>
+          )}
+
+          {summary.profitTakingCandidates.length > 0 && (
+            <div className="mb-6 rounded-lg border border-border bg-bg-elevated p-4">
+              <h2 className="mb-2 text-sm font-bold text-ink-muted">💡 利益確定を検討してもよいかもしれないカード</h2>
+              <ul className="space-y-1 text-sm">
+                {summary.profitTakingCandidates.slice(0, 3).map((c) => (
+                  <li key={c.cardId} className="flex items-center justify-between">
+                    <Link href={`/cards/${c.cardId}`} className="font-medium text-ink hover:text-accent hover:underline">
+                      {c.cardName}
+                    </Link>
+                    <span className="font-mono text-good">
+                      +{yen(c.unrealizedGain)}（+{c.gainPct.toFixed(1)}%）
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-ink-faint">
+                含み益が出ており、かつ市場的にも30日平均より割高な水準のカードです。投資助言ではなく、判断材料の一つとしてご参考ください。
               </p>
             </div>
           )}

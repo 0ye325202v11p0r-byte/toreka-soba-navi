@@ -3,6 +3,7 @@ import { conditionMet } from "./watchlistRule";
 import { isAutoTracked } from "./format";
 import { computePortfolioValuation } from "./portfolioValuation";
 import { computeMarketBenchmark, type MarketBenchmarkResult } from "./marketBenchmark";
+import { findProfitTakingCandidates, type ProfitTakingCandidate } from "./profitTaking";
 import type { Transaction, WatchlistItem, DashboardCardInfo } from "./types";
 
 /**
@@ -64,6 +65,12 @@ export interface DashboardSummary {
   // site can't: it needs both this user's own holdings AND a catalog-wide
   // sample, which only an app already tracking both ever has.
   benchmark: MarketBenchmarkResult;
+  // "利益確定を検討してもよいかもしれないカード" (added 2026-09-13,
+  // differentiation feature #4) — see profitTaking.ts for the exact
+  // condition (real unrealized gain AND market judgment 割高, both
+  // required). Sorted by gainPct descending; caller decides how many to
+  // show.
+  profitTakingCandidates: ProfitTakingCandidate[];
   hasNothing: boolean;
 }
 
@@ -149,6 +156,7 @@ export function buildDashboardSummary(
   const untrackedCount = relevantCards.filter((c) => !isAutoTracked(c)).length;
   const staleCard = findStalestTrackedCard(relevantCards, now);
   const benchmark = computeMarketBenchmark(pnl.holdings, cardById, catalogPctValues);
+  const profitTakingCandidates = findProfitTakingCandidates(pnl.holdings, cardById);
 
   return {
     currentValue,
@@ -163,6 +171,7 @@ export function buildDashboardSummary(
     unpricedHoldingsCount: valuation.unpricedHoldingsCount,
     staleCard,
     benchmark,
+    profitTakingCandidates,
     // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
     // 2026-09-13, found while re-checking this feature without Codex's
     // parallel verification): a user who bought and later fully sold
