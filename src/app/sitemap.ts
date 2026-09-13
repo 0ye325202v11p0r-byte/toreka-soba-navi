@@ -58,6 +58,7 @@ async function fetchAllCardIds() {
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
     { url: SITE_URL, changeFrequency: "daily", priority: 1 },
+    { url: `${SITE_URL}/weekly-movers`, changeFrequency: "hourly", priority: 0.8 },
     { url: `${SITE_URL}/compare`, changeFrequency: "weekly", priority: 0.5 },
     { url: `${SITE_URL}/login`, changeFrequency: "monthly", priority: 0.3 },
   ];

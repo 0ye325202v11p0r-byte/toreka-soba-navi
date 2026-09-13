@@ -20,6 +20,9 @@ export default async function NavBar() {
           <Link href="/compare" className="text-ink-muted hover:text-ink">
             比較
           </Link>
+          <Link href="/weekly-movers" className="text-ink-muted hover:text-ink">
+            週間ランキング
+          </Link>
           {!configured ? null : user ? (
             <>
               {/* First link in the logged-in nav segment, deliberately —

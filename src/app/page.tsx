@@ -6,6 +6,7 @@ import SetupNotice from "@/components/SetupNotice";
 import TodaysPicks from "@/components/TodaysPicks";
 import MoverStrip from "@/components/MoverStrip";
 import MarketTable from "@/components/MarketTable";
+import MarketTopics from "@/components/MarketTopics";
 import { isYuyuteiSourceEnabled } from "@/lib/appSettings";
 
 export const revalidate = 60;
@@ -102,6 +103,8 @@ export default async function MarketListPage() {
           まだカードデータがありません。移行スクリプトでArtifactからデータを取り込んでください。
         </div>
       )}
+
+      <MarketTopics />
 
       {cards && cards.length > 0 && (
         <>
