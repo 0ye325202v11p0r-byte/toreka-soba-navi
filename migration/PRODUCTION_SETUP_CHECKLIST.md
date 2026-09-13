@@ -46,8 +46,38 @@ email」設定がオンのままだと、新規登録時に依然として確認
 
 これを行うまでは、新規登録のたびに確認メールが送られ、同じ1時間2通の
 壁に引っかかり続ける。オフにすれば、ログイン・新規登録は一切メールを
-送らなくなる（パスワードを忘れた場合の再設定フローは今回のセッションで
-は未実装——別途対応が必要）。
+送らなくなる。パスワードを忘れた場合の再設定フロー（`/reset-password`）
+は2026-09-13中に追加実装済み。
+
+### 1c. CAPTCHA（Cloudflare Turnstile + Supabase Attack Protection）— コード側は準備済み、有効化は未実施
+
+**発覚した問題（セキュリティ監査）：** 新規登録・ログインの両方に
+リクエスト回数の上限が無く、①誰でも無制限に適当なアカウントを作れる
+②Supabaseのデフォルトのログイン試行回数制限はIPアドレス単位（アカウント
+単位ではない）ため、複数IP経由でのパスワード総当たりが理論上可能
+——という2つの懸念があった。
+
+**対応（コード側、完了済み）：** `src/components/TurnstileWidget.tsx`
+（新規）と、ログイン・新規登録・パスワード再設定リクエストの各フォーム
+への組み込みを実装済み。`NEXT_PUBLIC_TURNSTILE_SITE_KEY`が未設定の間は
+ウィジェット自体が表示されず、既存の動作と完全に同じ
+（グレースフルデグレード）。next.config.tsのCSPにも
+`challenges.cloudflare.com`を許可済み。Cloudflareが公開している
+アカウント登録不要のテスト用サイトキー（`1x00000000000000000000AA`、
+常に成功）を使い、ローカルで実際にウィジェットが表示・自動検証され、
+Supabaseへの認証リクエストが正常に通ることまで確認済み。
+
+**残作業（ユーザー自身が行う必要あり——アカウント作成を伴うためこの
+セッションでは実施不可）：**
+1. [Cloudflareダッシュボード](https://dash.cloudflare.com/)で無料アカウントを作成（未作成の場合）
+2. **Turnstile** → **Add site** で新しいサイトを追加し、Site KeyとSecret Keyを取得
+3. Vercelの環境変数に `NEXT_PUBLIC_TURNSTILE_SITE_KEY`（Site Key）を追加
+4. Supabaseダッシュボード → **Authentication** → **Attack Protection**
+   で有効化し、Secret Keyを設定
+5. 再デプロイ
+
+**検証：** `/login`にアクセスし、CAPTCHAウィジェットが表示され、チェック
+完了後にログイン/新規登録ボタンが押せるようになることを確認する。
 
 **手順：**
 1. `migration/retrofit_admin_only_sync_runs.sql` を開き、

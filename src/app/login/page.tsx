@@ -5,10 +5,19 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
 import SetupNotice from "@/components/SetupNotice";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const configured = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 );
+
+// Unset in production until the project owner completes the Cloudflare
+// Turnstile + Supabase Attack Protection setup (see
+// migration/PRODUCTION_SETUP_CHECKLIST.md) — every call site below treats
+// a missing key as "CAPTCHA not required," matching this project's
+// established graceful-degradation convention for other not-yet-configured
+// features (VAPID keys, ADMIN_EMAIL, etc.).
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 // Minimum accepted by Supabase Auth's own default password policy — this is
 // only a client-side hint (Supabase itself rejects anything shorter with its
@@ -44,6 +53,7 @@ function AuthForm() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error" | "reset_sent">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const router = useRouter();
   const next = safeNextPath(useSearchParams().get("next"));
 
@@ -57,6 +67,11 @@ function AuthForm() {
     setErrorMsg("");
     setPassword("");
     setPasswordConfirm("");
+    // A Turnstile token is single-use and tied to the widget instance that
+    // produced it — carrying a stale token across a mode switch (e.g.
+    // login -> signup) would let a genuinely unverified submission through
+    // on the new mode using an already-spent token.
+    setCaptchaToken(null);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -85,6 +100,13 @@ function AuthForm() {
       // does, by Supabase's own design).
       const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
         redirectTo: `${window.location.origin}/reset-password`,
+        // captchaToken is a top-level sibling of redirectTo here, unlike
+        // signUp/signInWithPassword below where it nests under `options`
+        // — an actual difference in the Supabase Auth JS SDK's types, not
+        // an inconsistency introduced here (verified against
+        // node_modules/@supabase/auth-js's own type definitions rather
+        // than assumed to match the other two calls' shape).
+        ...(captchaToken ? { captchaToken } : {}),
       });
       if (error) {
         setStatus("error");
@@ -95,10 +117,11 @@ function AuthForm() {
       return;
     }
 
+    const authOptions = captchaToken ? { options: { captchaToken } } : {};
     const { error } =
       mode === "signup"
-        ? await supabase.auth.signUp({ email: trimmedEmail, password })
-        : await supabase.auth.signInWithPassword({ email: trimmedEmail, password });
+        ? await supabase.auth.signUp({ email: trimmedEmail, password, ...authOptions })
+        : await supabase.auth.signInWithPassword({ email: trimmedEmail, password, ...authOptions });
 
     if (error) {
       setStatus("error");
@@ -166,9 +189,17 @@ function AuthForm() {
               className="w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-ink"
             />
           )}
+          {TURNSTILE_SITE_KEY && (
+            <TurnstileWidget
+              key={mode}
+              siteKey={TURNSTILE_SITE_KEY}
+              onVerify={setCaptchaToken}
+              onExpire={() => setCaptchaToken(null)}
+            />
+          )}
           <button
             type="submit"
-            disabled={status === "submitting"}
+            disabled={status === "submitting" || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}
             className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
           >
             {status === "submitting"

@@ -29,13 +29,22 @@ const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL
 // being framed or having its forms/base URI hijacked — it just doesn't
 // fully close inline-script-injection XSS the way a nonce-based policy
 // would. Revisit if that stronger guarantee becomes worth the migration.
+// challenges.cloudflare.com (added alongside the TurnstileWidget component,
+// same day) — found the same way as the va.vercel-scripts.com entry above:
+// by actually loading /login with NEXT_PUBLIC_TURNSTILE_SITE_KEY set to
+// Cloudflare's public test key and reading the resulting CSP violation,
+// not by assuming what Turnstile needs. Two separate directives are
+// required, not just script-src: Turnstile loads its own JS from this
+// origin AND renders its interactive challenge inside an iframe from the
+// same origin, which script-src alone does not cover.
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com",
+  "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://challenges.cloudflare.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
   `connect-src 'self'${supabaseOrigin ? ` ${supabaseOrigin}` : ""}`,
+  "frame-src https://challenges.cloudflare.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
