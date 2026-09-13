@@ -2,20 +2,29 @@ import { NextResponse } from "next/server";
 import { buildVerdictText } from "@/lib/ai-verdict";
 import { computeStats } from "@/lib/priceStats";
 import { resolvePriceRecord } from "@/lib/priceRecordUpdate";
+import { cardShardIndex } from "@/lib/cardSharding";
 import { errorMessage } from "@/lib/errorMessage";
 import { adminClient } from "@/lib/supabase/admin";
 import { sleep } from "@/lib/sleep";
 
-// Vercel Hobby caps function duration at 60s by default (300s if Fluid
-// Compute is enabled on the project) and Pro at up to 800s. 378 cards at
-// ~1.2s/request takes ~450s, which exceeds even Hobby+Fluid Compute. Rather
-// than assume a paid plan, this route time-boxes itself: it processes cards
-// oldest-updated-first and stops safely before the deadline, so a Hobby
-// deployment still runs correctly (just fewer cards per invocation, with
-// the remainder picked up automatically on the next daily run since it
-// always resumes with whichever cards have gone longest without an
-// update). Bump SAFETY_MARGIN_MS down / maxDuration up once on Vercel Pro
-// to cover more cards per run.
+// Vercel Hobby caps function duration at 300s (confirmed via Vercel's own
+// docs, 2026-09-13 — fluid compute is on by default). 844 'real' cards at
+// ~1.2s/request takes far longer than that in one invocation. This route
+// still time-boxes itself (processes cards oldest-updated-first within its
+// shard and stops safely before the deadline) as a last-resort safety net,
+// but the real fix for "the whole catalog needs several days to cycle
+// through" is sharding, not a bigger time budget: Hobby limits how often
+// ANY ONE cron job can fire (once/day), but not how many separate cron
+// jobs a project may have (100/project, confirmed via Vercel's docs) — so
+// vercel.json defines several daily cron entries against this SAME route,
+// each passing a different `shard` query param, at different hours. Every
+// card is deterministically assigned to exactly one shard (see
+// cardSharding.ts) and is therefore still only fetched once per day
+// overall — no change to the total daily request volume or the "considerate
+// rate limit" commitment to onepiece-card-atari.jp, just spread across more
+// invocations instead of one that can't finish. Omitting shard/shards
+// entirely (e.g. a manual/local invocation) processes every matching card,
+// same as before this feature existed.
 export const maxDuration = 290; // seconds — stay under Hobby+Fluid Compute's 300s ceiling
 export const dynamic = "force-dynamic";
 
@@ -66,6 +75,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const limit = limitParam ? Number(limitParam) : null;
+  // shard/shards (added 2026-09-13 — see cardSharding.ts and this route's
+  // header comment): both must be provided together to actually shard;
+  // either one alone is treated as "no sharding" (process every matching
+  // card), which is also what a manual/local invocation with neither
+  // param gets, unchanged from before this feature existed.
+  const shardParam = url.searchParams.get("shard");
+  const shardsParam = url.searchParams.get("shards");
+  const shard = shardParam !== null && shardsParam !== null ? Number(shardParam) : null;
+  const shardCount = shardParam !== null && shardsParam !== null ? Number(shardsParam) : null;
 
   // oldest-updated-first: if a single run can't cover every card within
   // the time budget, the cards it skips this time are exactly the ones
@@ -92,17 +110,20 @@ export async function GET(request: Request) {
   // exist rather than rejecting the request the way naming it explicitly
   // would — same pattern check-watchlist/route.ts already uses for
   // condition_was_met.
-  let query = supabase
+  // No DB-level .limit() here even when `limit` is set — sharding filters
+  // in JS below, after the full oldest-updated-first list is in hand, so a
+  // DB-level limit would risk taking `limit` cards that all happen to land
+  // outside this shard and returning zero work done. 844 rows is well
+  // under PostgREST's 1000-row default cap either way.
+  const { data: allCards, error: cardsErr } = await supabase
     .from("cards")
     .select("*")
     .not("source_url", "is", null)
     .eq("data_quality", "real")
     .order("updated_at", { ascending: true })
     .abortSignal(AbortSignal.timeout(DB_TIMEOUT_MS));
-  if (limit) query = query.limit(limit);
-  const { data: cards, error: cardsErr } = await query;
 
-  if (cardsErr || !cards) {
+  if (cardsErr || !allCards) {
     return NextResponse.json({ error: cardsErr ? errorMessage(cardsErr) : "no cards" }, { status: 500 });
   }
 
@@ -115,7 +136,15 @@ export async function GET(request: Request) {
   // per-card update below may safely include these fields — including them
   // in an update payload when the columns don't exist would fail the
   // update outright (unlike select("*"), UPDATE must name real columns).
-  const hasPriceRecordColumns = cards.length > 0 && "all_time_high_price" in cards[0];
+  // Computed from the FULL (pre-shard) list so a small/empty shard can
+  // never make this look falsely absent.
+  const hasPriceRecordColumns = allCards.length > 0 && "all_time_high_price" in allCards[0];
+
+  const shardFiltered =
+    shard !== null && shardCount !== null && shardCount > 0
+      ? allCards.filter((c) => cardShardIndex(c.id as string, shardCount) === shard)
+      : allCards;
+  const cards = limit ? shardFiltered.slice(0, limit) : shardFiltered;
 
   // Deliberately UTC, not JST — see the snapshot_date comment in
   // supabase/schema.sql (raised by Codex, 2026-09-12) for why this stays
@@ -312,6 +341,7 @@ export async function GET(request: Request) {
   const syncRunLogged = !syncRunErr;
 
   return NextResponse.json({
+    ...(shard !== null && shardCount !== null ? { shard, shardCount, catalogTotal: allCards.length } : {}),
     total: cards.length,
     success: successCount,
     failed: failCount,

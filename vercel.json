@@ -1,7 +1,27 @@
 {
   "crons": [
     {
-      "path": "/api/cron/refresh-prices",
+      "path": "/api/cron/refresh-prices?shard=0&shards=6",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices?shard=1&shards=6",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices?shard=2&shards=6",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices?shard=3&shards=6",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices?shard=4&shards=6",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/refresh-prices?shard=5&shards=6",
       "schedule": "0 20 * * *"
     },
     {
