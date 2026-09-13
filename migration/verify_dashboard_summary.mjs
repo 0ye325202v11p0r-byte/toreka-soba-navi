@@ -127,8 +127,13 @@ function watchItem(id, cardId, rule) {
 
   // Gainers/losers are scoped to c1/c2/c3 (held or watched AND has a
   // pct_vs_avg30) — c4 is excluded (null pct_vs_avg30, not auto-tracked).
-  assertEqual(s.gainers.map((c) => c.id), ["c1", "c3", "c2"], "S2: gainers sorted descending by pct_vs_avg30 (25, -18, -22)");
-  assertEqual(s.losers.map((c) => c.id), ["c2", "c3", "c1"], "S2: losers sorted ascending by pct_vs_avg30 (-22, -18, 25)");
+  // Also filtered to their own sign (self-review, 2026-09-13, found while
+  // rendering the full dashboard together for the first time): c3 at -18%
+  // must NEVER appear under "📈 値上がり中" just for being the least-
+  // negative of a small set — only c1 (the one genuinely-positive card) is
+  // a gainer here, and both negative cards (c2, c3) are losers.
+  assertEqual(s.gainers.map((c) => c.id), ["c1"], "S2: gainers contains ONLY the genuinely-positive card (c1, +25%) — c3 (-18%) is a loser, not a lesser gainer");
+  assertEqual(s.losers.map((c) => c.id), ["c2", "c3"], "S2: losers contains both negative cards, sorted ascending (-22, -18)");
 
   assertEqual(s.untrackedCount, 1, "S2: exactly one relevant card (c4) is not auto-tracked");
 }
@@ -148,6 +153,28 @@ function watchItem(id, cardId, rule) {
   assertEqual(s.gainers.length, 3, "S3: gainers is capped at 3 even with 4 tracked candidates");
   assertEqual(s.gainers.map((c) => c.id), ["g1", "g2", "g3"], "S3: gainers is the top 3 by pct_vs_avg30");
   assert(!s.gainers.some((c) => c.id === "untracked"), "S3: the null-pct_vs_avg30 card never appears among gainers");
+}
+
+// Scenario 3b (self-review, 2026-09-13 — found while rendering the full
+// dashboard together with realistic data for the first time, not caught by
+// any of this file's earlier per-section scenarios): with very few tracked
+// cards, ALL of them negative, gainers must be EMPTY — not "the 3 least-bad
+// losses," which would render under a "📈 値上がり中" header while every
+// listed card is actually down. Symmetric case for losers when all cards
+// are positive.
+{
+  const cards = [card("d1", { pct_vs_avg30: -5 }), card("d2", { pct_vs_avg30: -30 })];
+  const watchlistItems = cards.map((c, i) => watchItem(`w${i}`, c.id, { type: "price", op: "gte", value: 0 }));
+  const s = buildDashboardSummary([], watchlistItems, cards);
+  assertEqual(s.gainers, [], "S3b: gainers is empty when every tracked card is actually down, never the 'least negative' ones");
+  assertEqual(s.losers.map((c) => c.id), ["d2", "d1"], "S3b: losers still correctly lists both, sorted most-negative first");
+}
+{
+  const cards = [card("u1", { pct_vs_avg30: 5 }), card("u2", { pct_vs_avg30: 30 })];
+  const watchlistItems = cards.map((c, i) => watchItem(`w${i}`, c.id, { type: "price", op: "gte", value: 0 }));
+  const s = buildDashboardSummary([], watchlistItems, cards);
+  assertEqual(s.losers, [], "S3b: symmetric case — losers is empty when every tracked card is actually up");
+  assertEqual(s.gainers.map((c) => c.id), ["u2", "u1"], "S3b: gainers still correctly lists both, sorted most-positive first");
 }
 
 // Scenario 4 (self-review, 2026-09-13 — found while re-checking this

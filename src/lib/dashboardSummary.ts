@@ -150,8 +150,22 @@ export function buildDashboardSummary(
   const trackedCards = relevantCards.filter(
     (c): c is DashboardCardInfo & { pct_vs_avg30: number } => c.pct_vs_avg30 !== null
   );
-  const gainers = [...trackedCards].sort((a, b) => b.pct_vs_avg30 - a.pct_vs_avg30).slice(0, 3);
-  const losers = [...trackedCards].sort((a, b) => a.pct_vs_avg30 - b.pct_vs_avg30).slice(0, 3);
+  // Filtered to their own sign (self-review, 2026-09-13 — found while
+  // rendering the whole dashboard together with realistic data for the
+  // first time): with only a handful of relevant cards, "top 3 by
+  // pct_vs_avg30" with no sign filter let a card down -20% appear under
+  // "📈 値上がり中" simply for being the least-negative of a small set —
+  // factually misleading under that header, not just an edge case. A user
+  // with genuinely no cards currently up (or down) now correctly sees an
+  // empty list for that side rather than a wrong-signed one.
+  const gainers = [...trackedCards]
+    .filter((c) => c.pct_vs_avg30 > 0)
+    .sort((a, b) => b.pct_vs_avg30 - a.pct_vs_avg30)
+    .slice(0, 3);
+  const losers = [...trackedCards]
+    .filter((c) => c.pct_vs_avg30 < 0)
+    .sort((a, b) => a.pct_vs_avg30 - b.pct_vs_avg30)
+    .slice(0, 3);
 
   const untrackedCount = relevantCards.filter((c) => !isAutoTracked(c)).length;
   const staleCard = findStalestTrackedCard(relevantCards, now);
