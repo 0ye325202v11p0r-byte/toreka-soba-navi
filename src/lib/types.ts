@@ -56,6 +56,9 @@ export interface DashboardCardInfo {
   pct_vs_avg30: number | null;
   data_quality: DataQuality | null;
   source_url: string | null;
+  // Added 2026-09-13 (Codex UX review, cycle 2) for price-freshness display
+  // on revisit — see dashboardSummary.ts's staleCard.
+  updated_at: string;
 }
 
 export interface PriceSnapshot {

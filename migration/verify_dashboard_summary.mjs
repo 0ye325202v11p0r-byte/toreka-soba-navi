@@ -55,6 +55,7 @@ function card(id, overrides = {}) {
     pct_vs_avg30: null,
     data_quality: "real",
     source_url: `https://example.invalid/${id}`,
+    updated_at: "2026-09-13T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -219,6 +220,65 @@ function watchItem(id, cardId, rule) {
   assertEqual(s.unrealizedPnl, 0, "S7: unrealizedPnl is 0, not a confident total loss of the full cost basis");
   assertEqual(s.unpricedHoldingsCount, 2, "S7: both held cards are flagged as unpriced");
   assertEqual(s.hasNothing, false, "S7: this user has real transactions, so it's not the brand-new-user empty state");
+}
+
+// Scenario 8 (Codex UX review, 2026-09-13, cycle 2 — dashboard never showed
+// price freshness): a held, auto-tracked card whose updated_at is 3 days
+// old (well past the 36h threshold) must be flagged as staleCard, with the
+// `now` parameter injected for a deterministic result rather than reading
+// the real clock.
+{
+  const now = new Date("2026-09-13T00:00:00.000Z");
+  const cards = [card("c1", { updated_at: "2026-09-10T00:00:00.000Z" })]; // 3 days old
+  const transactions = [txn("c1", "buy", 1, 1000, "2026-01-01")];
+  const s = buildDashboardSummary(transactions, [], cards, now);
+  assertEqual(
+    s.staleCard,
+    { name: "カードc1", updatedAt: "2026-09-10T00:00:00.000Z" },
+    "S8: a held auto-tracked card 3 days stale is flagged as staleCard"
+  );
+}
+
+// Scenario 9: a held card updated 2 hours ago (well within the 36h
+// threshold) must NOT be flagged — staleCard stays null when everything is
+// fresh, so the dashboard doesn't show an alarm for normal operation.
+{
+  const now = new Date("2026-09-13T12:00:00.000Z");
+  const cards = [card("c1", { updated_at: "2026-09-13T10:00:00.000Z" })]; // 2 hours old
+  const transactions = [txn("c1", "buy", 1, 1000, "2026-01-01")];
+  const s = buildDashboardSummary(transactions, [], cards, now);
+  assertEqual(s.staleCard, null, "S9: a card updated 2 hours ago is not flagged as stale");
+}
+
+// Scenario 10: a held card that is NOT auto-tracked (data_quality 'flat')
+// with a very old updated_at must NOT be flagged — such a card is expected
+// to never update (already labeled "not auto-updated" elsewhere), so
+// treating its age as a problem would contradict that label and falsely
+// alarm the user over normal, by-design behavior.
+{
+  const now = new Date("2026-09-13T00:00:00.000Z");
+  const cards = [
+    card("c1", { updated_at: "2026-01-01T00:00:00.000Z", data_quality: "flat", source_url: null }),
+  ];
+  const transactions = [txn("c1", "buy", 1, 1000, "2026-01-01")];
+  const s = buildDashboardSummary(transactions, [], cards, now);
+  assertEqual(s.staleCard, null, "S10: a not-auto-tracked (flat) card is never flagged as stale, regardless of age");
+}
+
+// Scenario 11: two held cards past the threshold — the MOST stale one (not
+// just the first found) must be reported.
+{
+  const now = new Date("2026-09-13T00:00:00.000Z");
+  const cards = [
+    card("c1", { name: "新しい方", updated_at: "2026-09-11T00:00:00.000Z" }), // 2 days old
+    card("c2", { name: "古い方", updated_at: "2026-09-05T00:00:00.000Z" }), // 8 days old
+  ];
+  const transactions = [
+    txn("c1", "buy", 1, 1000, "2026-01-01"),
+    txn("c2", "buy", 1, 1000, "2026-01-01"),
+  ];
+  const s = buildDashboardSummary(transactions, [], cards, now);
+  assertEqual(s.staleCard?.name, "古い方", "S11: the MOST stale card is reported, not just the first one found");
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

@@ -46,13 +46,52 @@ export interface DashboardSummary {
   // must show a caveat rather than presenting those totals as complete
   // whenever this is > 0 (Codex independent review, 2026-09-13).
   unpricedHoldingsCount: number;
+  // The single most stale AUTO-TRACKED relevant card, if its last update is
+  // older than STALE_THRESHOLD_MS — null if every auto-tracked relevant
+  // card is fresh enough, or there are none. Added 2026-09-13 (Codex UX
+  // review, cycle 2): a returning user has no way to tell whether their
+  // holdings' prices are current or several days stale — the dashboard is
+  // the main "did anything change" landing page, but never surfaced this at
+  // all. Deliberately scoped to only auto-tracked cards: a 'flat'/'partial'
+  // card is EXPECTED to never update (already labeled "not auto-updated"
+  // elsewhere), so flagging it here would contradict that label and alarm
+  // the user over normal, by-design behavior.
+  staleCard: StaleCardInfo | null;
   hasNothing: boolean;
+}
+
+export interface StaleCardInfo {
+  name: string;
+  updatedAt: string;
+}
+
+// ~1.5x the daily cron cadence — tolerant of normal timing jitter (the cron
+// doesn't fire at the exact same instant every day) while still catching a
+// genuinely missed or persistently failing update for that specific card.
+const STALE_THRESHOLD_MS = 36 * 60 * 60 * 1000;
+
+function findStalestTrackedCard(
+  relevantCards: DashboardCardInfo[],
+  now: Date
+): StaleCardInfo | null {
+  let stalest: (StaleCardInfo & { ageMs: number }) | null = null;
+  for (const c of relevantCards) {
+    if (!isAutoTracked(c)) continue;
+    const ageMs = now.getTime() - new Date(c.updated_at).getTime();
+    if (ageMs > STALE_THRESHOLD_MS && (!stalest || ageMs > stalest.ageMs)) {
+      stalest = { name: c.name, updatedAt: c.updated_at, ageMs };
+    }
+  }
+  return stalest ? { name: stalest.name, updatedAt: stalest.updatedAt } : null;
 }
 
 export function buildDashboardSummary(
   transactions: Transaction[],
   watchlistItems: WatchlistItem[],
-  cards: DashboardCardInfo[]
+  cards: DashboardCardInfo[],
+  // Injectable for deterministic tests (never a bare `new Date()` used
+  // internally without a way to override it) — real callers simply omit it.
+  now: Date = new Date()
 ): DashboardSummary {
   const pnl = computePnl(transactions);
   const cardById = new Map(cards.map((c) => [c.id, c]));
@@ -96,6 +135,7 @@ export function buildDashboardSummary(
   const losers = [...trackedCards].sort((a, b) => a.pct_vs_avg30 - b.pct_vs_avg30).slice(0, 3);
 
   const untrackedCount = relevantCards.filter((c) => !isAutoTracked(c)).length;
+  const staleCard = findStalestTrackedCard(relevantCards, now);
 
   return {
     currentValue,
@@ -108,6 +148,7 @@ export function buildDashboardSummary(
     losers,
     untrackedCount,
     unpricedHoldingsCount: valuation.unpricedHoldingsCount,
+    staleCard,
     // Checks `transactions.length`, not `pnl.holdings.length` (self-review,
     // 2026-09-13, found while re-checking this feature without Codex's
     // parallel verification): a user who bought and later fully sold

@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import { buildDashboardSummary } from "@/lib/dashboardSummary";
-import { yen, pct, dataQualityLabel } from "@/lib/format";
+import { yen, pct, dataQualityLabel, formatDateTime } from "@/lib/format";
 import type { Transaction, WatchlistItem, DashboardCardInfo } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -80,7 +80,7 @@ export default async function DashboardPage() {
   if (relevantCardIds.length > 0) {
     const { data, error } = await supabase
       .from("cards")
-      .select("id, name, current_price, pct_vs_avg30, data_quality, source_url")
+      .select("id, name, current_price, pct_vs_avg30, data_quality, source_url, updated_at")
       .in("id", relevantCardIds);
     if (error) throw error;
     cards = (data ?? []) as DashboardCardInfo[];
@@ -136,6 +136,13 @@ export default async function DashboardPage() {
           {summary.unpricedHoldingsCount > 0 && (
             <p className="mb-6 text-xs text-ink-faint">
               ⚠️ 保有カードのうち{summary.unpricedHoldingsCount}件は現在価格が未取得のため、上記の保有評価額・含み損益・合計損益の集計に含まれていません（実現損益は影響を受けません）。
+            </p>
+          )}
+
+          {summary.staleCard && (
+            <p className="mb-6 text-xs text-warn">
+              ⚠️ {summary.staleCard.name}の価格が{formatDateTime(summary.staleCard.updatedAt)}
+              から更新されていません。自動更新は通常毎日行われるため、価格が古い可能性があります。
             </p>
           )}
 
