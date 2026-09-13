@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useState } from "react";
 import Script from "next/script";
 
 // Cloudflare Turnstile CAPTCHA (added 2026-09-13, security self-review) —
@@ -51,6 +51,13 @@ export default function TurnstileWidget({
   onExpire: () => void;
 }) {
   const containerId = `turnstile-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  // Cloudflare's script + the widget iframe it renders both take a visible
+  // moment to load, especially on a slow connection — without this, the
+  // container was just blank empty space with no indication anything was
+  // happening (found during a follow-up review, 2026-09-14, not caught
+  // when this component was first shipped since the test key/script loads
+  // near-instantly on localhost).
+  const [rendered, setRendered] = useState(false);
 
   useEffect(() => {
     let widgetId: string | undefined;
@@ -70,6 +77,7 @@ export default function TurnstileWidget({
           "expired-callback": onExpire,
           "error-callback": onExpire,
         });
+        setRendered(true);
       } else {
         setTimeout(tryRender, 100);
       }
@@ -88,6 +96,7 @@ export default function TurnstileWidget({
   return (
     <>
       <Script src="https://challenges.cloudflare.com/turnstile/v0/api.js" strategy="afterInteractive" />
+      {!rendered && <p className="text-sm text-ink-faint">認証ウィジェットを読み込み中…</p>}
       <div id={containerId} />
     </>
   );
