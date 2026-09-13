@@ -234,7 +234,7 @@ export default function WatchlistClient({
   return (
     <div>
       {errorMsg && (
-        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
+        <div role="alert" className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
       )}
 
       {/* Push opt-in (added 2026-09-13) — the whole point of a watchlist is
@@ -260,7 +260,7 @@ export default function WatchlistClient({
         <p className="mb-4 text-xs text-ink-faint">🔔 このブラウザへの通知は有効です。</p>
       )}
       {pushError && (
-        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{pushError}</div>
+        <div role="alert" className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{pushError}</div>
       )}
 
       <form onSubmit={addItem} className="mb-6 rounded-lg border border-border bg-bg-elevated p-4">

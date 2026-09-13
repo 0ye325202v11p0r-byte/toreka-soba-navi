@@ -56,7 +56,7 @@ export default function ResetPasswordPage() {
       <h1 className="mb-4 text-xl font-bold">新しいパスワードを設定</h1>
 
       {status === "done" ? (
-        <div className="rounded-lg bg-good-soft p-4 text-good">
+        <div role="status" className="rounded-lg bg-good-soft p-4 text-good">
           パスワードを更新しました。
           <button
             type="button"
@@ -97,9 +97,9 @@ export default function ResetPasswordPage() {
           >
             {status === "submitting" ? "更新中…" : "パスワードを更新"}
           </button>
-          {status === "mismatch" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
+          {status === "mismatch" && <p role="alert" className="text-sm text-warn">エラー：{errorMsg}</p>}
           {status === "error" && (
-            <p className="text-sm text-warn">
+            <p role="alert" className="text-sm text-warn">
               エラー：{errorMsg}
               <br />
               リンクの有効期限が切れているか、既に使用済みの可能性があります。もう一度パスワード再設定をお試しください。

@@ -216,7 +216,7 @@ export default function PortfolioClient({
       )}
 
       {errorMsg && (
-        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
+        <div role="alert" className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
       )}
 
       <form

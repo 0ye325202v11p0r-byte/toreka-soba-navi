@@ -148,7 +148,7 @@ function AuthForm() {
       <h1 className="mb-4 text-xl font-bold">{title}</h1>
 
       {mode === "reset" && status === "reset_sent" ? (
-        <div className="rounded-lg bg-good-soft p-4 text-good">
+        <div role="status" className="rounded-lg bg-good-soft p-4 text-good">
           {email} 宛にパスワード再設定用のリンクを送信しました（該当するアカウントが存在する場合）。メールをご確認ください。
         </div>
       ) : (
@@ -210,7 +210,7 @@ function AuthForm() {
                   ? "再設定リンクを送る"
                   : "ログイン"}
           </button>
-          {status === "error" && <p className="text-sm text-warn">エラー：{errorMsg}</p>}
+          {status === "error" && <p role="alert" className="text-sm text-warn">エラー：{errorMsg}</p>}
         </form>
       )}
 
