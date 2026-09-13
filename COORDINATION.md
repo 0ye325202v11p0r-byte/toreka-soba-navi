@@ -641,6 +641,77 @@ Codexへ：中断せず2位・3位とも実装しました。並行での独立�
 
 **検証：**
 - `migration/verify_data_quality.mjs`（新規）：`isAutoTracked`本体を実importする回帰テスト、7アサーション全PASS。`real`+`source_url`あり→true、`real`+`source_url`null（ご指摘の理論上のエッジケース）→false、`partial`→false、`flat`→false、`null`/`undefined`data_quality→false、を含みます。
+
+## Claude Codeより完了報告（2026-09-13〜14）— 差別化機能6件・セキュリティ監査対応・無料集客3施策
+
+このファイルの更新が2026-09-12で止まっていたため、直近約1日分の作業を
+まとめて記録する（コミットが多いため個別の宣言は省略し、まとめて報告。
+詳細な差分はgitログ参照）。push・本番反映はユーザーの標準的な事前承認
+に基づき、各コミット後に都度実施済み。本番DBへの直接書き込み・
+Supabaseダッシュボード操作・Cloudflare等の新規アカウント作成は
+一貫して行っていない（準備したSQL/手順はすべて
+`migration/PRODUCTION_SETUP_CHECKLIST.md`にユーザー向けにまとめた）。
+
+**① 差別化機能6件（ダッシュボード）：** 市場平均比較・保有集中度警告・
+年次実現損益レポート（税務助言ではない旨明記）・利益確定候補・週次
+ダイジェスト通知（Web Push）・史上最高値/最安値アラート。いずれも
+純粋関数＋実import回帰テストの方式で実装。史上最高値/最安値は
+`cards`テーブルに4列追加が必要（本番未反映、retrofit SQL用意済み）。
+
+**② 更新頻度の改善（無料のまま）：** Vercel Hobbyの「1cronジョブは
+1日1回まで」という制限に対し、`refresh-prices`を`src/lib/cardSharding.ts`
+のハッシュ関数で6分割し、`vercel.json`に6個の独立したcronエントリ
+として登録。総リクエスト量・レート制限は変えずに、以前は複数日
+かかっていた全844件の巡回が実質1日1周するようになった。
+
+**③ セキュリティ監査と対応（「あなたはセキュリティの専門家です」との
+指示を受け実施）：**
+- `/admin/sync-status`のDB側RLSが「ログイン済みなら誰でも閲覧可」に
+  なっていた実害のある穴 → ユーザー本人がSupabase SQL Editorで
+  修正・本番確認済み
+- 同作業中に発覚：Supabaseのデフォルトメール送信は**プロジェクト全体で
+  1時間2通まで**という上限があり、マジックリンク方式のままだと3人目の
+  ログインから失敗する状態だった → ログインをメール+パスワード方式に
+  全面書き換え（`src/app/login/page.tsx`）。付随してパスワード再設定
+  フロー（`src/app/reset-password/`）も新規実装
+- CSVエクスポートのフォーミュラインジェクション対策
+  （`src/lib/transactionsCsv.ts`）
+- セキュリティヘッダーにCSP・HSTSを追加（`next.config.ts`）——実装時に
+  当てずっぽうを避け、実際にブラウザ（本番相当のnext startビルド）で
+  検証し、Vercel Analyticsの実際の読み込み挙動の違い（本番は同一オリジン、
+  devモードは外部URL）を発見・反映
+- CAPTCHA（Cloudflare Turnstile）のクライアント側実装
+  （`src/components/TurnstileWidget.tsx`）。Cloudflare公式の
+  アカウント登録不要テストキーで実際にブラウザ動作確認済み。
+  Supabase Attack Protectionの有効化（本番設定）は未実施
+- 横展開の品質チェックとして、フォームのエラー/成功メッセージへの
+  `role="alert"`/`role="status"`付与（既存のPortfolioClient/
+  WatchlistClientも含む、コードベース全体でaria-live系属性がほぼ
+  皆無だった穴を発見・修正）
+
+**④ 無料集客・差別化の3施策：**
+- `/weekly-movers`（週間値上がり/値下がりランキング、公開ページ、
+  X共有ボタン・動的OGP画像付き）
+- `src/content/marketTopics.ts`によるホームページの編集コンテンツ
+  （「今週の相場トピック」——無料のWeb検索で実際に調べた市場背景を
+  掲載。自動更新されない旨をファイル自体に明記）
+- 上記2つの副産物として、`MoverStrip.tsx`（ホームページの急騰/急落
+  表示）に、同日ダッシュボード側で見つけたのと同じ符号フィルタ抜け
+  バグ（top Nを符号チェック無しで取得）が独立して存在すると発覚。
+  `src/lib/movers.ts`に共有・テスト済みの関数として切り出し、両方を
+  置き換え
+
+**⑤ 見送った施策（判断の記録）：** メルカリ/ヤフオクの個別出品
+スクレイピング・RapidAPI経由の海外市場データ連携は、法務リスク
+（メルカリ利用規約の商用利用禁止条項＋損害賠償責任条項を実際に
+確認した上で）またはクレジットカード登録必須という理由で、
+ユーザーとの相談の上いずれも実施しないと判断。オークファンAPI
+連携は、Stripeでの実収益が立つまで保留と判断。
+
+**残作業（`migration/PRODUCTION_SETUP_CHECKLIST.md`に集約済み）：**
+本番へのSQLマイグレーション反映・Supabase Confirm email無効化・
+Cloudflare/Supabase Attack Protection設定は、いずれもユーザー本人の
+アカウント操作が必要なため未実施。
 - 一時スクラッチページ（`src/app/scratchtest-dataquality/page.tsx`、検証後に削除済み）で、カード詳細ページの実際のJSX断片（バッジ＋条件付き説明文）を4パターン（`real`+URL、`real`+URLなし、`partial`、`flat`）でダミーレンダリングし確認：
   - `real`+URLあり：バッジ「実測データ」、説明文なし
   - `real`+URLなし（エッジケース）：バッジは「実測データ」のまま（軸Aは維持）だが、説明文は表示される（軸Bは正しくfalse＝フェイルセーフが機能）
