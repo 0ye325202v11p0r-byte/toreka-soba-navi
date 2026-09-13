@@ -173,4 +173,48 @@ function assertEqual(actual, expected, label) {
   assertEqual(withoutFeeField.holdings[0].costBasis, 2000, "T10 cost basis with no fee is the plain quantity*price");
 }
 
+// --- Test 11 (2026-09-13, annual realized-P&L report feature): a single
+// sell produces exactly one realizedEvent, with the correct date/quantity/
+// gain — the per-transaction detail behind the aggregate realizedPnl. ---
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 2, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+    { card_id: "c1", type: "sell", quantity: 2, price_per_unit: 1500, transaction_date: "2026-03-15", created_at: "2026-03-15T00:00:00Z" },
+  ]);
+  assertEqual(result.realizedEvents.length, 1, "T11 exactly one realizedEvent for one sell transaction");
+  assertEqual(result.realizedEvents[0].cardId, "c1", "T11 realizedEvent names the correct card");
+  assertEqual(result.realizedEvents[0].date, "2026-03-15", "T11 realizedEvent uses the sell's own transaction_date");
+  assertEqual(result.realizedEvents[0].quantity, 2, "T11 realizedEvent quantity matches the sell");
+  assertEqual(result.realizedEvents[0].gain, 1000, "T11 realizedEvent gain matches the aggregate realizedPnl for this single sell");
+}
+
+// --- Test 12: a sell that spans TWO buy lots (FIFO crosses a lot boundary)
+// must still produce exactly ONE realizedEvent (one line per sell
+// transaction, not one per lot consumed) — a user recognizes their own
+// sell transactions, not this app's internal lot bookkeeping. ---
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 1, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+    { card_id: "c1", type: "buy", quantity: 1, price_per_unit: 2000, transaction_date: "2026-02-01", created_at: "2026-02-01T00:00:00Z" },
+    { card_id: "c1", type: "sell", quantity: 2, price_per_unit: 1800, transaction_date: "2026-03-01", created_at: "2026-03-01T00:00:00Z" },
+  ]);
+  // gain = (1800-1000) + (1800-2000) = 800 - 200 = 600
+  assertEqual(result.realizedEvents.length, 1, "T12 one sell spanning two lots is still exactly one realizedEvent");
+  assertEqual(result.realizedEvents[0].gain, 600, "T12 the single event's gain combines both consumed lots correctly");
+}
+
+// --- Test 13: multiple sells across different cards/dates each produce
+// their own realizedEvent, and buys never produce one at all. ---
+{
+  const result = computePnl([
+    { card_id: "c1", type: "buy", quantity: 1, price_per_unit: 1000, transaction_date: "2026-01-01", created_at: "2026-01-01T00:00:00Z" },
+    { card_id: "c1", type: "sell", quantity: 1, price_per_unit: 1200, transaction_date: "2026-01-10", created_at: "2026-01-10T00:00:00Z" },
+    { card_id: "c2", type: "buy", quantity: 1, price_per_unit: 500, transaction_date: "2026-02-01", created_at: "2026-02-01T00:00:00Z" },
+    { card_id: "c2", type: "sell", quantity: 1, price_per_unit: 400, transaction_date: "2026-02-15", created_at: "2026-02-15T00:00:00Z" },
+  ]);
+  assertEqual(result.realizedEvents.length, 2, "T13 two sells across two cards produce exactly two realizedEvents (buys never produce one)");
+  const totalFromEvents = result.realizedEvents.reduce((s, e) => s + e.gain, 0);
+  assertEqual(totalFromEvents, result.realizedPnl, "T13 summing all realizedEvents' gains equals the aggregate realizedPnl exactly");
+}
+
 console.log("\nAll pnl.ts logic checks completed.");

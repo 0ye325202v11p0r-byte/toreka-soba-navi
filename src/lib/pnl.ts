@@ -1,4 +1,4 @@
-import type { Transaction, HoldingSummary, PnlSummary } from "./types";
+import type { Transaction, HoldingSummary, PnlSummary, RealizedEvent } from "./types";
 
 interface Lot {
   quantity: number;
@@ -21,6 +21,7 @@ export function computePnl(transactions: Transaction[]): PnlSummary {
   const holdings: HoldingSummary[] = [];
   let realizedPnl = 0;
   let costBasisTotal = 0;
+  const realizedEvents: RealizedEvent[] = [];
 
   for (const [cardId, txns] of byCard) {
     // sort chronologically; when two transactions land on the same date, fall
@@ -64,17 +65,25 @@ export function computePnl(transactions: Transaction[]): PnlSummary {
 
       // consume oldest lots first (FIFO), realize gain/loss per unit sold
       let remainingToSell = quantity;
+      let eventGain = 0;
       while (remainingToSell > 0 && lots.length > 0) {
         const lot = lots[0];
         const consumed = Math.min(lot.quantity, remainingToSell);
-        realizedPnl += consumed * (effectiveProceedsPerUnit - lot.pricePerUnit);
+        const gain = consumed * (effectiveProceedsPerUnit - lot.pricePerUnit);
+        realizedPnl += gain;
+        eventGain += gain;
         lot.quantity -= consumed;
         remainingToSell -= consumed;
         if (lot.quantity === 0) lots.shift();
       }
       // if remainingToSell > 0 here, the ledger sold more than was ever
       // bought (e.g. a transaction predating the ledger) — ignore the excess
-      // rather than inventing a cost basis for it.
+      // rather than inventing a cost basis for it. eventGain still only
+      // reflects the matched portion, same as realizedPnl itself — one
+      // record per sell TRANSACTION (not per lot consumed), so a sell that
+      // spans multiple buy lots still shows up as a single line in the
+      // realized-P&L report a user would actually recognize.
+      realizedEvents.push({ cardId, date: t.transaction_date, quantity, gain: eventGain });
     }
 
     const quantity = lots.reduce((sum, l) => sum + l.quantity, 0);
@@ -86,5 +95,5 @@ export function computePnl(transactions: Transaction[]): PnlSummary {
     }
   }
 
-  return { holdings, realizedPnl, costBasisTotal };
+  return { holdings, realizedPnl, costBasisTotal, realizedEvents };
 }

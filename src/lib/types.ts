@@ -93,10 +93,27 @@ export interface HoldingSummary {
   avgCost: number; // costBasis / quantity
 }
 
+// One sell transaction's realized gain/loss (added 2026-09-13 for the
+// annual realized-P&L report — a plain price-checking site has no notion
+// of a user's own transaction history, so it can never help with this;
+// see taxReport.ts). `quantity` is the full quantity recorded on the sell
+// even if it exceeded what computePnl() could actually match against real
+// lots (see pnl.ts's "ignore the excess" comment) — `gain` reflects only
+// the matched portion, same as realizedPnl itself.
+export interface RealizedEvent {
+  cardId: string;
+  date: string; // the sell transaction's transaction_date
+  quantity: number;
+  gain: number;
+}
+
 export interface PnlSummary {
   holdings: HoldingSummary[];
   realizedPnl: number; // lifetime realized profit/loss from sells
   costBasisTotal: number; // total cost basis of current holdings
+  // Per-sell-transaction detail behind the aggregate realizedPnl above —
+  // needed to group realized gains by year/month for tax-report purposes.
+  realizedEvents: RealizedEvent[];
 }
 
 export type WatchlistAlertRule =

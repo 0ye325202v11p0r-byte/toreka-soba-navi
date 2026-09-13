@@ -5,10 +5,12 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import PortfolioClient from "@/components/PortfolioClient";
 import PortfolioValueChart from "@/components/PortfolioValueChart";
 import HoldingsBreakdownPanel from "@/components/HoldingsBreakdownPanel";
+import AnnualRealizedReport from "@/components/AnnualRealizedReport";
 import SetupNotice from "@/components/SetupNotice";
 import { computePnl } from "@/lib/pnl";
 import { buildPortfolioValueHistory } from "@/lib/portfolioHistory";
 import { buildHoldingsBreakdown } from "@/lib/holdingsBreakdown";
+import { buildAnnualRealizedReport } from "@/lib/taxReport";
 import type { Transaction, DataQuality, PriceSnapshot } from "@/lib/types";
 
 export const metadata: Metadata = {
@@ -164,6 +166,7 @@ export default async function PortfolioPage({
   }
   const valueHistory = buildPortfolioValueHistory(transactions, snapshotsByCard);
   const breakdown = buildHoldingsBreakdown(pnl.holdings, cards);
+  const annualReport = buildAnnualRealizedReport(pnl.realizedEvents);
 
   return (
     <div>
@@ -183,6 +186,7 @@ export default async function PortfolioPage({
           <HoldingsBreakdownPanel byRarity={breakdown.byRarity} bySet={breakdown.bySet} />
         </div>
       )}
+      <AnnualRealizedReport years={annualReport} />
       <PortfolioClient transactions={transactions} cards={cards} pnl={pnl} initialCardId={initialCardId} />
     </div>
   );
