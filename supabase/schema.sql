@@ -221,6 +221,15 @@ create table if not exists public.watchlist_items (
   -- alert_rule example: {"type": "pct_vs_avg30", "op": "lte", "value": -15}
   alert_rule jsonb not null default '{}'::jsonb,
   last_triggered_at timestamptz,
+  -- Added 2026-09-13 (Web Push notifications): last_triggered_at alone
+  -- can't tell check-watchlist whether a condition is NEWLY true this run
+  -- vs. still true from a previous run — it's set whenever the condition
+  -- holds and is never cleared when it later becomes false again (see the
+  -- comment on it in check-watchlist/route.ts). Sending a push every single
+  -- run the condition remains true (e.g. daily for a week) would be spam;
+  -- this column tracks the condition's state as of the LAST check so the
+  -- route can push only on the false->true transition.
+  condition_was_met boolean not null default false,
   created_at timestamptz default now()
 );
 
@@ -243,6 +252,53 @@ create policy "users can update their own watchlist"
 create policy "users can delete their own watchlist items"
   on public.watchlist_items for delete
   using (auth.uid() = user_id);
+
+-- ============ push_subscriptions ============
+-- Browser Web Push subscriptions (added 2026-09-13) — lets check-watchlist
+-- notify a user's device directly the moment a condition is met, instead of
+-- relying on them remembering to reopen /watchlist. Deliberately NOT the
+-- Stripe/Resend "Phase 3/4" subscriptions table above (unfortunate name
+-- collision with the unrelated "subscriptions" table — this one is a
+-- browser PushSubscription object, not a billing subscription). Needs no
+-- external account/API key (unlike Resend) — VAPID keys are generated
+-- locally (see .env.local.example).
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- endpoint uniquely identifies one browser's push subscription (the
+  -- browser vendor's own push service URL) — unique globally, not just per
+  -- user, since the same physical subscription can never belong to two
+  -- different rows.
+  endpoint text not null unique,
+  p256dh text not null,
+  auth_key text not null,
+  created_at timestamptz default now()
+);
+
+create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+create policy "users can view their own push subscriptions"
+  on public.push_subscriptions for select
+  using (auth.uid() = user_id);
+
+create policy "users can insert their own push subscriptions"
+  on public.push_subscriptions for insert
+  with check (auth.uid() = user_id);
+
+create policy "users can delete their own push subscriptions"
+  on public.push_subscriptions for delete
+  using (auth.uid() = user_id);
+
+-- no update policy: a changed subscription is a new endpoint, handled as a
+-- fresh insert (upsert on the endpoint unique constraint) rather than a
+-- mutation of an existing row.
+
+-- no select/delete policy for anon/authenticated beyond "own rows" above —
+-- check-watchlist (service_role) reads every row and deletes stale ones
+-- (410 Gone from the push service) by bypassing RLS entirely, the same
+-- pattern this project already uses for sync_runs/cards writes.
 
 -- ============ subscriptions ============
 -- synced from Stripe webhooks (Phase 3)
@@ -389,6 +445,12 @@ grant select, insert, update, delete on public.transactions to service_role;
 
 grant select, insert, update, delete on public.watchlist_items to authenticated;
 grant select, insert, update, delete on public.watchlist_items to service_role;
+
+-- delete included for authenticated: RLS still restricts it to own rows
+-- (see push_subscriptions policies above); no update grant since the RLS
+-- policies deliberately don't allow updates (see comment above).
+grant select, insert, delete on public.push_subscriptions to authenticated;
+grant select, insert, update, delete on public.push_subscriptions to service_role;
 
 grant select on public.subscriptions to authenticated;
 grant select, insert, update, delete on public.subscriptions to service_role;

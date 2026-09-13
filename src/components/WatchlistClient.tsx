@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { pct, yen, dataQualityLabel, isAutoTracked, formatDateTime } from "@/lib/format";
 import { canSubmitWatchItem } from "@/lib/formValidation";
 import { conditionMet } from "@/lib/watchlistRule";
+import { subscribeToPush } from "@/lib/webPushClient";
 import type { WatchlistItem, WatchlistAlertRule, DataQuality } from "@/lib/types";
 import CardPicker from "./CardPicker";
 
@@ -64,6 +65,88 @@ export default function WatchlistClient({
   const [value, setValue] = useState(-15);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Push notification opt-in (added 2026-09-13) — a device-level setting,
+  // not tied to any one watchlist item, so it lives at the top of this
+  // component rather than per-row. "unknown" until the effect below checks
+  // for an existing subscription, so the button never flashes the wrong
+  // label on first paint.
+  const [pushStatus, setPushStatus] = useState<"unknown" | "off" | "on" | "unsupported">("unknown");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    // The capability check also goes through the same Promise chain as the
+    // subscription lookup (rather than an early setState at the top of the
+    // effect body) — resolving state updates only from within a .then()
+    // callback, never synchronously in the effect body itself.
+    Promise.resolve()
+      .then(() => {
+        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+          return Promise.reject(new Error("unsupported"));
+        }
+        return navigator.serviceWorker.getRegistration();
+      })
+      .then((reg) => reg?.pushManager.getSubscription())
+      .then((sub) => {
+        if (!cancelled) setPushStatus(sub ? "on" : "off");
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setPushStatus(e instanceof Error && e.message === "unsupported" ? "unsupported" : "off");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function enablePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+      const result = await subscribeToPush(vapidKey);
+      if (!result.ok) {
+        setPushError(
+          result.reason === "permission_denied"
+            ? "通知の許可が得られませんでした。ブラウザの設定から通知を許可してください。"
+            : result.reason === "unsupported"
+              ? "このブラウザはプッシュ通知に対応していません。"
+              : "プッシュ通知の設定に失敗しました。もう一度お試しください。"
+        );
+        return;
+      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        setPushError("ログイン状態を確認できませんでした。再度ログインしてください。");
+        return;
+      }
+      // upsert on the endpoint unique constraint — re-enabling on the same
+      // browser (e.g. after clearing the existing subscription) must not
+      // create a duplicate row for the same physical device.
+      const { error } = await supabase.from("push_subscriptions").upsert(
+        {
+          user_id: user.id,
+          endpoint: result.subscription.endpoint,
+          p256dh: result.subscription.p256dh,
+          auth_key: result.subscription.authKey,
+        },
+        { onConflict: "endpoint" }
+      );
+      if (error) {
+        setPushError(`通知の登録に失敗しました：${error.message}`);
+        return;
+      }
+      setPushStatus("on");
+    } catch {
+      setPushError("通信エラーが発生しました。もう一度お試しください。");
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const cardById = new Map(cards.map((c) => [c.id, c]));
   const selectedCard = cardById.get(cardId);
@@ -143,6 +226,32 @@ export default function WatchlistClient({
     <div>
       {errorMsg && (
         <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{errorMsg}</div>
+      )}
+
+      {/* Push opt-in (added 2026-09-13) — the whole point of a watchlist is
+          being told when a condition fires without having to remember to
+          come back and check; without this, "ウォッチリスト" was purely
+          passive. Hidden entirely when the browser can't do Web Push at all
+          (pushStatus stays "unknown" only very briefly on mount, so no
+          flash of the wrong button). */}
+      {pushStatus === "off" && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft p-3 text-sm">
+          <span>🔔 条件が成立したら、このブラウザに通知を送れます。</span>
+          <button
+            type="button"
+            onClick={enablePush}
+            disabled={pushBusy}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
+          >
+            {pushBusy ? "設定中…" : "通知を有効にする"}
+          </button>
+        </div>
+      )}
+      {pushStatus === "on" && (
+        <p className="mb-4 text-xs text-ink-faint">🔔 このブラウザへの通知は有効です。</p>
+      )}
+      {pushError && (
+        <div className="mb-4 rounded-lg bg-warn-soft p-3 text-sm text-warn">{pushError}</div>
       )}
 
       <form onSubmit={addItem} className="mb-6 rounded-lg border border-border bg-bg-elevated p-4">

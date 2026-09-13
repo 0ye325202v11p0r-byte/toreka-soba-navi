@@ -10,6 +10,17 @@ export async function resolve(specifier, context, nextResolve) {
       shortCircuit: true,
     };
   }
+  // Added 2026-09-13 for verify_check_watchlist.mjs's push-notification
+  // scenarios — without this, importing check-watchlist/route.ts (which
+  // imports the real "web-push" package) would resolve the actual library,
+  // and any test that reaches sendNotification() would attempt a real
+  // network call.
+  if (specifier === "web-push") {
+    return {
+      url: new URL("./web_push_mock.mjs", import.meta.url).href,
+      shortCircuit: true,
+    };
+  }
   if (specifier.startsWith("@/")) {
     const rel = specifier.slice(2);
     return {

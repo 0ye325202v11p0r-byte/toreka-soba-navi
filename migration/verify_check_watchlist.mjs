@@ -35,6 +35,14 @@ register("./_test_mocks/loader.mjs", import.meta.url);
 process.env.CRON_SECRET = "test-secret";
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.invalid";
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
+// NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are deliberately left
+// UNSET in this file — route.ts reads them once at module load, so a
+// single process can only ever exercise one of "configured" / "not
+// configured". This file's scenarios all predate the push feature and
+// don't care about it either way, so they exercise the "not configured"
+// path (push.skippedReason: "vapid_not_configured") by simply not setting
+// these — see verify_check_watchlist_push.mjs for the "configured, actually
+// sends notifications" scenarios in their own separate process.
 
 // ---- virtual clock ----
 let virtualNow = 1_000_000_000;

@@ -110,3 +110,14 @@ export interface WatchlistItem {
   alert_rule: WatchlistAlertRule;
   last_triggered_at: string | null;
 }
+
+// A browser Web Push subscription (added 2026-09-13, watchlist push
+// notifications) — one row per subscribed device/browser, not per user (a
+// user with two browsers has two rows).
+export interface PushSubscriptionRow {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth_key: string;
+}
