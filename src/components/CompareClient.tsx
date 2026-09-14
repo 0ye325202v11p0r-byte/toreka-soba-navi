@@ -97,7 +97,20 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshotsByCard
+    // and supabase are deliberately excluded (self-review, 2026-09-15, this
+    // was the one eslint-disable in the codebase without an inline
+    // rationale — the other two already have one). supabase: createClient()
+    // returns a fresh reference every render, so including it would re-run
+    // this effect on every render regardless of what actually changed.
+    // snapshotsByCard: this effect is the ONLY thing that writes it
+    // (setSnapshotsByCard below), so depending on it would re-trigger the
+    // effect every time it finishes loading — at best a redundant re-check
+    // of an already-empty toLoad, at worst a loop. Reading it via closure
+    // instead is safe because React re-renders (and rebuilds this closure)
+    // before this effect can run again, so the read always reflects the
+    // latest committed state at the point selected/retryNonce actually
+    // changes — never a genuinely stale value.
   }, [selected, retryNonce]);
 
   function toggle(id: string) {
