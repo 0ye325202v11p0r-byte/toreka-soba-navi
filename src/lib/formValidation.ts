@@ -15,7 +15,14 @@ export function canSubmitTransaction(params: {
   cardId: string;
   isKnownCard: boolean;
   pricePerUnit: number | "";
-  quantity: number;
+  // "" means "not entered yet" — the input starts empty (self-review,
+  // 2026-09-14) rather than pre-filled with 1. A number input's existing
+  // text isn't auto-selected on focus, so a pre-filled "1" let a real
+  // keystroke land next to it instead of replacing it (typing "2" against
+  // a pre-filled "1" silently produced a quantity of 12) with nothing to
+  // catch the mistake, since 1 was already a validly-submittable quantity.
+  // Reproduced live in browser testing, not just reasoned about.
+  quantity: number | "";
   // Optional (added 2026-09-13 with fee-aware P&L) — "" or omitted means
   // "not entered," which is valid and defaults to 0 on submit, exactly the
   // same as every transaction recorded before this field existed. Only a
@@ -33,7 +40,7 @@ export function canSubmitTransaction(params: {
   // ("invalid input syntax for type integer") surfaced verbatim to the user
   // instead of a Japanese validation message — found via self-review,
   // 2026-09-12.
-  if (!Number.isInteger(quantity) || quantity < 1) return false;
+  if (quantity === "" || !Number.isInteger(quantity) || quantity < 1) return false;
   // Matches the DB's `check (fee >= 0)` — catches a bad value here with a
   // friendly message instead of a raw Postgres constraint error, same
   // reasoning as the quantity check above.

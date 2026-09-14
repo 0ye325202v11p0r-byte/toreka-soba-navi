@@ -80,6 +80,16 @@ assertEqual(
   "T6 quantity 0 blocks submission"
 );
 
+// Quantity still "" (not typed yet) blocks submission — the input now
+// starts empty rather than pre-filled with 1 (self-review, 2026-09-14; see
+// canSubmitTransaction's own comment in formValidation.ts for the reproduced
+// data-entry bug a pre-filled 1 allowed).
+assertEqual(
+  canSubmitTransaction({ cardId: "c1", isKnownCard: true, pricePerUnit: 500, quantity: "" }),
+  false,
+  "T6z empty-string quantity (not yet typed) blocks submission"
+);
+
 // Fractional quantity blocks submission — transactions.quantity is a
 // Postgres `integer` column (supabase/schema.sql) with no client-side
 // enforcement elsewhere (the quantity <input> has no `step`, so a browser

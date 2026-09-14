@@ -46,7 +46,10 @@ export default function PortfolioClient({
   // quick-add link, not an arbitrary default.
   const [cardId, setCardId] = useState(initialCardId ?? "");
   const [type, setType] = useState<TransactionType>("buy");
-  const [quantity, setQuantity] = useState(1);
+  // Starts "" (not a pre-filled 1), matching pricePerUnit/fee below — see
+  // canSubmitTransaction's comment in formValidation.ts for why a pre-filled
+  // default here was a real, reproduced data-entry bug.
+  const [quantity, setQuantity] = useState<number | "">("");
   const [pricePerUnit, setPricePerUnit] = useState<number | "">("");
   const [fee, setFee] = useState<number | "">("");
   const [date, setDate] = useState(todayInTokyo);
@@ -135,6 +138,7 @@ export default function PortfolioClient({
         setErrorMsg(`記録に失敗しました：${error.message}`);
         return;
       }
+      setQuantity("");
       setPricePerUnit("");
       setFee("");
       // "無料でまず試す" 方針への転換（2026-09-13）に伴い追加 — このアプリ
@@ -247,8 +251,10 @@ export default function PortfolioClient({
             type="number"
             min={1}
             step={1}
+            required
             value={quantity}
-            onChange={(e) => setQuantity(Number(e.target.value))}
+            onChange={(e) => setQuantity(e.target.value === "" ? "" : Number(e.target.value))}
+            placeholder="枚数"
             className="w-20 rounded-md border border-border bg-bg px-2 py-1.5"
           />
         </div>
