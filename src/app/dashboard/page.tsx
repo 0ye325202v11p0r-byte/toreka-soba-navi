@@ -315,9 +315,13 @@ function StatBox({
   // treatment (2026-09-14, user design feedback) — 合計損益 is the one
   // number on this page a returning user checks first. Bright tone colors
   // (not the calm text-good/text-warn) since spotlight-bg is always dark in
-  // both light and dark mode — see globals.css's spotlight-bg comment.
+  // both light and dark mode — see globals.css's spotlight-good/-warn
+  // tokens (self-review: these are tokens, not hardcoded hex, specifically
+  // because spotlight-warn needs a different value per mode to keep WCAG AA
+  // contrast against spotlight-bg's own per-mode color — see that token's
+  // comment for the actual contrast-ratio math).
   if (emphasize) {
-    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-[#4fb58b]" : "text-[#e0794a]";
+    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-spotlight-good" : "text-spotlight-warn";
     return (
       <div className="rounded-lg bg-spotlight-bg p-3">
         <div className="text-xs text-spotlight-fg">{label}</div>

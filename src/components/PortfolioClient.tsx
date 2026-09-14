@@ -417,9 +417,10 @@ function StatBox({
   // treatment (2026-09-14, user design feedback) — same pattern as
   // dashboard/page.tsx's StatBox; kept as a separate copy here per this
   // project's existing convention for these two (see that file's own
-  // StatBox for the full rationale on the bright tone colors).
+  // StatBox for the full rationale on the bright tone colors and why
+  // spotlight-good/-warn are tokens rather than hardcoded hex).
   if (emphasize) {
-    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-[#4fb58b]" : "text-[#e0794a]";
+    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-spotlight-good" : "text-spotlight-warn";
     return (
       <div className="rounded-lg bg-spotlight-bg p-3">
         <div className="text-xs text-spotlight-fg">{label}</div>

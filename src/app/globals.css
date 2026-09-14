@@ -33,6 +33,23 @@
      still read as "elevated" rather than trying to be darker-than-dark). */
   --spotlight-bg: #1e2a38;
   --spotlight-fg: #f0be5c;
+  /* Tone colors for text inside a spotlight box (self-review, 2026-09-14 —
+     computing actual WCAG contrast ratios by hand rather than trusting a
+     screenshot, after the user pushed back on "is this really finished").
+     Both values were previously hardcoded as arbitrary Tailwind values
+     (text-[#4fb58b]/text-[#e0794a]) duplicated across three files, using
+     the SAME hex in both light and dark mode even though spotlight-bg
+     itself changes color per mode — spotlight-warn against the light-mode
+     navy bg (#1e2a38) computes to ~4.85:1 (passes WCAG AA's 4.5:1), but the
+     identical hex against the dark-mode amber bg (#3a2f1a) computes to only
+     ~4.37:1 — a real, if narrow, AA failure for text this size (18px bold
+     sits right at the "large text" 3:1 exemption's boundary, not safely
+     past it). spotlight-good passes AA in both modes as-is (~5.8:1 /
+     ~5.2:1), so only spotlight-warn needs a dark-mode-specific value.
+     Kept as tokens (not left as literals) so the fix applies once here
+     instead of being re-verified per call site. */
+  --spotlight-good: #4fb58b;
+  --spotlight-warn: #e0794a;
 }
 
 @theme inline {
@@ -57,6 +74,8 @@
   --color-rarity-sr: var(--rarity-sr);
   --color-spotlight-bg: var(--spotlight-bg);
   --color-spotlight-fg: var(--spotlight-fg);
+  --color-spotlight-good: var(--spotlight-good);
+  --color-spotlight-warn: var(--spotlight-warn);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -82,6 +101,12 @@
     --rarity-sr: #e58f6e;
     --spotlight-bg: #3a2f1a;
     --spotlight-fg: #f0be5c;
+    --spotlight-good: #4fb58b;
+    /* Brightened from the light-mode #e0794a — that value only computes to
+       ~4.37:1 against this mode's spotlight-bg (#3a2f1a), just under WCAG
+       AA's 4.5:1 for text this size. #f2966a computes to ~5.84:1. See the
+       token's own comment above for the full contrast-ratio workings. */
+    --spotlight-warn: #f2966a;
   }
 }
 
@@ -107,6 +132,8 @@
   --rarity-sr: #e58f6e;
   --spotlight-bg: #3a2f1a;
   --spotlight-fg: #f0be5c;
+  --spotlight-good: #4fb58b;
+  --spotlight-warn: #f2966a;
 }
 
 body {

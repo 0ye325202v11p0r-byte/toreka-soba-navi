@@ -40,7 +40,7 @@ export default function TodaysPicks({ cards }: { cards: MarketListCard[] }) {
             </div>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="font-mono font-bold text-white">{yen(c.current_price)}</span>
-              <span className="font-mono font-bold text-[#4fb58b]">{pct(c.pct_vs_avg30)}</span>
+              <span className="font-mono font-bold text-spotlight-good">{pct(c.pct_vs_avg30)}</span>
             </div>
           </Link>
         ))}
