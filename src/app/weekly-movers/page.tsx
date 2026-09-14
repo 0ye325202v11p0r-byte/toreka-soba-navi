@@ -80,6 +80,13 @@ export default async function WeeklyMoversPage() {
   );
 }
 
+// Spotlight-container treatment (2026-09-14, consistency follow-up —
+// MoverStrip.tsx's own version of this exact component got the same
+// upgrade for the same reason; see its comment). This page's whole content
+// IS the ranking, so the container getting the bold treatment (rather than
+// each of the 10 rows individually, which would be too heavy) matches how
+// the rest of the app now reserves this look for a screen's headline
+// content.
 function RankingList({
   title,
   items,
@@ -90,20 +97,20 @@ function RankingList({
   tone: "good" | "warn";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated p-4">
-      <h2 className="mb-3 text-sm font-bold text-ink-muted">{title}</h2>
+    <div className="rounded-lg bg-spotlight-bg p-4">
+      <h2 className="mb-3 text-sm font-bold text-spotlight-fg">{title}</h2>
       {items.length === 0 ? (
-        <p className="text-sm text-ink-faint">対象カードがありません。</p>
+        <p className="text-sm text-white/60">対象カードがありません。</p>
       ) : (
         <ol className="space-y-2">
           {items.map((c, i) => (
             <li key={c.id}>
-              <Link href={`/cards/${c.id}`} className="flex items-center justify-between text-sm hover:text-accent">
+              <Link href={`/cards/${c.id}`} className="flex items-center justify-between text-sm text-white/90 hover:text-spotlight-fg">
                 <span className="truncate">
-                  <span className="mr-2 text-ink-faint">{i + 1}.</span>
+                  <span className="mr-2 text-white/50">{i + 1}.</span>
                   {c.name}
                 </span>
-                <span className={`ml-2 shrink-0 font-mono ${tone === "good" ? "text-good" : "text-warn"}`}>
+                <span className={`ml-2 shrink-0 font-mono font-bold ${tone === "good" ? "text-spotlight-good" : "text-spotlight-warn"}`}>
                   {pct(c.pct_vs_avg30)}
                 </span>
               </Link>

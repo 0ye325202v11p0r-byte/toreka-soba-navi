@@ -338,6 +338,13 @@ function StatBox({
   );
 }
 
+// Spotlight-container treatment (2026-09-14, consistency follow-up —
+// MoverStrip.tsx and weekly-movers/page.tsx's identical copies of this same
+// gainers/losers list pattern got the same upgrade; leaving this third copy
+// calm would have been a new inconsistency of its own). Sits below the
+// already-spotlighted 合計損益 StatBox above — both serve the same "notable,
+// worth noticing" theme, so keeping them visually consistent with each
+// other reads as one cohesive highlights section, not competing accents.
 function MoverBox({
   title,
   items,
@@ -348,20 +355,20 @@ function MoverBox({
   tone: "good" | "warn";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated p-3">
-      <div className="mb-2 text-xs font-semibold text-ink-muted">{title}</div>
+    <div className="rounded-lg bg-spotlight-bg p-3">
+      <div className="mb-2 text-xs font-semibold text-spotlight-fg">{title}</div>
       {items.length === 0 ? (
-        <p className="text-sm text-ink-faint">対象カードがありません。</p>
+        <p className="text-sm text-white/60">対象カードがありません。</p>
       ) : (
         <div className="space-y-1">
           {items.map((c) => (
             <Link
               key={c.id}
               href={`/cards/${c.id}`}
-              className="flex items-center justify-between text-sm hover:text-accent"
+              className="flex items-center justify-between text-sm text-white/90 hover:text-spotlight-fg"
             >
               <span className="truncate">{c.name}</span>
-              <span className={`ml-2 shrink-0 font-mono ${tone === "good" ? "text-good" : "text-warn"}`}>
+              <span className={`ml-2 shrink-0 font-mono font-bold ${tone === "good" ? "text-spotlight-good" : "text-spotlight-warn"}`}>
                 {pct(c.pct_vs_avg30)}
               </span>
             </Link>

@@ -28,6 +28,13 @@ export default function MoverStrip({ cards }: { cards: MarketListCard[] }) {
   );
 }
 
+// Spotlight-container treatment (2026-09-14, consistency follow-up to
+// TodaysPicks — the user flagged that this section sat right next to
+// TodaysPicks' bold cards on the same homepage while still looking like the
+// old calm style). Unlike TodaysPicks, each row isn't boxed individually —
+// this is a ranked list of 5, and 5 stacked dark cards reads as heavier/
+// busier than one dark container holding a compact list, so only the
+// container gets the spotlight treatment here.
 function MoverList({
   title,
   items,
@@ -38,20 +45,20 @@ function MoverList({
   tone: "good" | "warn";
 }) {
   return (
-    <div className="rounded-lg border border-border bg-bg-elevated p-3">
-      <div className="mb-2 text-xs font-semibold text-ink-muted">{title}</div>
+    <div className="rounded-lg bg-spotlight-bg p-3">
+      <div className="mb-2 text-xs font-semibold text-spotlight-fg">{title}</div>
       {items.length === 0 ? (
-        <p className="text-sm text-ink-faint">対象カードがありません。</p>
+        <p className="text-sm text-white/60">対象カードがありません。</p>
       ) : (
       <div className="space-y-1">
         {items.map((c) => (
           <Link
             key={c.id}
             href={`/cards/${c.id}`}
-            className="flex items-center justify-between text-sm hover:text-accent"
+            className="flex items-center justify-between text-sm text-white/90 hover:text-spotlight-fg"
           >
             <span className="truncate">{c.name}</span>
-            <span className={`ml-2 shrink-0 font-mono ${tone === "good" ? "text-good" : "text-warn"}`}>
+            <span className={`ml-2 shrink-0 font-mono font-bold ${tone === "good" ? "text-spotlight-good" : "text-spotlight-warn"}`}>
               {pct(c.pct_vs_avg30)}
             </span>
           </Link>
