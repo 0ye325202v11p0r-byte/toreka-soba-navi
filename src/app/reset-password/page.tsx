@@ -30,6 +30,12 @@ export default function ResetPasswordPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Same busy-race guard as login/page.tsx's handleSubmit and
+    // PortfolioClient.tsx's addTransaction (self-review, 2026-09-15) —
+    // applied here too for consistency even though a slipped-through double
+    // submit is low-stakes (just updateUser() with the same password
+    // twice), not because this specific case is dangerous.
+    if (status === "submitting") return;
     if (password !== passwordConfirm) {
       setStatus("mismatch");
       setErrorMsg("パスワードが一致しません。");

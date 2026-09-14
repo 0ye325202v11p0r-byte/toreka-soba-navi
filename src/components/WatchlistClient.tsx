@@ -168,6 +168,13 @@ export default function WatchlistClient({
 
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
+    // Re-checks busy itself (self-review, 2026-09-15 — see
+    // PortfolioClient.tsx's addTransaction for the full race-condition
+    // rationale this mirrors): the button's disabled= only takes effect
+    // once React commits the re-render after setBusy(true) below, so a
+    // second click landing before that commit isn't guaranteed to be
+    // blocked by the DOM attribute alone.
+    if (busy) return;
     // Re-checks the same rule the submit button's disabled= already
     // enforces — belt and suspenders against implicit form submission
     // bypassing a disabled button.

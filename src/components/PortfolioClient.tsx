@@ -72,6 +72,17 @@ export default function PortfolioClient({
 
   async function addTransaction(e: React.FormEvent) {
     e.preventDefault();
+    // Re-checks busy itself, not just the fields the button's disabled=
+    // already gates on (self-review, 2026-09-15) — the button's disabled
+    // attribute only takes effect once React commits the re-render after
+    // setBusy(true) below, which is not necessarily before a second click
+    // (or a fast double-tap, or Enter fired again) reaches this handler.
+    // Without this, a submission that slips through the race inserts a
+    // second, genuinely duplicate transaction row — this function has no
+    // other guard against running twice concurrently. Same "belt and
+    // suspenders against a disabled button being bypassed" reasoning as the
+    // field re-checks below, just covering the one condition those don't.
+    if (busy) return;
     // Re-checks the same rule the submit button's disabled= already
     // enforces — belt and suspenders against implicit form submission
     // (e.g. Enter in the quantity/price/date fields) bypassing a disabled

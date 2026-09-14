@@ -76,6 +76,15 @@ function AuthForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // Re-checks status itself (self-review, 2026-09-15 — same race as
+    // PortfolioClient.tsx's addTransaction: the button's disabled= only
+    // takes effect once React commits the re-render after setStatus
+    // ("submitting") below). Worth guarding here specifically because
+    // "reset" mode spends this project's scarce, actively-rationed email
+    // quota (see this file's own comment on Supabase's 2-emails/project/
+    // hour default) — a slipped-through double submit in that mode wastes
+    // a second email for nothing, not just an annoying duplicate request.
+    if (status === "submitting") return;
     // Same reasoning as the pre-password version: trimmed before sending,
     // not just relied on <input type="email">, so a stray leading/trailing
     // space can never split one person's account across two rows or break
