@@ -140,9 +140,9 @@ Supabaseへの認証リクエストが正常に通ることまで確認済み。
 
 ### 4. 遊々亭（yuyu-tei）の日次自動追跡（カタログの74%）
 
-**現状：** `refresh-yuyutei-prices`のcronはコード完成済みだが、本番への
-デプロイ自体（`vercel.json`のcronエントリ・関連コミット）が一切
-反映されていない可能性がある。
+**現状（2026-09-14更新）：** `refresh-yuyutei-prices`のcronはコード完成
+済みで、`vercel.json`のcronエントリ含め`git push`済み（`origin/main`との
+差分なしを確認済み）。残るはSupabase側のテーブル作成のみ。
 
 **手順：** `migration/README.md`の「遊々亭の日次自動追跡を本番で有効に
 する手順」セクション（15-23行目）を参照——`yuyutei_sync_runs`テーブルの

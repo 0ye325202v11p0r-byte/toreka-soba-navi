@@ -26,11 +26,13 @@ import { sleep } from "@/lib/sleep";
 //
 // Built 2026-09-12 following the user's explicit legal-risk acceptance for
 // the yuyu-tei source (see README.md "遊々亭ソースの法務リスクについて" /
-// COORDINATION.md). NOT deployed as of this commit — see
-// migration/README.md and COORDINATION.md for the manual steps (Supabase
-// SQL Editor: create the yuyutei_sync_runs table; Vercel: this needs an
-// actual `git push` + the vercel.json cron entry to take effect) required
-// before this runs for real. Written and tested locally/via mocks only.
+// COORDINATION.md). Code + the vercel.json cron entry are pushed to
+// origin/main (confirmed 2026-09-14 via `git diff origin/main`) — the only
+// remaining manual step is the Supabase SQL Editor: create the
+// yuyutei_sync_runs table (see migration/README.md). Until that table
+// exists, the price-refresh work above still runs correctly; only the final
+// run-log insert below fails (caught, reported as syncRunLogged: false, not
+// thrown — see that insert's own comment).
 export const maxDuration = 290; // seconds — stay under Vercel Hobby+Fluid Compute's 300s ceiling
 export const dynamic = "force-dynamic";
 
