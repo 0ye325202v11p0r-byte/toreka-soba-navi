@@ -413,9 +413,23 @@ function StatBox({
   tone?: number;
   emphasize?: boolean;
 }) {
+  // emphasize upgraded from a subtle accent ring to the full spotlight
+  // treatment (2026-09-14, user design feedback) — same pattern as
+  // dashboard/page.tsx's StatBox; kept as a separate copy here per this
+  // project's existing convention for these two (see that file's own
+  // StatBox for the full rationale on the bright tone colors).
+  if (emphasize) {
+    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-[#4fb58b]" : "text-[#e0794a]";
+    return (
+      <div className="rounded-lg bg-spotlight-bg p-3">
+        <div className="text-xs text-spotlight-fg">{label}</div>
+        <div className={`mt-1 font-mono text-lg font-bold ${toneClass}`}>{value}</div>
+      </div>
+    );
+  }
   const toneClass = tone === undefined ? "" : tone >= 0 ? "text-good" : "text-warn";
   return (
-    <div className={`rounded-lg border border-border bg-bg-elevated p-3 ${emphasize ? "ring-1 ring-accent" : ""}`}>
+    <div className="rounded-lg border border-border bg-bg-elevated p-3">
       <div className="text-xs text-ink-muted">{label}</div>
       <div className={`mt-1 font-mono text-lg ${toneClass}`}>{value}</div>
     </div>

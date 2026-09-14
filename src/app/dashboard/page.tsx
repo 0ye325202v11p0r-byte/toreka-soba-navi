@@ -311,9 +311,23 @@ function StatBox({
   tone?: number;
   emphasize?: boolean;
 }) {
+  // emphasize upgraded from a subtle accent ring to the full spotlight
+  // treatment (2026-09-14, user design feedback) — 合計損益 is the one
+  // number on this page a returning user checks first. Bright tone colors
+  // (not the calm text-good/text-warn) since spotlight-bg is always dark in
+  // both light and dark mode — see globals.css's spotlight-bg comment.
+  if (emphasize) {
+    const toneClass = tone === undefined ? "text-white" : tone >= 0 ? "text-[#4fb58b]" : "text-[#e0794a]";
+    return (
+      <div className="rounded-lg bg-spotlight-bg p-3">
+        <div className="text-xs text-spotlight-fg">{label}</div>
+        <div className={`mt-1 font-mono text-lg font-bold ${toneClass}`}>{value}</div>
+      </div>
+    );
+  }
   const toneClass = tone === undefined ? "" : tone >= 0 ? "text-good" : "text-warn";
   return (
-    <div className={`rounded-lg border border-border bg-bg-elevated p-3 ${emphasize ? "ring-1 ring-accent" : ""}`}>
+    <div className="rounded-lg border border-border bg-bg-elevated p-3">
       <div className="text-xs text-ink-muted">{label}</div>
       <div className={`mt-1 font-mono text-lg ${toneClass}`}>{value}</div>
     </div>

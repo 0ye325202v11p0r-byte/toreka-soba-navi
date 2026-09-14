@@ -261,6 +261,7 @@ export default async function CardDetailPage({
               ? `30日安値${yen(c.low30)}から+${yen(c.change_amt30)}`
               : undefined
           }
+          spotlight
         />
         <StatBox label="30日平均" value={yen(c.avg30)} />
         <StatBox label="90日平均" value={`${yen(c.avg90)}（${pct(c.pct_vs_avg90)}）`} />
@@ -343,7 +344,31 @@ export default async function CardDetailPage({
   );
 }
 
-function StatBox({ label, value, hint }: { label: string; value: string; hint?: string }) {
+// `spotlight` (2026-09-14, user design feedback): reserved for 現在価格
+// specifically — the one number on this page a viewer actually came for —
+// rather than applied to every StatBox, matching the "accent the headline
+// number only" approach used across the app (TodaysPicks, dashboard/
+// portfolio's 合計損益).
+function StatBox({
+  label,
+  value,
+  hint,
+  spotlight,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  spotlight?: boolean;
+}) {
+  if (spotlight) {
+    return (
+      <div className="rounded-lg bg-spotlight-bg p-3">
+        <div className="text-xs text-spotlight-fg">{label}</div>
+        <div className="mt-1 font-mono text-lg font-bold text-white">{value}</div>
+        {hint && <div className="mt-0.5 text-[11px] text-white/60">{hint}</div>}
+      </div>
+    );
+  }
   return (
     <div className="rounded-lg border border-border bg-bg-elevated p-3">
       <div className="text-xs text-ink-muted">{label}</div>

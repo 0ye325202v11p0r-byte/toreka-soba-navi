@@ -23,20 +23,24 @@ export default function TodaysPicks({ cards }: { cards: MarketListCard[] }) {
   return (
     <div className="mb-6">
       <h2 className="mb-2 text-sm font-semibold text-ink-muted">🎯 今日の狙い目（実測データ・30日平均比 割安）</h2>
+      {/* Spotlight treatment (2026-09-14, user design feedback) — these are
+          the app's single most attention-worthy picks (genuinely tracked,
+          genuinely undervalued), so they get the bold dark/gold card style
+          reserved for headline numbers rather than the calm default. */}
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
         {picks.map((c) => (
           <Link
             key={c.id}
             href={`/cards/${c.id}`}
-            className="rounded-lg border border-border bg-bg-elevated p-3 hover:border-accent"
+            className="rounded-lg bg-spotlight-bg p-3 transition hover:brightness-110"
           >
-            <div className="font-medium">{c.name}</div>
-            <div className="text-xs text-ink-faint">
+            <div className="font-medium text-spotlight-fg">{c.name}</div>
+            <div className="text-xs text-white/60">
               {c.rarity} ・ {c.set_name}
             </div>
             <div className="mt-1 flex items-baseline justify-between">
-              <span className="font-mono">{yen(c.current_price)}</span>
-              <span className="font-mono text-good">{pct(c.pct_vs_avg30)}</span>
+              <span className="font-mono font-bold text-white">{yen(c.current_price)}</span>
+              <span className="font-mono font-bold text-[#4fb58b]">{pct(c.pct_vs_avg30)}</span>
             </div>
           </Link>
         ))}

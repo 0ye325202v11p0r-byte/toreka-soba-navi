@@ -20,6 +20,19 @@
   --rarity-r: #2e6da4;
   --rarity-l: #2e7d5f;
   --rarity-sr: #b5482f;
+  /* "Spotlight" — a deliberately bolder treatment for the 1-2 numbers per
+     screen that should visually pop (today's picks, a card's headline
+     price, total P&L) — added 2026-09-14 per user design feedback ("もっと
+     刺激されるようなかっこいいデザイン"). Reserved for a handful of hero
+     elements, not a base-palette change, matching this project's existing
+     calm/trustworthy identity for financial data (see the mockup comparison
+     shown to the user: full-page bold color was rejected as undermining
+     trust in a P&L tool, in favor of accenting only the headline numbers).
+     Always dark in BOTH light and dark mode (in dark mode the page itself
+     is already dark, so this switches to a warm amber-tinted surface to
+     still read as "elevated" rather than trying to be darker-than-dark). */
+  --spotlight-bg: #1e2a38;
+  --spotlight-fg: #f0be5c;
 }
 
 @theme inline {
@@ -42,6 +55,8 @@
   --color-rarity-r: var(--rarity-r);
   --color-rarity-l: var(--rarity-l);
   --color-rarity-sr: var(--rarity-sr);
+  --color-spotlight-bg: var(--spotlight-bg);
+  --color-spotlight-fg: var(--spotlight-fg);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -65,6 +80,8 @@
     --rarity-r: #6fa8dc;
     --rarity-l: #6fcb9f;
     --rarity-sr: #e58f6e;
+    --spotlight-bg: #3a2f1a;
+    --spotlight-fg: #f0be5c;
   }
 }
 
@@ -88,6 +105,8 @@
   --rarity-r: #6fa8dc;
   --rarity-l: #6fcb9f;
   --rarity-sr: #e58f6e;
+  --spotlight-bg: #3a2f1a;
+  --spotlight-fg: #f0be5c;
 }
 
 body {
