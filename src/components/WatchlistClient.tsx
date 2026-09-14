@@ -310,6 +310,20 @@ export default function WatchlistClient({
               type="number"
               value={value}
               onChange={(e) => setValue(Number(e.target.value))}
+              // Unlike PortfolioClient's quantity field (which was changed to
+              // start empty — see formValidation.ts), this field's non-empty
+              // default (-15%, or the card's current price) is genuinely
+              // useful, not an oversight: it's a sensible starter suggestion
+              // for a threshold, reset appropriately on rule-type switch just
+              // above. But a number input doesn't select its existing text on
+              // focus, so a user editing that default (e.g. typing "25" to
+              // replace "-15") gets it inserted at the click position instead
+              // — reproduced live as "-15" + "25" typed became "-1525",
+              // silently accepted since nothing here validates `value`'s
+              // magnitude. Auto-selecting on focus keeps the useful default
+              // while making the first keystroke replace it, matching how a
+              // user expects a pre-filled field to behave.
+              onFocus={(e) => e.target.select()}
               className="w-24 rounded-md border border-border bg-bg px-2 py-1.5"
             />
           </div>
