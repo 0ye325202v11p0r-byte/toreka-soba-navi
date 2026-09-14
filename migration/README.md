@@ -12,9 +12,9 @@ Supabase/PostgRESTは明示的なlimit/rangeなしだと暗黙に1000件で打�
 「カードデータの収録範囲」参照）。このディレクトリの既存スクリプトは全て
 対応済みだが、新規スクリプトでは同じ落とし穴に注意すること。
 
-## ⚠️ 遊々亭の日次自動追跡（2026-09-12実装）を本番で有効にする手順（未実施）
+## ⚠️ 遊々亭の日次自動追跡（2026-09-12実装）を本番で有効にする手順
 
-`/api/cron/refresh-yuyutei-prices`はコード・テストとも完成していますが、**本番へは一切反映していません**（push・デプロイ・本番DB変更は今回のセッションで意図的に行っていません）。実際に有効化するには、ユーザー自身が以下を順に行う必要があります：
+`/api/cron/refresh-yuyutei-prices`はコード・テストとも完成しており、`git push`済み（2026-09-14確認：`git diff origin/main`で差分なし。`vercel.json`のcronエントリも含む）。**残るのはSupabase側の作業のみ**——本番DB変更はこのセッションのポリシー上行っていないため、ユーザー自身が以下を順に行う必要があります：
 
 1. Supabase SQL Editorで`supabase/schema.sql`の`yuyutei_sync_runs`テーブル定義（`create table if not exists`のブロック）と`app_settings`テーブル定義（同ブロック内の初期行insertまで含む）を実行する（どちらも新規テーブルなので、既存テーブルへの影響なし）。**実行前に、`yuyutei_sync_runs`のポリシー内`'REPLACE_WITH_YOUR_ADMIN_EMAIL'`を実際の管理者メールアドレス（`.env.local`の`ADMIN_EMAIL`と同じ値）に置き換えること**——詳細は下記「🔒 `/admin/sync-status`のアクセス制御修正」参照。
 2. このリポジトリを通常通りgit push（→Vercelが自動デプロイ）。これで`vercel.json`に追加済みの新規cronエントリ（`/api/cron/refresh-yuyutei-prices`、毎日UTC20:30）が有効になります。

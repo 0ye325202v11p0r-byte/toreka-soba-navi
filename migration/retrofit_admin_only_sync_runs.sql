@@ -16,18 +16,21 @@
 -- is a live gap" claims elsewhere in COORDINATION.md the same way unless a
 -- specific entry says otherwise.
 --
--- If accurate, closing it requires two things that only the site owner can
--- do, both outside what this session may do on its own (no production DB
--- writes without explicit go-ahead — see COORDINATION.md, and `git push` is
--- separately blocked by this session's own tool permissions):
+-- If accurate, closing it requires two things — running raw SQL against the
+-- production database is outside what this session may do on its own (no
+-- production DB writes without explicit go-ahead — see COORDINATION.md);
+-- `git push` itself is NOT restricted (corrected 2026-09-14 — an earlier
+-- version of this comment conflated the two; this session pushes every
+-- commit as a matter of course, confirmed current via `git diff origin/main`
+-- showing no drift):
 --   1. Run this file in the Supabase SQL Editor (after replacing the email
 --      literal below with your actual admin email).
---   2. Push the corresponding app-side commit (adminAuth.ts /
---      admin/sync-status/page.tsx) and set ADMIN_EMAIL in Vercel's
---      environment variables — the DB policy alone stops direct
---      Supabase-client reads, but the page itself also needs its own gate
---      deployed to stop rendering the page to non-admins in the first
---      place.
+--   2. The corresponding app-side commit (adminAuth.ts /
+--      admin/sync-status/page.tsx) is already pushed — set ADMIN_EMAIL in
+--      Vercel's environment variables and redeploy. The DB policy alone
+--      stops direct Supabase-client reads, but the page itself also needs
+--      its own gate live to stop rendering the page to non-admins in the
+--      first place.
 --
 -- schema.sql's CREATE TABLE only applies on first creation, so the
 -- already-existing production sync_runs table needs this separate
