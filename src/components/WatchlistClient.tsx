@@ -244,13 +244,17 @@ export default function WatchlistClient({
           (pushStatus stays "unknown" only very briefly on mount, so no
           flash of the wrong button). */}
       {pushStatus === "off" && (
-        <div className="mb-4 flex items-center justify-between rounded-lg border border-accent bg-accent-soft p-3 text-sm">
+        // flex-wrap + shrink-0 on the button (mobile check, self-review
+        // 2026-09-14) — without them, the default flex shrink squeezed the
+        // button into a cramped two-line label on a narrow viewport
+        // (375px) instead of dropping it to its own line below the text.
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-accent bg-accent-soft p-3 text-sm">
           <span>🔔 条件が成立したとき・保有/ウォッチ中のカードが史上最高値/最安値を更新したとき・週1回の成績サマリーを、このブラウザに通知します。</span>
           <button
             type="button"
             onClick={enablePush}
             disabled={pushBusy}
-            className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
+            className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-bg-elevated hover:bg-accent-strong disabled:opacity-50"
           >
             {pushBusy ? "設定中…" : "通知を有効にする"}
           </button>
