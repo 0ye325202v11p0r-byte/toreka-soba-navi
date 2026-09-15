@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 
 export interface ServiceFormState {
   error?: string;
@@ -35,6 +36,9 @@ export async function createService(
 
   if (!title || !description || !garmentType) {
     return { error: "タイトル・説明・着物の種類は必須です。" };
+  }
+  if (containsContactInfo(title) || containsContactInfo(description)) {
+    return { error: CONTACT_INFO_ERROR };
   }
   if (!Number.isFinite(price) || price < 0) {
     return { error: "価格を正しく入力してください。" };

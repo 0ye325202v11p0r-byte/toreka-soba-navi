@@ -82,3 +82,12 @@ body {
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
 }
+
+/* Keeps the printed/PDF-saved transaction statement (/orders/[id]/receipt)
+   free of the site chrome — nobody wants NavBar/Footer on a tax record. */
+@media print {
+  header,
+  footer {
+    display: none;
+  }
+}

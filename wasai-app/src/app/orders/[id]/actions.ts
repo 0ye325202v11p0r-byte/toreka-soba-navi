@@ -7,6 +7,7 @@ import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { notify } from "@/lib/notifications";
 import { releaseEscrowPayout, refundIfPaid } from "@/lib/escrow";
+import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 
 async function loadOrderForParticipant(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -72,6 +73,14 @@ export async function postMessage(
 
   const order = await loadOrderForParticipant(supabase, orderId, user.id);
   if (!order) return { error: "この取引にアクセスできません。" };
+
+  // Contact info is blocked only until money has actually moved — once
+  // payment_status leaves "unpaid" it's often legitimately needed (a
+  // delivery address, a phone number for a courier), and the platform has
+  // already captured this transaction either way.
+  if (order.payment_status === "unpaid" && containsContactInfo(body)) {
+    return { error: CONTACT_INFO_ERROR };
+  }
 
   const { error } = await supabase.from("messages").insert({
     order_id: orderId,

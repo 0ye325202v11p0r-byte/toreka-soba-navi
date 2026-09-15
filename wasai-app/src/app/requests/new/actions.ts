@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 import type { GradeRequirement } from "@/lib/types";
 
 const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
@@ -42,6 +43,9 @@ export async function createRequest(
 
   if (!title || !description || !garmentType) {
     return { error: "タイトル・説明・着物の種類は必須です。" };
+  }
+  if (containsContactInfo(title) || containsContactInfo(description)) {
+    return { error: CONTACT_INFO_ERROR };
   }
 
   const { data: request, error } = await supabase

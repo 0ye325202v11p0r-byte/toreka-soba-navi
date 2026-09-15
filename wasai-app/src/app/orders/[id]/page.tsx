@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
@@ -7,7 +8,8 @@ import StatusControls from "./StatusControls";
 import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
-import { platformFeeAmount, PLATFORM_FEE_RATE } from "@/lib/stripe";
+import { platformFeeAmount, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
+import { isRepeatCustomer } from "@/lib/escrow";
 import type { Order, Message, Profile, Review } from "@/lib/types";
 
 const STATUS_LABEL: Record<Order["status"], string> = {
@@ -70,6 +72,15 @@ export default async function OrderDetailPage({
   const myReview = (reviewsRaw ?? []).find((r) => r.reviewer_id === current.id);
   const revieweeLabel = viewerRole === "client" ? "この和裁士" : "この依頼者";
 
+  const feeIsFinal = order.platform_fee_amount != null;
+  const estimatedIsRepeat = feeIsFinal
+    ? false
+    : await isRepeatCustomer(supabase, order.client_id, order.craftsman_id, order.id);
+  const feeRatePercent = feeIsFinal
+    ? Math.round((order.platform_fee_amount! / order.price) * 100)
+    : Math.round((estimatedIsRepeat ? REPEAT_PLATFORM_FEE_RATE : PLATFORM_FEE_RATE) * 100);
+  const feeAmount = order.platform_fee_amount ?? platformFeeAmount(order.price, estimatedIsRepeat);
+
   return (
     <div>
       <p className="text-xs text-ink-muted">
@@ -82,13 +93,20 @@ export default async function OrderDetailPage({
         {viewerRole === "craftsman" && order.payment_status !== "unpaid" && (
           <>
             {" "}
-            （手数料 {Math.round(PLATFORM_FEE_RATE * 100)}%
-            ¥{(order.platform_fee_amount ?? platformFeeAmount(order.price)).toLocaleString()} 差引後 ¥
-            {(order.price - (order.platform_fee_amount ?? platformFeeAmount(order.price))).toLocaleString()}
-            が振込先口座へ）
+            （{feeIsFinal ? "手数料" : "手数料（概算）"} {feeRatePercent}%
+            ¥{feeAmount.toLocaleString()} 差引後 ¥{(order.price - feeAmount).toLocaleString()}
+            が振込先口座へ
+            {estimatedIsRepeat && !feeIsFinal ? "・リピート割引適用" : ""}）
           </>
         )}
       </p>
+      {order.payment_status !== "unpaid" && (
+        <p className="mt-1">
+          <Link href={`/orders/${order.id}/receipt`} className="text-xs text-accent-strong underline">
+            取引明細書を表示
+          </Link>
+        </p>
+      )}
 
       {order.status === "pending_payment" && viewerRole === "client" && (
         <div className="mt-4 rounded-lg border border-warn bg-warn-soft p-4">

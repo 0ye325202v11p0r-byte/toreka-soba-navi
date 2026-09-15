@@ -17,6 +17,15 @@ export function stripeClient(): Stripe {
 // rate shown to both sides, instead of an opaque markup.
 export const PLATFORM_FEE_RATE = 0.15;
 
-export function platformFeeAmount(price: number): number {
-  return Math.round(price * PLATFORM_FEE_RATE);
+// Lower rate for a client/craftsman pair's 2nd+ completed order together
+// (see src/lib/escrow.ts for how "repeat" is determined). Acquisition
+// cost for this pair is already paid — undercutting a 0%-fee direct bank
+// transfer isn't possible, but keeping the rate low is the platform's only
+// lever against a trust-established pair simply moving off-platform for
+// repeat business (the "マーケットプレイス・リーケージ" problem).
+export const REPEAT_PLATFORM_FEE_RATE = 0.08;
+
+export function platformFeeAmount(price: number, isRepeat: boolean = false): number {
+  const rate = isRepeat ? REPEAT_PLATFORM_FEE_RATE : PLATFORM_FEE_RATE;
+  return Math.round(price * rate);
 }

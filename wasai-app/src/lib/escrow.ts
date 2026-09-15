@@ -1,6 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/stripe";
 
+// "Repeat" = this client/craftsman pair has at least one OTHER completed
+// order together already — see REPEAT_PLATFORM_FEE_RATE in stripe.ts.
+export async function isRepeatCustomer(
+  supabase: SupabaseClient,
+  clientId: string,
+  craftsmanId: string,
+  excludeOrderId: string
+): Promise<boolean> {
+  const { count } = await supabase
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("client_id", clientId)
+    .eq("craftsman_id", craftsmanId)
+    .eq("status", "completed")
+    .neq("id", excludeOrderId);
+  return (count ?? 0) > 0;
+}
+
 // Shared by the client's "completed" action (src/app/orders/[id]/actions.ts)
 // and the auto-complete cron (src/app/api/cron/auto-complete-orders/route.ts)
 // — the one place funds actually leave the platform's Stripe account, via a
@@ -11,7 +29,7 @@ import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/strip
 // account setup, and the payout can be retried later (not yet automated).
 export async function releaseEscrowPayout(
   supabase: SupabaseClient,
-  order: { id: string; craftsman_id: string; price: number; payment_status: string }
+  order: { id: string; client_id: string; craftsman_id: string; price: number; payment_status: string }
 ) {
   if (!isStripeConfigured() || order.payment_status !== "paid") return;
 
@@ -23,7 +41,8 @@ export async function releaseEscrowPayout(
 
   if (!craftsmanProfile?.stripe_account_id || !craftsmanProfile.stripe_transfers_enabled) return;
 
-  const fee = platformFeeAmount(order.price);
+  const isRepeat = await isRepeatCustomer(supabase, order.client_id, order.craftsman_id, order.id);
+  const fee = platformFeeAmount(order.price, isRepeat);
   const transferAmount = order.price - fee;
   if (transferAmount <= 0) return;
 

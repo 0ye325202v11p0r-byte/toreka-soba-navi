@@ -7,6 +7,7 @@ import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 import { notify } from "@/lib/notifications";
+import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 
 export interface ProposalFormState {
   error?: string;
@@ -23,6 +24,7 @@ export async function submitProposal(
   if (!requestId) return { error: "依頼が見つかりません。" };
   if (!Number.isFinite(price) || price < 0) return { error: "見積り価格を正しく入力してください。" };
   if (!message) return { error: "提案メッセージを入力してください。" };
+  if (containsContactInfo(message)) return { error: CONTACT_INFO_ERROR };
 
   const supabase = await createClient();
   const {
