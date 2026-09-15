@@ -148,14 +148,27 @@ export default async function CardDetailPage({
           dangerouslySetInnerHTML={{ __html: safeJsonLdString(jsonLd) }}
         />
       )}
-      <div className="mb-4 flex items-start justify-between">
-        <div>
+      {/* flex-col on narrow screens (self-review, 2026-09-15 — caught live
+          on a mobile-width check): items-start justify-between kept both
+          halves on one row at every width, so the right-side badge/date
+          block ate into the left-side text's available space on mobile.
+          The left div had no min-w-0, so as a flex item it couldn't shrink
+          below its content's natural width either — between the two, セット名
+          (a katakana compound like 「ワンピースカード ザベスト」) had too
+          little room and wrapped mid-word ("ザベ" / "スト") at the default
+          CJK line-break points. break-keep (word-break: keep-all) stops the
+          browser from splitting inside a run of katakana/alphanumerics; the
+          existing "・" separators remain valid, preferred wrap points either
+          way, so this doesn't risk overflow the way it could for arbitrary
+          unbroken text. */}
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold">{c.name}</h1>
-          <div className="mt-1 text-sm text-ink-muted">
+          <div className="mt-1 text-sm text-ink-muted break-keep">
             {c.rarity} ・ {c.set_name} {c.card_number ? `・ ${c.card_number}` : ""}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-row items-center gap-2 sm:flex-col sm:items-end sm:gap-1">
           <span className={`rounded-full px-2 py-0.5 text-xs ${dq.cls}`}>{dq.label}</span>
           {!isAutoTracked(c) && (
             <span className="max-w-[220px] text-right text-[11px] text-ink-faint">
