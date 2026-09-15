@@ -220,30 +220,52 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
                 </div>
               );
             }
+            // Self-review, 2026-09-15, continued — the check above only
+            // catches "every selected card lacks history." A MIXED
+            // selection (e.g. one real-data card + one 参考価格 card) still
+            // passes hasEnoughHistory and reaches this branch, but the
+            // one-point card's <polyline> silently draws nothing while the
+            // legend table below lists it with its own colored dot like any
+            // other row — reproduced live (2億V雷神 + "ハウリング"ガブ): the
+            // graph shows one line, the table implies two. Naming the
+            // affected card(s) here, rather than leaving the missing line
+            // unexplained, mirrors the same "don't let absence look like a
+            // rendering bug" fix as the all-cards-insufficient case above.
+            const cardsWithoutLine = selected
+              .filter((id) => (snapshotsByCard[id] ?? []).length < 2)
+              .map((id) => cardById.get(id)?.name)
+              .filter((name): name is string => Boolean(name));
             return (
-              <svg viewBox={`0 0 ${w} ${h}`} className="mb-4 w-full rounded-lg border border-border bg-bg-elevated">
-                {selected.map((id, idx) => {
-                  const snaps = snapshotsByCard[id] ?? [];
-                  if (snaps.length === 0) return null;
-                  const points = snaps.map((s) => {
-                    const dateIdx = allDates.indexOf(s.snapshot_date);
-                    const x = padX + (dateIdx / Math.max(allDates.length - 1, 1)) * (w - padX * 2);
-                    const y = h - 12 - ((s.price - min) / range) * (h - 24);
-                    return `${x.toFixed(1)},${y.toFixed(1)}`;
-                  });
-                  return (
-                    <polyline
-                      key={id}
-                      points={points.join(" ")}
-                      fill="none"
-                      stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                      strokeWidth={2}
-                      strokeLinejoin="round"
-                      strokeLinecap="round"
-                    />
-                  );
-                })}
-              </svg>
+              <>
+                <svg viewBox={`0 0 ${w} ${h}`} className="mb-2 w-full rounded-lg border border-border bg-bg-elevated">
+                  {selected.map((id, idx) => {
+                    const snaps = snapshotsByCard[id] ?? [];
+                    if (snaps.length === 0) return null;
+                    const points = snaps.map((s) => {
+                      const dateIdx = allDates.indexOf(s.snapshot_date);
+                      const x = padX + (dateIdx / Math.max(allDates.length - 1, 1)) * (w - padX * 2);
+                      const y = h - 12 - ((s.price - min) / range) * (h - 24);
+                      return `${x.toFixed(1)},${y.toFixed(1)}`;
+                    });
+                    return (
+                      <polyline
+                        key={id}
+                        points={points.join(" ")}
+                        fill="none"
+                        stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                      />
+                    );
+                  })}
+                </svg>
+                {cardsWithoutLine.length > 0 && (
+                  <p className="mb-4 text-xs text-ink-faint">
+                    ⚠️ {cardsWithoutLine.join("・")}は価格履歴がまだ少ないため、グラフに線が表示されていません。
+                  </p>
+                )}
+              </>
             );
           })()}
 
