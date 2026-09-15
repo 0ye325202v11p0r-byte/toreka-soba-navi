@@ -36,6 +36,15 @@ export async function orderService(
     return { error: "自分自身のサービスには依頼できません。" };
   }
 
+  const { data: craftsmanProfile } = await supabase
+    .from("craftsman_profiles")
+    .select("is_accepting_orders")
+    .eq("profile_id", service.craftsman_id)
+    .maybeSingle();
+  if (craftsmanProfile?.is_accepting_orders === false) {
+    return { error: "この和裁士は現在、新規受注を停止しています。" };
+  }
+
   const { data: order, error } = await supabase
     .from("orders")
     .insert({

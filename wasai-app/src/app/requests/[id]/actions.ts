@@ -48,13 +48,17 @@ export async function submitProposal(
     return { error: "この依頼は現在提案を受け付けていません。" };
   }
 
-  if (request.min_grade) {
-    const { data: craftsmanProfile } = await supabase
-      .from("craftsman_profiles")
-      .select("grade")
-      .eq("profile_id", user.id)
-      .maybeSingle();
+  const { data: craftsmanProfile } = await supabase
+    .from("craftsman_profiles")
+    .select("grade, is_accepting_orders")
+    .eq("profile_id", user.id)
+    .maybeSingle();
 
+  if (craftsmanProfile?.is_accepting_orders === false) {
+    return { error: "新規受注を停止中は提案できません。プロフィールで設定を変更してください。" };
+  }
+
+  if (request.min_grade) {
     const myGrade = craftsmanProfile?.grade as Grade | null;
     const requiredGrade = request.min_grade as GradeRequirement;
     const meetsRequirement = myGrade != null && GRADE_RANK[myGrade] <= GRADE_RANK[requiredGrade];
@@ -185,6 +189,46 @@ export async function respondProposal(
       link: `/requests/${proposal.request_id}`,
     });
   }
+
+  revalidatePath(`/requests/${proposal.request_id}`);
+  return {};
+}
+
+export interface WithdrawProposalState {
+  error?: string;
+}
+
+export async function withdrawProposal(
+  _prevState: WithdrawProposalState,
+  formData: FormData
+): Promise<WithdrawProposalState> {
+  const proposalId = String(formData.get("proposal_id") ?? "");
+  if (!proposalId) return { error: "提案が見つかりません。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("id, request_id, craftsman_id, status")
+    .eq("id", proposalId)
+    .maybeSingle();
+
+  if (!proposal || proposal.craftsman_id !== user.id) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+  if (proposal.status !== "pending") {
+    return { error: "検討中の提案のみ取り下げできます。" };
+  }
+
+  const { error } = await supabase
+    .from("proposals")
+    .update({ status: "withdrawn" })
+    .eq("id", proposalId);
+  if (error) return { error: error.message };
 
   revalidatePath(`/requests/${proposal.request_id}`);
   return {};

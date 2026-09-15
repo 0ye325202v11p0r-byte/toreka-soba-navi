@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/stripe";
+import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { notify } from "@/lib/notifications";
+import { releaseEscrowPayout, refundIfPaid } from "@/lib/escrow";
 
 async function loadOrderForParticipant(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -101,6 +102,10 @@ const ALLOWED_TRANSITIONS: Record<string, { by: "client" | "craftsman"; to: stri
   in_progress: [
     { by: "craftsman", to: "delivered" },
     { by: "client", to: "cancelled" },
+    // A craftsman who can't continue (illness, etc.) needs their own way
+    // out too — previously only the client could cancel, which left a
+    // craftsman with no self-service option but to simply never deliver.
+    { by: "craftsman", to: "cancelled" },
   ],
   delivered: [
     { by: "client", to: "completed" },
@@ -135,6 +140,7 @@ export async function updateOrderStatus(
     .update({
       status: nextStatus,
       completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
+      delivered_at: nextStatus === "delivered" ? new Date().toISOString() : undefined,
     })
     .eq("id", orderId);
   if (error) return { error: error.message };
@@ -146,12 +152,13 @@ export async function updateOrderStatus(
     await refundIfPaid(supabase, order);
   }
 
-  // cancelled is only ever client-initiated (see ALLOWED_TRANSITIONS above),
-  // so the craftsman is always the one being notified here.
+  // cancelled can now come from either side (see ALLOWED_TRANSITIONS above)
+  // — notify whichever party didn't do the cancelling.
+  const counterpartId = actorRole === "client" ? order.craftsman_id : order.client_id;
   const STATUS_NOTIFICATIONS: Record<string, { userId: string; title: string }> = {
     delivered: { userId: order.client_id, title: "納品されました" },
     completed: { userId: order.craftsman_id, title: "取引が完了しました" },
-    cancelled: { userId: order.craftsman_id, title: "取引がキャンセルされました" },
+    cancelled: { userId: counterpartId, title: "取引がキャンセルされました" },
   };
   const statusNotification = STATUS_NOTIFICATIONS[nextStatus];
   if (statusNotification) {
@@ -166,68 +173,6 @@ export async function updateOrderStatus(
 
   revalidatePath(`/orders/${orderId}`);
   return {};
-}
-
-// A cancelled order can only ever be in payment_status "unpaid" or "paid" —
-// "transferred" is only reachable via releaseEscrowPayout() above, which
-// only runs on the "completed" transition, and ALLOWED_TRANSITIONS has no
-// path from "completed" to "cancelled". So there's no case here where the
-// craftsman has already been paid out.
-async function refundIfPaid(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  order: { id: string; price: number; payment_status: string; stripe_payment_intent_id: string | null }
-) {
-  if (!isStripeConfigured() || order.payment_status !== "paid" || !order.stripe_payment_intent_id) return;
-
-  const stripe = stripeClient();
-  await stripe.refunds.create({ payment_intent: order.stripe_payment_intent_id });
-
-  await supabase.from("orders").update({ payment_status: "refunded" }).eq("id", order.id);
-}
-
-// Moves the held payment to the craftsman once the client confirms
-// completion — a separate Stripe Transfer, not part of the original charge
-// (see src/lib/orderPayment.ts), so this is the one place funds actually
-// leave the platform's account. Best-effort: if the craftsman hasn't
-// finished Stripe onboarding yet, this silently leaves payment_status at
-// "paid" rather than blocking the client's "completed" action — there's
-// nothing the client can do about the craftsman's account setup, and the
-// payout can be retried later once payouts are set up (not yet automated;
-// see README).
-async function releaseEscrowPayout(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  order: { id: string; craftsman_id: string; price: number; payment_status: string }
-) {
-  if (!isStripeConfigured() || order.payment_status !== "paid") return;
-
-  const { data: craftsmanProfile } = await supabase
-    .from("craftsman_profiles")
-    .select("stripe_account_id, stripe_transfers_enabled")
-    .eq("profile_id", order.craftsman_id)
-    .maybeSingle();
-
-  if (!craftsmanProfile?.stripe_account_id || !craftsmanProfile.stripe_transfers_enabled) return;
-
-  const fee = platformFeeAmount(order.price);
-  const transferAmount = order.price - fee;
-  if (transferAmount <= 0) return;
-
-  const stripe = stripeClient();
-  const transfer = await stripe.transfers.create({
-    amount: transferAmount,
-    currency: "jpy",
-    destination: craftsmanProfile.stripe_account_id,
-    transfer_group: order.id,
-  });
-
-  await supabase
-    .from("orders")
-    .update({
-      payment_status: "transferred",
-      stripe_transfer_id: transfer.id,
-      platform_fee_amount: fee,
-    })
-    .eq("id", order.id);
 }
 
 export interface ReviewFormState {

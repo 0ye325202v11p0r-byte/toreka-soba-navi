@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import SetupNotice from "@/components/SetupNotice";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
+import WithdrawProposalButton from "./WithdrawProposalButton";
 import { GRADE_RANK, type Grade, type JobRequest, type Profile, type Proposal } from "@/lib/types";
 
 const STATUS_LABEL: Record<Proposal["status"], string> = {
@@ -124,6 +125,11 @@ export default async function RequestDetailPage({
               {isOwner && p.status === "pending" && request.status === "open" && (
                 <div className="mt-3">
                   <RespondProposalButtons proposalId={p.id} />
+                </div>
+              )}
+              {current?.id === p.craftsman_id && p.status === "pending" && (
+                <div className="mt-3">
+                  <WithdrawProposalButton proposalId={p.id} />
                 </div>
               )}
             </li>

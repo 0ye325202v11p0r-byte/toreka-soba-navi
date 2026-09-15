@@ -7,8 +7,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // /api/webhooks/* carries no Supabase session cookie (Stripe calls it
-    // server-to-server) — skip the pointless session-refresh round trip.
-    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // /api/webhooks/* and /api/cron/* carry no Supabase session cookie
+    // (Stripe and Vercel Cron call them server-to-server) — skip the
+    // pointless session-refresh round trip.
+    "/((?!_next/static|_next/image|favicon.ico|api/webhooks|api/cron|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

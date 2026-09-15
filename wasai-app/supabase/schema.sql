@@ -370,3 +370,13 @@ create policy "notifications_insert_any_authenticated" on notifications for inse
   with check (auth.role() = 'authenticated');
 
 create index if not exists idx_notifications_user_unread on notifications(user_id, read_at);
+
+-- ---------------------------------------------------------------------------
+-- Phase 5（2026-09-15追加）: 「納品済み」のまま依頼者が応答しないと、和裁士が
+-- 永久に報酬を受け取れない欠陥への対応。delivered_atを記録し、日次cron
+-- （/api/cron/auto-complete-orders）が一定日数放置されたdeliveredを自動的に
+-- completedへ進める（migration/README的な手動有効化手順はREADME参照）。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists delivered_at timestamptz;
+
+create index if not exists idx_orders_delivered_at on orders(status, delivered_at);

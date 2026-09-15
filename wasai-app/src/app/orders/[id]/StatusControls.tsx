@@ -67,6 +67,17 @@ export default function StatusControls({
       <StatusButton key="cancel" orderId={orderId} nextStatus="cancelled" label="キャンセルする" variant="danger" />
     );
   }
+  if (status === "in_progress" && viewerRole === "craftsman") {
+    buttons.push(
+      <StatusButton
+        key="craftsman-cancel"
+        orderId={orderId}
+        nextStatus="cancelled"
+        label="対応できないためキャンセルする"
+        variant="danger"
+      />
+    );
+  }
 
   if (buttons.length === 0) return null;
 
