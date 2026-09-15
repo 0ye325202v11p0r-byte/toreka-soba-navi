@@ -8,12 +8,14 @@ Vercelダッシュボードで行う必要がある**（このセッションは
 Vercelの環境変数設定を一切行っていない — 自己申告した制約による）。項目1・
 1bは2026-09-13にユーザー本人により完了済み（該当箇所に明記）。
 
-未完了の各項目は「今まだ本番で反映されていないはず」という**推測**であり、
-本番DB/Vercel環境を直接確認した結果ではない。実行前に念のため現状を確認す
-ることを推奨する。コード自体（アプリ側の実装・`vercel.json`のcron設定）は
-全て`git push`済みで、`git diff origin/main`で差分がないことを2026-09-14に
-確認済み——残っているのはSupabase SQL Editor / Vercel環境変数など、
-ダッシュボード側の設定のみ。
+**2026-09-15更新：** サービスロールキーで本番Supabaseに直接クエリし、
+項目2〜5のテーブル・列は全て本番に既に存在することを確認した（このファイル
+は以前ガイド作業直後に更新し忘れていて、しばらく実態より古い内容のままに
+なっていた）。残っている作業は実質的に**Vercelの環境変数2つ
+（`VAPID_PRIVATE_KEY`・`NEXT_PUBLIC_TURNSTILE_SITE_KEY`）だけ**——どちらも
+ユーザー本人の操作が必要（前者はこのセッションの秘密値自動入力ブロック、
+後者はCloudflareアカウント作成が必要なため）。項目6（CHECK制約）のみ
+未確認・任意。
 
 ---
 
@@ -87,69 +89,53 @@ Supabaseへの認証リクエストが正常に通ることまで確認済み。
 
 ## 🟡 機能を実際に動かすために必要（現在は黙ってスキップされている）
 
-### 2. Web Push通知（ウォッチリスト成立・週次ダイジェスト・価格更新アラート、全部）
+### 2. Web Push通知（ウォッチリスト成立・週次ダイジェスト・価格更新アラート、全部）✅ DB側は完了（2026-09-15、本番Supabaseに直接クエリして確認済み）・残るはVercel環境変数のみ
 
-**現状：** VAPID鍵未設定・`push_subscriptions`テーブル未作成のため、
-3つのプッシュ通知cron（`check-watchlist`・`weekly-digest`・
-`check-price-records`）はいずれも`{"skipped": true, "reason":
-"vapid_not_configured"}`を返すだけで、実際には何も送信していない。
+**現状（2026-09-15、本番を直接確認）：** `push_subscriptions`テーブル・
+`watchlist_items.condition_was_met`列は**本番に既に存在**。Supabase側の
+作業は完了している。残っているのはVercelの環境変数だけ：
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` ✅ 設定済み（2026-09-15確認）
+- `VAPID_PRIVATE_KEY` ❌ **未設定**——これが無い限り3つのプッシュ通知cron
+  はいずれも`{"skipped": true, "reason": "vapid_not_configured"}`を
+  返すだけで、実際には何も送信しない。値そのものはこのセッションの
+  自動入力ツールが「秘密鍵らしき値をフォームに入力する操作」を安全機構
+  でブロックするため、**ユーザー本人がVercelダッシュボードで直接入力する
+  必要がある**（キー名は入力済みで、値の入力欄が開いたところで止まって
+  いる——`settings/environment-variables`から「Add Environment Variable」
+  で`VAPID_PRIVATE_KEY`を追加すればよい。値はローカルで生成済みのはず、
+  無ければ`node -e "console.log(require('web-push').generateVAPIDKeys())"`
+  で再生成）。
 
-**手順：**
-1. ローカルでVAPID鍵ペアを生成：
-   ```
-   node -e "console.log(require('web-push').generateVAPIDKeys())"
-   ```
-2. Vercelの環境変数に追加：
-   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY`
-   - `VAPID_PRIVATE_KEY`
-3. `migration/retrofit_push_subscriptions.sql` をSupabase SQL Editorで
-   実行（`push_subscriptions`テーブルを新規作成）
-4. `migration/retrofit_add_watchlist_condition_was_met.sql` を実行
-   （`watchlist_items.condition_was_met`列を追加——これが無いと
-   「新規成立」の検知ができず、プッシュは送られない）
-5. 再デプロイ
+**手順（残りはこれだけ）：**
+1. Vercelの環境変数に `VAPID_PRIVATE_KEY` を追加（Type: Secret）
+2. 再デプロイ
 
 **検証：** `/watchlist` で通知を有効化し、実際に条件が成立する
 ウォッチリスト項目を一時的に登録して、ブラウザに通知が届くか確認する
 （確認後は削除する）。
 
-### 3. 史上最高値・最安値アラート
+### 3. 史上最高値・最安値アラート ✅ 完了（2026-09-15、本番Supabaseに直接クエリして確認済み）
 
-**現状：** `cards`テーブルに`all_time_high_price`等の4列が無いため、
-`refresh-prices`はこの機能を検出して黙ってスキップし続けている。
+`cards.all_time_high_price`/`all_time_low_price`等の列は本番に既に存在。
+`refresh-prices`は列の存在を検出した瞬間から自動的に機能する設計なので、
+これ以上の作業は不要。
 
-**手順：**
-1. `migration/retrofit_add_price_records.sql` をSupabase SQL Editorで
-   実行
-2. 再デプロイ不要（コードは既にデプロイ済み——列の存在を検出した瞬間から
-   自動的に機能し始める設計）
+**検証：** `/admin/sync-status`、またはSupabaseのTable Editorで
+`all_time_high_price`/`all_time_low_price`にNULLでない値が入っている
+ことを確認できる。
 
-**検証：** 列追加の翌日以降、`refresh-prices`が処理したカードの
-`all_time_high_price`/`all_time_low_price`にNULLでない値が入り始める
-ことを`/admin/sync-status`経由、またはSupabaseのTable Editorで確認する。
+### 4. 遊々亭（yuyu-tei）の日次自動追跡（カタログの74%）✅ 完了（2026-09-15、本番Supabaseに直接クエリして確認済み）
 
-### 4. 遊々亭（yuyu-tei）の日次自動追跡（カタログの74%）
-
-**現状（2026-09-14更新）：** `refresh-yuyutei-prices`のcronはコード完成
-済みで、`vercel.json`のcronエントリ含め`git push`済み（`origin/main`との
-差分なしを確認済み）。残るはSupabase側のテーブル作成のみ。
-
-**手順：** `migration/README.md`の「遊々亭の日次自動追跡を本番で有効に
-する手順」セクション（15-23行目）を参照——`yuyutei_sync_runs`テーブルの
-作成（`supabase/schema.sql`該当ブロック、admin email置き換え含む）と
-`app_settings`テーブルの作成が必要。
+`yuyutei_sync_runs`・`app_settings`テーブルは本番に既に存在。コードも
+`git push`済みなので、これ以上の作業は不要。
 
 ---
 
 ## 🟢 データ整合性の強化（緊急ではないが望ましい）
 
-### 5. `transactions.fee` 列
+### 5. `transactions.fee` 列 ✅ 完了（2026-09-15、本番Supabaseに直接クエリして確認済み）
 
-**現状：** アプリ側は`fee`列が無くてもエラー時に自動フォールバックする
-設計になっているため、これが未実行でも壊れない。ただし手数料込みの
-損益計算をしたい場合は必要。
-
-**手順：** `migration/retrofit_add_transaction_fee.sql` を実行。
+`transactions.fee`列は本番に既に存在。これ以上の作業は不要。
 
 ### 6. `cards`テーブルのCHECK制約
 
