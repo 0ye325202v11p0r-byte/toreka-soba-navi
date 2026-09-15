@@ -70,3 +70,20 @@ export async function subscribeToPush(vapidPublicKey: string): Promise<PushSetup
     return { ok: false, reason: "error", message: e instanceof Error ? e.message : String(e) };
   }
 }
+
+// Returns this browser's current Web Push subscription endpoint, if any,
+// without prompting for permission or creating a new subscription — used by
+// LogoutButton.tsx to delete this device's push_subscriptions row on
+// sign-out. push_subscriptions.endpoint is UNIQUE per device, and
+// re-enabling push upserts `onConflict: "endpoint"` (see WatchlistClient.tsx)
+// — so on a shared device, the NEXT person who logs in and enables push
+// would otherwise silently reassign THIS row (and its user_id) to
+// themselves, cutting off delivery to the original account with nothing to
+// explain why (found via independent review, 2026-09-15).
+export async function getCurrentPushEndpoint(): Promise<string | null> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return null;
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) return null;
+  const subscription = await registration.pushManager.getSubscription();
+  return subscription?.endpoint ?? null;
+}

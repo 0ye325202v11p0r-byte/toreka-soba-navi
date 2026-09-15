@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import webpush, { pushConfigured } from "@/lib/webPushServer";
+import webpush, { pushConfigured, isSafePushEndpoint } from "@/lib/webPushServer";
 import { adminClient } from "@/lib/supabase/admin";
 import { errorMessage } from "@/lib/errorMessage";
 import { buildDashboardSummary } from "@/lib/dashboardSummary";
@@ -185,6 +185,13 @@ export async function GET(request: Request) {
       }
       digestsSent++;
       for (const sub of subsByUser.get(userId) ?? []) {
+        // See webPushServer.ts's isSafePushEndpoint doc comment (SSRF via a
+        // client-inserted, unvalidated endpoint).
+        if (!isSafePushEndpoint(sub.endpoint)) {
+          pushFailed++;
+          staleSubscriptionIds.push(sub.id);
+          continue;
+        }
         try {
           await webpush.sendNotification(
             { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },

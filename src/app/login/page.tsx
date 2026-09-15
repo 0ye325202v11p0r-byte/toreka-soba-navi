@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { track } from "@vercel/analytics";
 import { createClient } from "@/lib/supabase/client";
+import { safeNextPath } from "@/lib/safeNextPath";
 import SetupNotice from "@/components/SetupNotice";
 import TurnstileWidget from "@/components/TurnstileWidget";
 
@@ -23,14 +24,6 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 // only a client-side hint (Supabase itself rejects anything shorter with its
 // own error message regardless of this attribute).
 const MIN_PASSWORD_LENGTH = 6;
-
-// Only accept a same-site relative path (starts with exactly one "/", never
-// "//..." which browsers treat as protocol-relative — an open-redirect risk
-// if this ever came from an untrusted query param, which `next` is).
-function safeNextPath(raw: string | null): string {
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/";
-  return raw;
-}
 
 // Switched from magic-link (OTP) to email+password auth (2026-09-13) — see
 // COORDINATION.md. Supabase's default (no custom SMTP configured) email

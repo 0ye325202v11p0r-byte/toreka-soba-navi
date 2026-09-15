@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import webpush, { pushConfigured } from "@/lib/webPushServer";
+import webpush, { pushConfigured, isSafePushEndpoint } from "@/lib/webPushServer";
 import type { WatchlistAlertRule } from "@/lib/types";
 import { errorMessage } from "@/lib/errorMessage";
 import { adminClient } from "@/lib/supabase/admin";
@@ -285,6 +285,15 @@ export async function GET(request: Request) {
         const subs = subsByUser.get(n.userId) ?? [];
         const payload = buildWatchlistPushPayload(n.cardName, n.cardId);
         for (const sub of subs) {
+          // See webPushServer.ts's isSafePushEndpoint doc comment (SSRF via
+          // a client-inserted, unvalidated endpoint) — not a real browser
+          // subscription, so treat it the same as a stale/gone one: never
+          // sent to, deleted below.
+          if (!isSafePushEndpoint(sub.endpoint)) {
+            pushFailed++;
+            staleSubscriptionIds.push(sub.id);
+            continue;
+          }
           try {
             await webpush.sendNotification(
               { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth_key } },

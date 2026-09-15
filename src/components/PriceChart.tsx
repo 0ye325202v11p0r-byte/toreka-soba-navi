@@ -14,11 +14,19 @@ export default function PriceChart({
   avgCost?: number;
 }) {
   const prices = snapshots.map((s) => s.price);
-  // avgCost is folded into the min/max range (not just the price history)
-  // so the reference line is never drawn off-canvas or clipped — a card
-  // bought when its price was well outside its later tracked range (e.g.
-  // acquired before this project started tracking it daily) would
-  // otherwise place the line above/below the visible chart entirely.
+  // "最高"/"最安" must reflect actual recorded market prices only — computed
+  // from `prices` alone, never from rangeValues below (found via independent
+  // review, 2026-09-15: the two were previously the same array, so a card
+  // bought outside its tracked price range had its own acquisition cost
+  // silently mislabeled as the card's all-time high or low).
+  const displayMax = Math.max(...prices);
+  const displayMin = Math.min(...prices);
+  // avgCost is folded into a SEPARATE min/max range, used only for the SVG's
+  // y-axis scale (not the labels above), so the reference line is never
+  // drawn off-canvas or clipped — a card bought when its price was well
+  // outside its later tracked range (e.g. acquired before this project
+  // started tracking it daily) would otherwise place the line above/below
+  // the visible chart entirely.
   const rangeValues = avgCost !== undefined ? [...prices, avgCost] : prices;
   const max = Math.max(...rangeValues);
   const min = Math.min(...rangeValues);
@@ -38,10 +46,10 @@ export default function PriceChart({
     <div>
       <div className="mb-2 flex justify-between text-xs text-ink-muted">
         <span>
-          最高：<b className="text-ink">{yen(max)}</b>
+          最高：<b className="text-ink">{yen(displayMax)}</b>
         </span>
         <span>
-          最安：<b className="text-ink">{yen(min)}</b>
+          最安：<b className="text-ink">{yen(displayMin)}</b>
         </span>
         {avgCost !== undefined && (
           <span>
