@@ -40,7 +40,17 @@ export default function TodaysPicks({ cards }: { cards: MarketListCard[] }) {
             </div>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="font-mono font-bold text-white">{yen(c.current_price)}</span>
-              <span className="font-mono font-bold text-spotlight-good">{pct(c.pct_vs_avg30)}</span>
+              {/* Intentionally NOT text-spotlight-good (self-review, 2026-09-15
+                  — user caught this live on production). Every value here is
+                  negative by construction (judgment === "割安" only), but
+                  MoverStrip.tsx right below this section on the homepage uses
+                  green for POSITIVE moves and orange for negative ones — the
+                  same green meaning opposite things four inches apart on the
+                  same page reads as a real inconsistency, not a deliberate
+                  "green = good deal" convention. Neutral white sidesteps the
+                  conflict; the section heading ("割安") already says what this
+                  number means without needing color to repeat it. */}
+              <span className="font-mono font-bold text-white/70">{pct(c.pct_vs_avg30)}</span>
             </div>
           </Link>
         ))}
