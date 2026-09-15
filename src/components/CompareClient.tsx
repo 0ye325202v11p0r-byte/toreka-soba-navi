@@ -196,29 +196,56 @@ export default function CompareClient({ cards }: { cards: CardOption[] }) {
 
       {selected.length > 0 && (
         <>
-          <svg viewBox={`0 0 ${w} ${h}`} className="mb-4 w-full rounded-lg border border-border bg-bg-elevated">
-            {selected.map((id, idx) => {
-              const snaps = snapshotsByCard[id] ?? [];
-              if (snaps.length === 0) return null;
-              const points = snaps.map((s) => {
-                const dateIdx = allDates.indexOf(s.snapshot_date);
-                const x = padX + (dateIdx / Math.max(allDates.length - 1, 1)) * (w - padX * 2);
-                const y = h - 12 - ((s.price - min) / range) * (h - 24);
-                return `${x.toFixed(1)},${y.toFixed(1)}`;
-              });
+          {/* Self-review, 2026-09-15 — caught live on a mobile-width check
+              by selecting only 参考価格 (data_quality !== 'real') cards,
+              which have exactly one price_snapshots row each (see
+              scrape_yuyutei.mjs — no daily re-tracking for these). A
+              <polyline> needs 2+ points to draw anything; with only one
+              point per selected card, this rendered as a completely blank
+              box with no line, no dot, and no explanation — indistinguishable
+              from "broken" to a user, unlike cards/[id]/page.tsx's own
+              history.length === 1 case, which already shows an explicit
+              "not enough records yet" message for the exact same situation.
+              stillLoading (checked first) avoids flashing this message
+              during the brief window snapshotsByCard[id] is still undefined
+              for a newly-selected card — only genuinely-insufficient data
+              after loading finishes triggers it. */}
+          {(() => {
+            const stillLoading = selected.some((id) => snapshotsByCard[id] === undefined);
+            const hasEnoughHistory = selected.some((id) => (snapshotsByCard[id] ?? []).length >= 2);
+            if (!stillLoading && !hasEnoughHistory) {
               return (
-                <polyline
-                  key={id}
-                  points={points.join(" ")}
-                  fill="none"
-                  stroke={LINE_COLORS[idx % LINE_COLORS.length]}
-                  strokeWidth={2}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
+                <div className="mb-4 rounded-lg border border-dashed border-border p-6 text-center text-sm text-ink-faint">
+                  選択したカードには、推移を表示するのに十分な価格履歴がまだありません。
+                </div>
               );
-            })}
-          </svg>
+            }
+            return (
+              <svg viewBox={`0 0 ${w} ${h}`} className="mb-4 w-full rounded-lg border border-border bg-bg-elevated">
+                {selected.map((id, idx) => {
+                  const snaps = snapshotsByCard[id] ?? [];
+                  if (snaps.length === 0) return null;
+                  const points = snaps.map((s) => {
+                    const dateIdx = allDates.indexOf(s.snapshot_date);
+                    const x = padX + (dateIdx / Math.max(allDates.length - 1, 1)) * (w - padX * 2);
+                    const y = h - 12 - ((s.price - min) / range) * (h - 24);
+                    return `${x.toFixed(1)},${y.toFixed(1)}`;
+                  });
+                  return (
+                    <polyline
+                      key={id}
+                      points={points.join(" ")}
+                      fill="none"
+                      stroke={LINE_COLORS[idx % LINE_COLORS.length]}
+                      strokeWidth={2}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  );
+                })}
+              </svg>
+            );
+          })()}
 
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full text-sm">
