@@ -144,12 +144,21 @@ export async function updateOrderStatus(
   const transition = allowed.find((t) => t.by === actorRole && t.to === nextStatus);
   if (!transition) return { error: "この操作は現在の状態では行えません。" };
 
+  // Optional, only meaningful on the "delivered" transition — no carrier
+  // integration, just a free-text paper trail so "納品する" isn't purely
+  // the craftsman's word with nothing to point to if the client disputes
+  // it later.
+  const shippingMethod = String(formData.get("shipping_method") ?? "").trim();
+  const trackingNumber = String(formData.get("tracking_number") ?? "").trim();
+
   const { error } = await supabase
     .from("orders")
     .update({
       status: nextStatus,
       completed_at: nextStatus === "completed" ? new Date().toISOString() : null,
       delivered_at: nextStatus === "delivered" ? new Date().toISOString() : undefined,
+      shipping_method: nextStatus === "delivered" ? shippingMethod || null : undefined,
+      tracking_number: nextStatus === "delivered" ? trackingNumber || null : undefined,
     })
     .eq("id", orderId);
   if (error) return { error: error.message };

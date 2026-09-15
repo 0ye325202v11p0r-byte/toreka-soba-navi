@@ -103,6 +103,8 @@ export interface Order {
   stripe_checkout_session_id: string | null;
   stripe_payment_intent_id: string | null;
   stripe_transfer_id: string | null;
+  shipping_method: string | null;
+  tracking_number: string | null;
   platform_fee_amount: number | null;
   created_at: string;
   completed_at: string | null;

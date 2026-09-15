@@ -122,6 +122,13 @@ export default async function OrderDetailPage({
         </p>
       )}
 
+      {(order.shipping_method || order.tracking_number) && (
+        <p className="mt-2 text-xs text-ink-muted">
+          配送方法: {order.shipping_method || "未入力"}
+          {order.tracking_number ? ` ・ 追跡番号: ${order.tracking_number}` : ""}
+        </p>
+      )}
+
       <div className="mt-4">
         <StatusControls orderId={order.id} status={order.status} viewerRole={viewerRole} />
       </div>

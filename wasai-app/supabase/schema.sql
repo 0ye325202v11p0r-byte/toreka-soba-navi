@@ -468,3 +468,14 @@ create policy "reviews_insert_participant_completed_order" on reviews for insert
   );
 
 create index if not exists idx_reviews_reviewee on reviews(reviewee_id);
+
+-- ---------------------------------------------------------------------------
+-- Phase 13（2026-09-15追加）: 配送業者連携はしない（ヤマト・佐川・日本郵便
+-- それぞれ法人契約が要り、この規模では現実的でない）が、「納品する」が
+-- 和裁士の自己申告だけで、実際に発送した証拠が何も残らないという欠陥への
+-- 最小限の対応として、配送方法・追跡番号を残せるだけの欄を追加する。
+-- 既存のorders_update_participantポリシー（取引参加者なら誰でも更新可）で
+-- 十分カバーされるため、RLSポリシーの追加は不要。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists shipping_method text;
+alter table orders add column if not exists tracking_number text;

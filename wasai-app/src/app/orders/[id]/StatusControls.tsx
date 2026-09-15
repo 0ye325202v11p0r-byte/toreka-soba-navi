@@ -38,6 +38,40 @@ function StatusButton({
   );
 }
 
+function DeliverButton({ orderId }: { orderId: string }) {
+  const [state, formAction, pending] = useActionState(updateOrderStatus, initialState);
+  return (
+    <form action={formAction} className="w-full space-y-2 rounded-lg border border-border bg-bg-elevated p-3">
+      <input type="hidden" name="order_id" value={orderId} />
+      <input type="hidden" name="next_status" value="delivered" />
+      <p className="text-xs font-semibold">納品する</p>
+      <p className="text-xs text-ink-muted">
+        配送方法・追跡番号を残しておくと、届いたかどうかでの行き違いを防げます（任意）。
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          name="shipping_method"
+          placeholder="配送方法（例: ヤマト運輸）"
+          className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 text-sm"
+        />
+        <input
+          name="tracking_number"
+          placeholder="追跡番号（任意）"
+          className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 text-sm"
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={pending}
+        className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-bg-elevated disabled:opacity-60"
+      >
+        {pending ? "送信中…" : "納品済みにする"}
+      </button>
+      {state.error && <p role="alert" className="text-xs text-warn">{state.error}</p>}
+    </form>
+  );
+}
+
 export default function StatusControls({
   orderId,
   status,
@@ -50,9 +84,7 @@ export default function StatusControls({
   const buttons: ReactNode[] = [];
 
   if (status === "in_progress" && viewerRole === "craftsman") {
-    buttons.push(
-      <StatusButton key="deliver" orderId={orderId} nextStatus="delivered" label="納品する" />
-    );
+    buttons.push(<DeliverButton key="deliver" orderId={orderId} />);
   }
   if (status === "delivered" && viewerRole === "client") {
     buttons.push(
