@@ -73,14 +73,17 @@ email」設定がオンのままだと、新規登録時に依然として確認
 常に成功）を使い、ローカルで実際にウィジェットが表示・自動検証され、
 Supabaseへの認証リクエストが正常に通ることまで確認済み。
 
-**残作業（ユーザー自身が行う必要あり——アカウント作成を伴うためこの
-セッションでは実施不可）：**
-1. [Cloudflareダッシュボード](https://dash.cloudflare.com/)で無料アカウントを作成（未作成の場合）
-2. **Turnstile** → **Add site** で新しいサイトを追加し、Site KeyとSecret Keyを取得
-3. Vercelの環境変数に `NEXT_PUBLIC_TURNSTILE_SITE_KEY`（Site Key）を追加
-4. Supabaseダッシュボード → **Authentication** → **Attack Protection**
-   で有効化し、Secret Keyを設定
-5. 再デプロイ
+**進捗（2026-09-15）：** ユーザー本人がCloudflareアカウントを作成済み。
+Turnstileウィジェット（名前「トレカ相場ナビ」、ホスト名
+`toreka-soba-navi.vercel.app`、Managedモード）を作成し、発行された
+Site Key（`NEXT_PUBLIC_TURNSTILE_SITE_KEY`、非秘密のため今回このセッションが
+Vercelに設定・再デプロイ済み）とSecret Key（秘密情報のため未設定——
+ユーザー自身の入力が必要）を取得済み。
+
+**残作業（ユーザー自身が行う必要あり——秘密情報の入力のため）：**
+1. Supabaseダッシュボード → **Authentication** → **Attack Protection**
+   でTurnstileを有効化し、発行済みのSecret Keyを設定（値はCloudflare
+   ダッシュボードのTurnstileウィジェット詳細からいつでも再確認できる）
 
 **検証：** `/login`にアクセスし、CAPTCHAウィジェットが表示され、チェック
 完了後にログイン/新規登録ボタンが押せるようになることを確認する。
