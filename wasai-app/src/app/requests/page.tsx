@@ -11,7 +11,7 @@ export const metadata = { title: "依頼掲示板" };
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ garment_type?: string }>;
+  searchParams: Promise<{ garment_type?: string; min_grade?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return (
@@ -22,7 +22,7 @@ export default async function RequestsPage({
     );
   }
 
-  const { garment_type = "" } = await searchParams;
+  const { garment_type = "", min_grade = "" } = await searchParams;
   const supabase = await createClient();
 
   let query = supabase
@@ -30,6 +30,7 @@ export default async function RequestsPage({
     .select("*, profiles!inner(*)")
     .eq("status", "open");
   if (garment_type) query = query.eq("garment_type", garment_type);
+  if (min_grade) query = query.eq("min_grade", min_grade);
 
   const { data, error } = await query.order("created_at", { ascending: false });
   const requests = (data ?? []) as unknown as RequestRow[];
@@ -55,6 +56,13 @@ export default async function RequestsPage({
             </option>
           ))}
         </select>
+        <select name="min_grade" defaultValue={min_grade} className="rounded-md border border-border bg-bg px-2 py-1.5">
+          <option value="">資格指定: すべて</option>
+          <option value="1級">1級限定</option>
+          <option value="2級">2級以上限定</option>
+          <option value="3級">3級以上限定</option>
+          <option value="その他資格">資格保有者限定</option>
+        </select>
         <button type="submit" className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated">
           絞り込む
         </button>
@@ -65,9 +73,16 @@ export default async function RequestsPage({
       <ul className="mt-6 space-y-3">
         {requests.map((r) => (
           <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-            <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
-              {r.title}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+                {r.title}
+              </Link>
+              {r.min_grade && (
+                <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-strong">
+                  {r.min_grade}以上限定
+                </span>
+              )}
+            </div>
             <p className="mt-1 text-xs text-ink-muted">
               {r.garment_type} ・ 依頼者: {r.profiles.display_name}
               {r.deadline ? ` ・ 希望納期: ${r.deadline}` : ""}

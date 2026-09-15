@@ -6,13 +6,23 @@ import SetupNotice from "@/components/SetupNotice";
 import StatusControls from "./StatusControls";
 import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
+import PaymentRetryButton from "./PaymentRetryButton";
+import { platformFeeAmount, PLATFORM_FEE_RATE } from "@/lib/stripe";
 import type { Order, Message, Profile, Review } from "@/lib/types";
 
 const STATUS_LABEL: Record<Order["status"], string> = {
+  pending_payment: "支払い待ち",
   in_progress: "進行中",
   delivered: "納品済み・確認待ち",
   completed: "完了",
   cancelled: "キャンセル",
+};
+
+const PAYMENT_STATUS_LABEL: Record<Order["payment_status"], string> = {
+  unpaid: "未払い",
+  paid: "支払い済み（プラットフォームで保管中）",
+  transferred: "和裁士へ送金済み",
+  refunded: "返金済み",
 };
 
 export default async function OrderDetailPage({
@@ -65,6 +75,32 @@ export default async function OrderDetailPage({
       </p>
       <h1 className="mt-1 text-2xl font-bold">{order.title}</h1>
       <p className="mt-1 text-sm font-semibold">¥{order.price.toLocaleString()}</p>
+      <p className="mt-1 text-xs text-ink-muted">
+        決済状況: {PAYMENT_STATUS_LABEL[order.payment_status]}
+        {viewerRole === "craftsman" && order.payment_status !== "unpaid" && (
+          <>
+            {" "}
+            （手数料 {Math.round(PLATFORM_FEE_RATE * 100)}%
+            ¥{(order.platform_fee_amount ?? platformFeeAmount(order.price)).toLocaleString()} 差引後 ¥
+            {(order.price - (order.platform_fee_amount ?? platformFeeAmount(order.price))).toLocaleString()}
+            が振込先口座へ）
+          </>
+        )}
+      </p>
+
+      {order.status === "pending_payment" && viewerRole === "client" && (
+        <div className="mt-4 rounded-lg border border-warn bg-warn-soft p-4">
+          <p className="text-sm text-ink">支払いが完了していません。支払いが完了すると和裁士に作業を依頼できます。</p>
+          <div className="mt-3">
+            <PaymentRetryButton orderId={order.id} />
+          </div>
+        </div>
+      )}
+      {order.status === "pending_payment" && viewerRole === "craftsman" && (
+        <p className="mt-4 rounded-lg border border-border bg-bg-elevated p-4 text-sm text-ink-muted">
+          依頼者の支払い完了後に作業を開始できます。
+        </p>
+      )}
 
       <div className="mt-4">
         <StatusControls orderId={order.id} status={order.status} viewerRole={viewerRole} />

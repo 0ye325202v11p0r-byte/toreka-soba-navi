@@ -2,6 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import type { GradeRequirement } from "@/lib/types";
+
+const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
 
 export interface RequestFormState {
   error?: string;
@@ -32,6 +35,10 @@ export async function createRequest(
   const budgetMinRaw = String(formData.get("budget_min") ?? "").trim();
   const budgetMaxRaw = String(formData.get("budget_max") ?? "").trim();
   const deadline = String(formData.get("deadline") ?? "").trim();
+  const minGradeRaw = String(formData.get("min_grade") ?? "").trim();
+  const minGrade = GRADE_REQUIREMENTS.includes(minGradeRaw as GradeRequirement)
+    ? (minGradeRaw as GradeRequirement)
+    : null;
 
   if (!title || !description || !garmentType) {
     return { error: "タイトル・説明・着物の種類は必須です。" };
@@ -47,6 +54,7 @@ export async function createRequest(
       budget_min: budgetMinRaw ? Number(budgetMinRaw) : null,
       budget_max: budgetMaxRaw ? Number(budgetMaxRaw) : null,
       deadline: deadline || null,
+      min_grade: minGrade,
       status: "open",
     })
     .select("id")

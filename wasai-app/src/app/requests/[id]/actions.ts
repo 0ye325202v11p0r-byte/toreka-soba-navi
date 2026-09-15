@@ -1,7 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isStripeConfigured } from "@/lib/stripe";
+import { createCheckoutSessionUrl } from "@/lib/orderPayment";
+import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 
 export interface ProposalFormState {
   error?: string;
@@ -36,11 +40,26 @@ export async function submitProposal(
 
   const { data: request } = await supabase
     .from("requests")
-    .select("status")
+    .select("status, min_grade")
     .eq("id", requestId)
     .maybeSingle();
   if (!request || request.status !== "open") {
     return { error: "この依頼は現在提案を受け付けていません。" };
+  }
+
+  if (request.min_grade) {
+    const { data: craftsmanProfile } = await supabase
+      .from("craftsman_profiles")
+      .select("grade")
+      .eq("profile_id", user.id)
+      .maybeSingle();
+
+    const myGrade = craftsmanProfile?.grade as Grade | null;
+    const requiredGrade = request.min_grade as GradeRequirement;
+    const meetsRequirement = myGrade != null && GRADE_RANK[myGrade] <= GRADE_RANK[requiredGrade];
+    if (!meetsRequirement) {
+      return { error: `この依頼は「${request.min_grade}」以上の資格級位を登録した和裁士のみ提案できます。` };
+    }
   }
 
   const { error } = await supabase.from("proposals").insert({
@@ -91,9 +110,13 @@ export async function respondProposal(
   if (proposalFetchError || !proposal) return { error: "提案が見つかりません。" };
   if (proposal.status !== "pending") return { error: "この提案はすでに処理済みです。" };
 
+  if (decision === "accepted" && !isStripeConfigured()) {
+    return { error: "決済機能は準備中です。しばらくお待ちください。" };
+  }
+
   const { data: request, error: requestFetchError } = await supabase
     .from("requests")
-    .select("id, client_id, title, status")
+    .select("id, client_id, title, garment_type, status")
     .eq("id", proposal.request_id)
     .maybeSingle();
 
@@ -108,15 +131,20 @@ export async function respondProposal(
   if (updateError) return { error: updateError.message };
 
   if (decision === "accepted") {
-    const { error: orderError } = await supabase.from("orders").insert({
-      client_id: request.client_id,
-      craftsman_id: proposal.craftsman_id,
-      request_id: request.id,
-      proposal_id: proposal.id,
-      title: request.title,
-      price: proposal.price,
-      status: "in_progress",
-    });
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        client_id: request.client_id,
+        craftsman_id: proposal.craftsman_id,
+        request_id: request.id,
+        proposal_id: proposal.id,
+        title: request.title,
+        garment_type: request.garment_type,
+        price: proposal.price,
+        status: "pending_payment",
+      })
+      .select("id, title, price")
+      .single();
     if (orderError) return { error: orderError.message };
 
     await supabase.from("requests").update({ status: "matched" }).eq("id", request.id);
@@ -128,6 +156,9 @@ export async function respondProposal(
       .update({ status: "declined" })
       .eq("request_id", request.id)
       .eq("status", "pending");
+
+    const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
+    redirect(checkoutUrl);
   }
 
   revalidatePath(`/requests/${proposal.request_id}`);

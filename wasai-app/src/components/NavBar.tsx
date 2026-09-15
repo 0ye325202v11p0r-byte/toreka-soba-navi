@@ -22,6 +22,9 @@ export default async function NavBar() {
           <Link href="/requests" className="text-ink-muted hover:text-ink transition-colors">
             依頼掲示板
           </Link>
+          <Link href="/market-rates" className="text-ink-muted hover:text-ink transition-colors">
+            相場データ
+          </Link>
           {user?.profile ? (
             <>
               <Link href="/dashboard" className="text-ink-muted hover:text-ink transition-colors">

@@ -98,6 +98,27 @@ export default function RequestForm() {
         </div>
       </div>
 
+      <div>
+        <label htmlFor="min_grade" className="block text-sm font-medium">
+          資格級位の指定（任意）
+        </label>
+        <select
+          id="min_grade"
+          name="min_grade"
+          defaultValue=""
+          className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
+        >
+          <option value="">指定なし（誰でも提案可）</option>
+          <option value="1級">1級のみ</option>
+          <option value="2級">2級以上</option>
+          <option value="3級">3級以上</option>
+          <option value="その他資格">資格保有者のみ</option>
+        </select>
+        <p className="mt-1 text-xs text-ink-muted">
+          指定すると、該当する資格級位の和裁士しか提案できなくなります（価格競争を避けたい高難度の依頼向け）。
+        </p>
+      </div>
+
       {state.error && (
         <p role="alert" className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
           {state.error}

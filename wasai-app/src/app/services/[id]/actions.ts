@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isStripeConfigured } from "@/lib/stripe";
+import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 
 export interface OrderFromServiceState {
   error?: string;
@@ -13,6 +15,7 @@ export async function orderService(
 ): Promise<OrderFromServiceState> {
   const serviceId = String(formData.get("service_id") ?? "");
   if (!serviceId) return { error: "サービスが見つかりません。" };
+  if (!isStripeConfigured()) return { error: "決済機能は準備中です。しばらくお待ちください。" };
 
   const supabase = await createClient();
   const {
@@ -22,7 +25,7 @@ export async function orderService(
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("id, craftsman_id, title, price, status")
+    .select("id, craftsman_id, title, price, garment_type, status")
     .eq("id", serviceId)
     .maybeSingle();
 
@@ -40,13 +43,15 @@ export async function orderService(
       craftsman_id: service.craftsman_id,
       service_id: service.id,
       title: service.title,
+      garment_type: service.garment_type,
       price: service.price,
-      status: "in_progress",
+      status: "pending_payment",
     })
-    .select("id")
+    .select("id, title, price")
     .single();
 
   if (error) return { error: error.message };
 
-  redirect(`/orders/${order.id}`);
+  const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
+  redirect(checkoutUrl);
 }

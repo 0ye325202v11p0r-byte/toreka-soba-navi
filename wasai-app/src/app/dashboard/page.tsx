@@ -9,6 +9,7 @@ import type { JobRequest, Order, Proposal, Service } from "@/lib/types";
 export const metadata = { title: "マイページ" };
 
 const ORDER_STATUS_LABEL: Record<Order["status"], string> = {
+  pending_payment: "支払い待ち",
   in_progress: "進行中",
   delivered: "納品済み",
   completed: "完了",
@@ -64,9 +65,16 @@ export default async function DashboardPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">マイページ</h1>
-        <Link href="/dashboard/profile" className="text-sm text-accent-strong underline">
-          プロフィールを編集
-        </Link>
+        <div className="flex gap-4">
+          {!isClient && (
+            <Link href="/dashboard/payouts" className="text-sm text-accent-strong underline">
+              振込先の設定
+            </Link>
+          )}
+          <Link href="/dashboard/profile" className="text-sm text-accent-strong underline">
+            プロフィールを編集
+          </Link>
+        </div>
       </div>
       <p className="mt-1 text-sm text-ink-muted">
         こんにちは、{current.profile.display_name}さん（

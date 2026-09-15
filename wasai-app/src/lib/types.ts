@@ -2,6 +2,20 @@ export type Role = "client" | "craftsman";
 
 export type Grade = "1級" | "2級" | "3級" | "その他資格" | "資格なし";
 
+// Lower index = higher qualification. A craftsman satisfies a request's
+// min_grade requirement when their own rank is <= the requirement's rank.
+export const GRADE_RANK: Record<Grade, number> = {
+  "1級": 0,
+  "2級": 1,
+  "3級": 2,
+  その他資格: 3,
+  資格なし: 4,
+};
+
+// Subset of Grade that a request can require (excludes "資格なし" — a
+// request can't require the absence of a qualification).
+export type GradeRequirement = "1級" | "2級" | "3級" | "その他資格";
+
 export interface Profile {
   id: string;
   role: Role;
@@ -19,6 +33,8 @@ export interface CraftsmanProfile {
   specialties: string[];
   portfolio_urls: string[];
   is_accepting_orders: boolean;
+  stripe_account_id: string | null;
+  stripe_transfers_enabled: boolean;
   updated_at: string;
 }
 
@@ -49,6 +65,7 @@ export interface JobRequest {
   budget_min: number | null;
   budget_max: number | null;
   deadline: string | null;
+  min_grade: GradeRequirement | null;
   status: RequestStatus;
   created_at: string;
 }
@@ -65,7 +82,8 @@ export interface Proposal {
   created_at: string;
 }
 
-export type OrderStatus = "in_progress" | "delivered" | "completed" | "cancelled";
+export type OrderStatus = "pending_payment" | "in_progress" | "delivered" | "completed" | "cancelled";
+export type PaymentStatus = "unpaid" | "paid" | "transferred" | "refunded";
 
 export interface Order {
   id: string;
@@ -75,8 +93,14 @@ export interface Order {
   request_id: string | null;
   proposal_id: string | null;
   title: string;
+  garment_type: string | null;
   price: number;
   status: OrderStatus;
+  payment_status: PaymentStatus;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_transfer_id: string | null;
+  platform_fee_amount: number | null;
   created_at: string;
   completed_at: string | null;
 }

@@ -59,7 +59,10 @@ export default function StatusControls({
       <StatusButton key="complete" orderId={orderId} nextStatus="completed" label="納品を確認して完了にする" />
     );
   }
-  if ((status === "in_progress" || status === "delivered") && viewerRole === "client") {
+  if (
+    (status === "pending_payment" || status === "in_progress" || status === "delivered") &&
+    viewerRole === "client"
+  ) {
     buttons.push(
       <StatusButton key="cancel" orderId={orderId} nextStatus="cancelled" label="キャンセルする" variant="danger" />
     );

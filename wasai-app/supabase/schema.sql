@@ -248,3 +248,87 @@ create index if not exists idx_orders_client on orders(client_id);
 create index if not exists idx_orders_craftsman on orders(craftsman_id);
 create index if not exists idx_messages_order on messages(order_id);
 create index if not exists idx_reviews_craftsman on reviews(craftsman_id);
+
+-- ---------------------------------------------------------------------------
+-- Phase 2（2026-09-15追加）: Stripe Connectによるエスクロー決済、資格級位限定の
+-- 依頼、相場データ集計。ADD COLUMN IF NOT EXISTS で追記する形にしているのは、
+-- このファイルを「差分だけ再実行すればよい」運用にしているため（README参照）
+-- ——Phase 1が既に本番実行済みの環境でも、このセクションだけ安全に追いつける。
+-- ---------------------------------------------------------------------------
+
+-- 和裁士側のStripe Connect（Express）アカウント。プラットフォームが依頼者から
+-- 直接課金し（destination chargeではない）、取引完了時にtransferで送金する
+-- 「separate charges and transfers」方式を採るため、和裁士側の接続アカウントは
+-- transfers capabilityだけ有効になればよく、charges_enabledは見ていない。
+alter table craftsman_profiles add column if not exists stripe_account_id text;
+alter table craftsman_profiles add column if not exists stripe_transfers_enabled boolean not null default false;
+
+-- 依頼に資格級位の下限を指定できるように（1級限定の依頼など）。価格競争の
+-- 回避策として、和裁士のgradeがこの水準を満たさない場合は提案できない
+-- （enforcementはsubmitProposalアクション側、RLSではなくアプリ層）。
+alter table requests add column if not exists min_grade text check (min_grade in ('1級', '2級', '3級', 'その他資格'));
+
+-- orders.garment_type: services/requestsのどちらから生成された取引かに関わらず
+-- 相場集計ページ（/market-rates）が単純なGROUP BYだけで済むよう非正規化。
+alter table orders add column if not exists garment_type text;
+
+-- 決済状態。ordersのstatus（作業の進捗）とは別軸——決済が完了するまで
+-- 和裁士は作業を開始しない想定なので、statusの初期値も後述の通り変更する。
+alter table orders add column if not exists payment_status text not null default 'unpaid'
+  check (payment_status in ('unpaid', 'paid', 'transferred', 'refunded'));
+alter table orders add column if not exists stripe_checkout_session_id text;
+alter table orders add column if not exists stripe_payment_intent_id text;
+alter table orders add column if not exists stripe_transfer_id text;
+alter table orders add column if not exists platform_fee_amount integer check (platform_fee_amount >= 0);
+
+-- statusに'pending_payment'を追加: 取引作成直後はここから始まり、Stripeの
+-- webhookが決済完了を確認して初めて'in_progress'に進む（クライアントが直接
+-- 'in_progress'へ更新できないよう、この遷移はservice roleのwebhookのみが行う
+-- ——orders_update_participantポリシー自体は変えていないが、アプリ側の
+-- updateOrderStatusアクションがpending_payment→in_progressを許可リストに
+-- 含めていないため、通常のユーザー操作では発生しない）。
+alter table orders drop constraint if exists orders_status_check;
+alter table orders add constraint orders_status_check
+  check (status in ('pending_payment', 'in_progress', 'delivered', 'completed', 'cancelled'));
+
+create index if not exists idx_orders_garment_type on orders(garment_type);
+create index if not exists idx_orders_payment_status on orders(payment_status);
+
+-- ---------------------------------------------------------------------------
+-- Phase 3（2026-09-15追加）: 相場データの公開集計（/market-rates）。
+--
+-- ordersテーブル自体は取引参加者しか読めないRLSのままにしたい（個別の取引額は
+-- 依頼者・和裁士のプライバシー）——だが集計結果（種類別の件数・平均・最安・
+-- 最高）は非会員にも公開して差別化コンテンツにしたい、という2つの要求を
+-- 両立させるため、SECURITY DEFINERのRPC関数だけを公開する。関数はordersの
+-- 生データを一切返さず、集計値のみを返す。件数3件未満のカテゴリは
+-- 除外している（少数サンプルだと集計値から個別の取引価格が事実上特定できて
+-- しまうため）。
+-- ---------------------------------------------------------------------------
+create or replace function public.market_rate_summary()
+returns table (
+  garment_type text,
+  order_count bigint,
+  avg_price numeric,
+  min_price integer,
+  max_price integer
+)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select
+    garment_type,
+    count(*) as order_count,
+    avg(price) as avg_price,
+    min(price) as min_price,
+    max(price) as max_price
+  from orders
+  where status = 'completed' and garment_type is not null
+  group by garment_type
+  having count(*) >= 3
+  order by garment_type;
+$$;
+
+grant execute on function public.market_rate_summary() to anon, authenticated;
