@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured, stripeClient } from "@/lib/stripe";
+import { notify } from "@/lib/notifications";
 
 // Stripe → us only. Verified via the signing secret, not a session — this
 // route intentionally uses the service-role client (bypasses RLS) because
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
         // Only advance orders still awaiting payment — guards against a
         // duplicate webhook delivery (Stripe retries on anything but a 2xx)
         // re-running this after the order has already moved on.
-        await supabase
+        const { data: updated } = await supabase
           .from("orders")
           .update({
             status: "in_progress",
@@ -50,7 +51,19 @@ export async function POST(request: NextRequest) {
             stripe_payment_intent_id: paymentIntentId,
           })
           .eq("id", orderId)
-          .eq("status", "pending_payment");
+          .eq("status", "pending_payment")
+          .select("craftsman_id, title")
+          .maybeSingle();
+
+        if (updated) {
+          await notify(supabase, {
+            userId: updated.craftsman_id,
+            type: "payment_received",
+            title: "支払いが完了しました",
+            body: `${updated.title} — 作業を開始できます。`,
+            link: `/orders/${orderId}`,
+          });
+        }
       }
       break;
     }

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
+import { notify } from "@/lib/notifications";
 
 export interface ProposalFormState {
   error?: string;
@@ -40,7 +41,7 @@ export async function submitProposal(
 
   const { data: request } = await supabase
     .from("requests")
-    .select("status, min_grade")
+    .select("client_id, title, status, min_grade")
     .eq("id", requestId)
     .maybeSingle();
   if (!request || request.status !== "open") {
@@ -75,6 +76,14 @@ export async function submitProposal(
     }
     return { error: error.message };
   }
+
+  await notify(supabase, {
+    userId: request.client_id,
+    type: "proposal_received",
+    title: "新しい提案が届きました",
+    body: request.title,
+    link: `/requests/${requestId}`,
+  });
 
   revalidatePath(`/requests/${requestId}`);
   return {};
@@ -157,8 +166,24 @@ export async function respondProposal(
       .eq("request_id", request.id)
       .eq("status", "pending");
 
+    await notify(supabase, {
+      userId: proposal.craftsman_id,
+      type: "proposal_accepted",
+      title: "提案が承諾されました",
+      body: request.title,
+      link: `/orders/${order.id}`,
+    });
+
     const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
     redirect(checkoutUrl);
+  } else {
+    await notify(supabase, {
+      userId: proposal.craftsman_id,
+      type: "proposal_declined",
+      title: "提案が見送られました",
+      body: request.title,
+      link: `/requests/${proposal.request_id}`,
+    });
   }
 
   revalidatePath(`/requests/${proposal.request_id}`);

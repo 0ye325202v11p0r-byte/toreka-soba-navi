@@ -1,10 +1,22 @@
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { SITE_NAME } from "@/lib/site";
 import LogoutButton from "@/components/LogoutButton";
 
 export default async function NavBar() {
   const user = await getCurrentUser();
+
+  let unreadCount = 0;
+  if (user) {
+    const supabase = await createClient();
+    const { count } = await supabase
+      .from("notifications")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .is("read_at", null);
+    unreadCount = count ?? 0;
+  }
 
   return (
     <header className="border-b border-border bg-bg-elevated">
@@ -27,6 +39,14 @@ export default async function NavBar() {
           </Link>
           {user?.profile ? (
             <>
+              <Link href="/notifications" className="relative text-ink-muted hover:text-ink transition-colors">
+                通知
+                {unreadCount > 0 && (
+                  <span className="absolute -right-3 -top-2 rounded-full bg-warn px-1.5 py-0.5 text-[10px] font-bold leading-none text-bg-elevated">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </Link>
               <Link href="/dashboard" className="text-ink-muted hover:text-ink transition-colors">
                 マイページ
               </Link>

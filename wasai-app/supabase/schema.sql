@@ -332,3 +332,41 @@ as $$
 $$;
 
 grant execute on function public.market_rate_summary() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Phase 4（2026-09-15追加）: アプリ内通知。外部のメール/プッシュサービス
+-- （Resend, Web Push等）のアカウント開設を待たずに、「新しい提案が来た」
+-- 「メッセージが来た」「取引状態が変わった」を可視化するための最小構成。
+-- ---------------------------------------------------------------------------
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  type text not null,
+  title text not null,
+  body text,
+  link text,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+alter table notifications enable row level security;
+
+drop policy if exists "notifications_select_own" on notifications;
+create policy "notifications_select_own" on notifications for select using (user_id = auth.uid());
+
+drop policy if exists "notifications_update_own" on notifications;
+create policy "notifications_update_own" on notifications for update using (user_id = auth.uid());
+
+-- insertだけ「受信者本人」ではなく「ログイン済みの誰でも」に開いている。
+-- 通知は常に「相手の行動をきっかけに」作られる（提案が来たら依頼者に、
+-- メッセージが来たらもう一方の参加者に、など）ため、user_id = auth.uid()
+-- という制約にすると正当な通知作成まで防いでしまう。開けた場合の最悪ケースは
+-- 悪意あるログイン済みユーザーがSupabase REST APIを直接叩いて他人宛に
+-- 迷惑通知を挿入することだが、他人のデータの閲覧・改ざんには繋がらず
+-- （読めるのは通知を受け取ったuser_id本人のみ）、このMVPで他にも許容している
+-- リスク水準（例: 依頼投稿へのレート制限が無い等）と同程度と判断した。
+drop policy if exists "notifications_insert_any_authenticated" on notifications;
+create policy "notifications_insert_any_authenticated" on notifications for insert
+  with check (auth.role() = 'authenticated');
+
+create index if not exists idx_notifications_user_unread on notifications(user_id, read_at);
