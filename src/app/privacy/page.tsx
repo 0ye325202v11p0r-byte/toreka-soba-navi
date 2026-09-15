@@ -9,23 +9,18 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold">プライバシーポリシー</h1>
-      <p className="mb-6 text-xs text-ink-faint">最終更新日：[ここに掲載日を記入]</p>
-
-      <div className="mb-6 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
-        ⚠️
-        このページはテンプレートです。四角括弧「［　］」で囲まれた箇所（事業者情報・連絡先・最終更新日）は、公開前に必ずご自身の情報に置き換えてください。それ以外の本文は、本サイトが実際に収集・利用しているデータに基づいて記載しています。内容に不安がある場合は、公開前に専門家（弁護士等）にご確認ください。
-      </div>
+      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月15日</p>
 
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
           <h2 className="mb-2 font-bold">1. 事業者情報</h2>
           <p>
-            本サービス「トレカ相場ナビ」（以下「本サービス」）は、［ここに事業者名・屋号を記入］（以下「当方」）が提供します。
+            本サービス「トレカ相場ナビ」（以下「本サービス」）は、トレカ相場ナビ運営者（以下「当方」）が提供します。
           </p>
           <p className="mt-1">
-            所在地：［ここに記入］
+            所在地：大阪府
             <br />
-            連絡先：［ここにメールアドレス等を記入］
+            連絡先：0ye325202v11p0r@gmail.com
           </p>
         </section>
 
@@ -105,7 +100,7 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-bold">8. お問い合わせ</h2>
           <p>本ポリシーに関するお問い合わせは、以下の連絡先までお願いいたします。</p>
-          <p className="mt-1">［ここに連絡先メールアドレス等を記入］</p>
+          <p className="mt-1">0ye325202v11p0r@gmail.com</p>
         </section>
       </div>
     </div>

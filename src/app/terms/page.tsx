@@ -9,18 +9,18 @@ export default function TermsPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold">利用規約</h1>
-      <p className="mb-6 text-xs text-ink-faint">最終更新日：[ここに掲載日を記入]</p>
+      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月15日</p>
 
       <div className="mb-6 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
         ⚠️
-        このページはテンプレートです。四角括弧「［　］」で囲まれた箇所（事業者情報・連絡先・最終更新日）は、公開前に必ずご自身の情報に置き換えてください。有料プラン（サブスク課金）を開始する際は、解約・返金に関する条項の追加が必要になります。公開前に専門家（弁護士等）にご確認いただくことを推奨します。
+        有料プラン（サブスク課金）を開始する際は、解約・返金に関する条項の追加が必要になります。公開前に専門家（弁護士等）にご確認いただくことを推奨します。
       </div>
 
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
           <h2 className="mb-2 font-bold">第1条（本規約について）</h2>
           <p>
-            本規約は、［ここに事業者名・屋号を記入］（以下「当方」）が提供する「トレカ相場ナビ」（以下「本サービス」）の利用条件を定めるものです。本サービスをご利用いただく場合には、本規約に同意したものとみなします。
+            本規約は、トレカ相場ナビ運営者（以下「当方」）が提供する「トレカ相場ナビ」（以下「本サービス」）の利用条件を定めるものです。本サービスをご利用いただく場合には、本規約に同意したものとみなします。
           </p>
         </section>
 
@@ -89,14 +89,14 @@ export default function TermsPage() {
         <section>
           <h2 className="mb-2 font-bold">第9条（準拠法・管轄）</h2>
           <p>
-            本規約の解釈にあたっては、日本法を準拠法とします。本サービスに関して紛争が生じた場合には、［ここに管轄裁判所を記入。例：東京地方裁判所］を第一審の専属的合意管轄裁判所とします。
+            本規約の解釈にあたっては、日本法を準拠法とします。本サービスに関して紛争が生じた場合には、大阪地方裁判所を第一審の専属的合意管轄裁判所とします。
           </p>
         </section>
 
         <section>
           <h2 className="mb-2 font-bold">第10条（お問い合わせ）</h2>
           <p>本規約に関するお問い合わせは、以下の連絡先までお願いいたします。</p>
-          <p className="mt-1">［ここに連絡先メールアドレス等を記入］</p>
+          <p className="mt-1">0ye325202v11p0r@gmail.com</p>
         </section>
       </div>
     </div>
