@@ -70,7 +70,7 @@ export default function ProfileForm({
 
           <div>
             <label htmlFor="grade" className="block text-sm font-medium">
-              資格級位
+              資格級位（和裁技能士）
             </label>
             <select
               id="grade"
@@ -85,6 +85,10 @@ export default function ProfileForm({
               <option value="その他資格">その他資格</option>
               <option value="資格なし">資格なし</option>
             </select>
+            <p className="mt-1 text-xs text-ink-muted">
+              1〜3級は国家検定「和裁技能士」（厚生労働省・都道府県職業能力開発協会）の等級です。
+              日本和裁士会認定などそれ以外の資格をお持ちの場合は「その他資格」を選び、発行団体名が分かる証明書を登録してください。
+            </p>
           </div>
 
           {craftsmanProfile?.grade && (
@@ -124,6 +128,7 @@ export default function ProfileForm({
               className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-ink-muted">
+              1〜3級の場合は都道府県職業能力開発協会が発行する技能検定合格証書、その他資格の場合は発行団体名が分かる証明書をご登録ください。
               運営が内容を確認できると、プロフィールに「確認済み」バッジが表示されます。資格級位または証明書URLを変更すると確認状態はリセットされます。
             </p>
           </div>

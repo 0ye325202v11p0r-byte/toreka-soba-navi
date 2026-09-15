@@ -38,6 +38,11 @@ export default async function AdminCraftsmenPage() {
       <p className="mt-1 text-sm text-ink-muted">
         資格級位を設定している和裁士の一覧。証明書URLの内容を確認できたら「確認済みにする」を押してください。
       </p>
+      <p className="mt-2 text-xs text-ink-muted">
+        1〜3級は国家検定「和裁技能士」の等級です。証明書が都道府県職業能力開発協会発行の技能検定合格証書かどうかを確認してください
+        （公開のオンライン照会はないため、疑わしい場合は本人確認の上で発行元の協会に直接問い合わせてください）。
+        「その他資格」は日本和裁士会認定など別団体の資格です。発行団体名が証明書に明記されているか確認してください。
+      </p>
 
       <ul className="mt-6 space-y-3">
         {rows.map((r) => (
