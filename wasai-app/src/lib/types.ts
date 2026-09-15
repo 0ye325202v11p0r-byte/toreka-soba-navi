@@ -35,6 +35,9 @@ export interface CraftsmanProfile {
   is_accepting_orders: boolean;
   stripe_account_id: string | null;
   stripe_transfers_enabled: boolean;
+  certificate_url: string | null;
+  grade_verified: boolean;
+  grade_verified_at: string | null;
   updated_at: string;
 }
 
@@ -117,7 +120,7 @@ export interface Review {
   id: string;
   order_id: string;
   reviewer_id: string;
-  craftsman_id: string;
+  reviewee_id: string;
   rating: number;
   comment: string | null;
   created_at: string;

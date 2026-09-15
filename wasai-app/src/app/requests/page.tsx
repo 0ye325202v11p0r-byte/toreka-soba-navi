@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { getRatingSummary } from "@/lib/reviews";
+import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import { GARMENT_TYPES, type JobRequest, type Profile } from "@/lib/types";
 
@@ -11,7 +13,7 @@ export const metadata = { title: "依頼掲示板" };
 export default async function RequestsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ garment_type?: string; min_grade?: string }>;
+  searchParams: Promise<{ q?: string; garment_type?: string; min_grade?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return (
@@ -22,18 +24,23 @@ export default async function RequestsPage({
     );
   }
 
-  const { garment_type = "", min_grade = "" } = await searchParams;
+  const { q = "", garment_type = "", min_grade = "" } = await searchParams;
   const supabase = await createClient();
 
   let query = supabase
     .from("requests")
     .select("*, profiles!inner(*)")
     .eq("status", "open");
+  if (q) query = query.ilike("title", `%${q}%`);
   if (garment_type) query = query.eq("garment_type", garment_type);
   if (min_grade) query = query.eq("min_grade", min_grade);
 
   const { data, error } = await query.order("created_at", { ascending: false });
   const requests = (data ?? []) as unknown as RequestRow[];
+
+  const clientRatings = await Promise.all(
+    requests.map((r) => getRatingSummary(supabase, r.client_id))
+  );
 
   return (
     <div>
@@ -48,6 +55,13 @@ export default async function RequestsPage({
       </p>
 
       <form className="mt-4 flex gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="タイトルで検索"
+          className="rounded-md border border-border bg-bg px-2 py-1.5"
+        />
         <select name="garment_type" defaultValue={garment_type} className="rounded-md border border-border bg-bg px-2 py-1.5">
           <option value="">種類: すべて</option>
           {GARMENT_TYPES.map((g) => (
@@ -71,7 +85,7 @@ export default async function RequestsPage({
       {error && <p className="mt-4 text-sm text-warn">読み込みに失敗しました: {error.message}</p>}
 
       <ul className="mt-6 space-y-3">
-        {requests.map((r) => (
+        {requests.map((r, i) => (
           <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center gap-2">
               <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
@@ -87,6 +101,9 @@ export default async function RequestsPage({
               {r.garment_type} ・ 依頼者: {r.profiles.display_name}
               {r.deadline ? ` ・ 希望納期: ${r.deadline}` : ""}
             </p>
+            <div className="mt-1">
+              <StarRating rating={clientRatings[i]?.average ?? null} count={clientRatings[i]?.count ?? 0} />
+            </div>
             <p className="mt-2 line-clamp-2 text-sm text-ink-muted">{r.description}</p>
             {(r.budget_min || r.budget_max) && (
               <p className="mt-2 text-sm font-semibold">

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getCraftsmanRatingSummary } from "@/lib/reviews";
+import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
+import VerifiedBadge from "@/components/VerifiedBadge";
 import SetupNotice from "@/components/SetupNotice";
 import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type Profile } from "@/lib/types";
 
@@ -13,7 +14,7 @@ export const metadata = { title: "和裁士を探す" };
 export default async function CraftsmenPage({
   searchParams,
 }: {
-  searchParams: Promise<{ specialty?: string; prefecture?: string; grade?: string }>;
+  searchParams: Promise<{ q?: string; specialty?: string; prefecture?: string; grade?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return (
@@ -24,10 +25,11 @@ export default async function CraftsmenPage({
     );
   }
 
-  const { specialty = "", prefecture = "", grade = "" } = await searchParams;
+  const { q = "", specialty = "", prefecture = "", grade = "" } = await searchParams;
   const supabase = await createClient();
 
   let query = supabase.from("craftsman_profiles").select("*, profiles!inner(*)");
+  if (q) query = query.ilike("profiles.display_name", `%${q}%`);
   if (specialty) query = query.contains("specialties", [specialty]);
   if (prefecture) query = query.eq("profiles.prefecture", prefecture);
   if (grade) query = query.eq("grade", grade);
@@ -36,7 +38,7 @@ export default async function CraftsmenPage({
   const craftsmen = (data ?? []) as unknown as CraftsmanRow[];
 
   const ratings = await Promise.all(
-    craftsmen.map((c) => getCraftsmanRatingSummary(supabase, c.profile_id))
+    craftsmen.map((c) => getRatingSummary(supabase, c.profile_id))
   );
 
   return (
@@ -47,6 +49,13 @@ export default async function CraftsmenPage({
       </p>
 
       <form className="mt-4 flex flex-wrap gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="名前で検索"
+          className="rounded-md border border-border bg-bg px-2 py-1.5"
+        />
         <select name="specialty" defaultValue={specialty} className="rounded-md border border-border bg-bg px-2 py-1.5">
           <option value="">得意分野: すべて</option>
           {GARMENT_TYPES.map((g) => (
@@ -80,9 +89,12 @@ export default async function CraftsmenPage({
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {craftsmen.map((c, i) => (
           <li key={c.profile_id} className="rounded-lg border border-border bg-bg-elevated p-4">
-            <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-accent-strong hover:underline">
-              {c.profiles.display_name}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-accent-strong hover:underline">
+                {c.profiles.display_name}
+              </Link>
+              {c.grade_verified && <VerifiedBadge />}
+            </div>
             <p className="mt-1 text-xs text-ink-muted">
               {c.profiles.prefecture ?? "地域未設定"} ・ {c.grade ?? "資格未設定"}
               {c.years_experience != null ? ` ・ 経験${c.years_experience}年` : ""}

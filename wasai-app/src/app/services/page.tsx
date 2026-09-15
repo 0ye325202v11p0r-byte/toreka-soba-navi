@@ -11,7 +11,7 @@ export const metadata = { title: "出品一覧" };
 export default async function ServicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ garment_type?: string }>;
+  searchParams: Promise<{ q?: string; garment_type?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return (
@@ -22,13 +22,14 @@ export default async function ServicesPage({
     );
   }
 
-  const { garment_type = "" } = await searchParams;
+  const { q = "", garment_type = "" } = await searchParams;
   const supabase = await createClient();
 
   let query = supabase
     .from("services")
     .select("*, profiles!inner(*)")
     .eq("status", "published");
+  if (q) query = query.ilike("title", `%${q}%`);
   if (garment_type) query = query.eq("garment_type", garment_type);
 
   const { data, error } = await query.order("created_at", { ascending: false });
@@ -44,6 +45,13 @@ export default async function ServicesPage({
       </div>
 
       <form className="mt-4 flex gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="タイトルで検索"
+          className="rounded-md border border-border bg-bg px-2 py-1.5"
+        />
         <select name="garment_type" defaultValue={garment_type} className="rounded-md border border-border bg-bg px-2 py-1.5">
           <option value="">種類: すべて</option>
           {GARMENT_TYPES.map((g) => (

@@ -47,6 +47,7 @@ export async function updateProfile(
       .map((s) => s.trim())
       .filter(Boolean);
     const isAcceptingOrders = formData.get("is_accepting_orders") === "on";
+    const certificateUrl = String(formData.get("certificate_url") ?? "").trim() || null;
 
     const { error: craftsmanError } = await supabase
       .from("craftsman_profiles")
@@ -56,6 +57,7 @@ export async function updateProfile(
         specialties,
         portfolio_urls: portfolioUrls,
         is_accepting_orders: isAcceptingOrders,
+        certificate_url: certificateUrl,
         updated_at: new Date().toISOString(),
       })
       .eq("profile_id", user.id);

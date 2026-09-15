@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getCraftsmanRatingSummary } from "@/lib/reviews";
+import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
+import VerifiedBadge from "@/components/VerifiedBadge";
 import SetupNotice from "@/components/SetupNotice";
 import type { CraftsmanProfile, Profile, Service, Review } from "@/lib/types";
 
@@ -45,16 +46,19 @@ export default async function CraftsmanDetailPage({
   const { data: reviews } = await supabase
     .from("reviews")
     .select("*")
-    .eq("craftsman_id", id)
+    .eq("reviewee_id", id)
     .order("created_at", { ascending: false })
     .returns<Review[]>();
 
-  const rating = await getCraftsmanRatingSummary(supabase, id);
+  const rating = await getRatingSummary(supabase, id);
 
   return (
     <div>
       <div className="rounded-lg border border-border bg-bg-elevated p-6">
-        <h1 className="text-2xl font-bold">{profile.display_name}</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">{profile.display_name}</h1>
+          {craftsmanProfile?.grade_verified && <VerifiedBadge />}
+        </div>
         <p className="mt-1 text-sm text-ink-muted">
           {profile.prefecture ?? "地域未設定"} ・ {craftsmanProfile?.grade ?? "資格未設定"}
           {craftsmanProfile?.years_experience != null

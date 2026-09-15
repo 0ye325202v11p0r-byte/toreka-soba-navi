@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
-import { getCraftsmanRatingSummary } from "@/lib/reviews";
+import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import OrderButton from "./OrderButton";
@@ -27,7 +27,7 @@ export default async function ServiceDetailPage({
 
   if (!service) notFound();
 
-  const rating = await getCraftsmanRatingSummary(supabase, service.craftsman_id);
+  const rating = await getRatingSummary(supabase, service.craftsman_id);
   const current = await getCurrentUser();
   const isOwner = current?.id === service.craftsman_id;
 

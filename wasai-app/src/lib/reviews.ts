@@ -5,11 +5,14 @@ export interface RatingSummary {
   count: number;
 }
 
-export async function getCraftsmanRatingSummary(
+// Generic over who's being rated — a craftsman (reviewed by clients) or a
+// client (reviewed by craftsmen); reviews are bidirectional (see
+// supabase/schema.sql Phase 7).
+export async function getRatingSummary(
   supabase: SupabaseClient,
-  craftsmanId: string
+  revieweeId: string
 ): Promise<RatingSummary> {
-  const { data } = await supabase.from("reviews").select("rating").eq("craftsman_id", craftsmanId);
+  const { data } = await supabase.from("reviews").select("rating").eq("reviewee_id", revieweeId);
 
   const ratings = (data ?? []).map((r) => r.rating as number);
   if (ratings.length === 0) return { average: null, count: 0 };

@@ -203,17 +203,24 @@ export async function submitReview(
     .select("id, client_id, craftsman_id, status")
     .eq("id", orderId)
     .maybeSingle();
-  if (!order || order.client_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (!order || (order.client_id !== user.id && order.craftsman_id !== user.id)) {
+    return { error: "この操作を行う権限がありません。" };
+  }
   if (order.status !== "completed") return { error: "取引完了後にレビューできます。" };
+
+  const revieweeId = order.client_id === user.id ? order.craftsman_id : order.client_id;
 
   const { error } = await supabase.from("reviews").insert({
     order_id: orderId,
     reviewer_id: user.id,
-    craftsman_id: order.craftsman_id,
+    reviewee_id: revieweeId,
     rating,
     comment: comment || null,
   });
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505") return { error: "この取引には既にレビュー済みです。" };
+    return { error: error.message };
+  }
 
   revalidatePath(`/orders/${orderId}`);
   return {};

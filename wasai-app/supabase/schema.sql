@@ -247,7 +247,12 @@ create index if not exists idx_proposals_craftsman on proposals(craftsman_id);
 create index if not exists idx_orders_client on orders(client_id);
 create index if not exists idx_orders_craftsman on orders(craftsman_id);
 create index if not exists idx_messages_order on messages(order_id);
-create index if not exists idx_reviews_craftsman on reviews(craftsman_id);
+-- reviews(craftsman_id) index removed here — Phase 7 below renames that
+-- column to reviewee_id and (re)creates idx_reviews_reviewee instead. Left
+-- out of this original block (rather than "create index ... craftsman_id"
+-- immediately failing on a second full re-run of this file, once Phase 7
+-- has already dropped that column) so the whole file stays safe to re-run
+-- top to bottom any number of times.
 
 -- ---------------------------------------------------------------------------
 -- Phase 2（2026-09-15追加）: Stripe Connectによるエスクロー決済、資格級位限定の
@@ -380,3 +385,86 @@ create index if not exists idx_notifications_user_unread on notifications(user_i
 alter table orders add column if not exists delivered_at timestamptz;
 
 create index if not exists idx_orders_delivered_at on orders(status, delivered_at);
+
+-- ---------------------------------------------------------------------------
+-- Phase 6（2026-09-15追加）: 資格級位の運営確認（自己申告のままだと「1級限定」
+-- 機能の信頼性が成り立たないという指摘への対応）。
+-- ---------------------------------------------------------------------------
+alter table craftsman_profiles add column if not exists certificate_url text;
+alter table craftsman_profiles add column if not exists grade_verified boolean not null default false;
+alter table craftsman_profiles add column if not exists grade_verified_at timestamptz;
+
+-- grade_verifiedをtrueにできるのはservice role（管理者アクション）経由のみ。
+-- craftsman_profiles_update_ownポリシーはprofile_id = auth.uid()であれば
+-- どの列でも更新できてしまう（RLSは行単位でしか制御できず、列単位の制限は
+-- ポリシーだけでは書けない）ため、本人が直接REST APIを叩いてgrade_verified
+-- をtrueに書き換えることを防ぐにはトリガーが必要——でなければ「検証」機能が
+-- 名ばかりになる。あわせて、grade・certificate_urlのいずれかが変わったら
+-- 検証状態を自動的に未検証へ戻す（新しい申告は再確認が必要なため）。
+create or replace function public.craftsman_profiles_guard_verification()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if auth.role() <> 'service_role' then
+      new.grade_verified := false;
+      new.grade_verified_at := null;
+    end if;
+    return new;
+  end if;
+
+  if new.grade is distinct from old.grade or new.certificate_url is distinct from old.certificate_url then
+    new.grade_verified := false;
+    new.grade_verified_at := null;
+  end if;
+
+  if auth.role() <> 'service_role'
+     and new.grade_verified is distinct from old.grade_verified
+     and new.grade_verified = true then
+    new.grade_verified := old.grade_verified;
+    new.grade_verified_at := old.grade_verified_at;
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_craftsman_profiles_guard_verification on craftsman_profiles;
+create trigger trg_craftsman_profiles_guard_verification
+  before insert or update on craftsman_profiles
+  for each row
+  execute function public.craftsman_profiles_guard_verification();
+
+-- ---------------------------------------------------------------------------
+-- Phase 7（2026-09-15追加）: レビューを依頼者→和裁士の一方向から双方向に。
+-- 「問題のある依頼者（無応答・無理な要求等）の履歴が可視化されない」という
+-- 指摘への対応——完了した取引の当事者なら、どちらからでも相手を評価できる
+-- ようにする。craftsman_idをreviewee_id（評価される側、どちらの役割でも
+-- 入りうる）に置き換え、「1取引につき1件まで」だったuniqueを
+-- 「1取引につきreviewerごとに1件まで」（最大2件）に変更する。
+-- ---------------------------------------------------------------------------
+alter table reviews add column if not exists reviewee_id uuid references profiles(id) on delete cascade;
+update reviews set reviewee_id = craftsman_id where reviewee_id is null;
+alter table reviews alter column reviewee_id set not null;
+alter table reviews drop column if exists craftsman_id;
+
+alter table reviews drop constraint if exists reviews_order_id_key;
+alter table reviews drop constraint if exists reviews_order_id_reviewer_id_key;
+alter table reviews add constraint reviews_order_id_reviewer_id_key unique (order_id, reviewer_id);
+
+drop policy if exists "reviews_insert_own_completed_order" on reviews;
+drop policy if exists "reviews_insert_participant_completed_order" on reviews;
+create policy "reviews_insert_participant_completed_order" on reviews for insert
+  with check (
+    reviewer_id = auth.uid()
+    and exists (
+      select 1 from orders o
+      where o.id = order_id
+        and o.status = 'completed'
+        and (o.client_id = auth.uid() or o.craftsman_id = auth.uid())
+        and reviewee_id = case when o.client_id = auth.uid() then o.craftsman_id else o.client_id end
+    )
+  );
+
+create index if not exists idx_reviews_reviewee on reviews(reviewee_id);

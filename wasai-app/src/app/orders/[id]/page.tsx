@@ -62,11 +62,13 @@ export default async function OrderDetailPage({
     .order("created_at", { ascending: true });
   const messages = (messagesRaw ?? []) as Message[];
 
-  const { data: review } = await supabase
+  const { data: reviewsRaw } = await supabase
     .from("reviews")
     .select("*")
     .eq("order_id", id)
-    .maybeSingle<Review>();
+    .returns<Review[]>();
+  const myReview = (reviewsRaw ?? []).find((r) => r.reviewer_id === current.id);
+  const revieweeLabel = viewerRole === "client" ? "この和裁士" : "この依頼者";
 
   return (
     <div>
@@ -132,11 +134,11 @@ export default async function OrderDetailPage({
         <MessageForm orderId={order.id} />
       </section>
 
-      {order.status === "completed" && viewerRole === "client" && (
-        <section className="mt-6">{review ? (
+      {order.status === "completed" && (
+        <section className="mt-6">{myReview ? (
           <p className="text-sm text-ink-muted">レビュー投稿済みです。ありがとうございました。</p>
         ) : (
-          <ReviewForm orderId={order.id} />
+          <ReviewForm orderId={order.id} revieweeLabel={revieweeLabel} />
         )}</section>
       )}
     </div>

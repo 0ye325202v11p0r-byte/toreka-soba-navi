@@ -4,6 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import SetupNotice from "@/components/SetupNotice";
+import VerifiedBadge from "@/components/VerifiedBadge";
+import StarRating from "@/components/StarRating";
+import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
 import WithdrawProposalButton from "./WithdrawProposalButton";
@@ -41,11 +44,24 @@ export default async function RequestDetailPage({
     .order("created_at", { ascending: true });
   const proposals = (proposalsRaw ?? []) as unknown as (Proposal & { profiles: Profile })[];
 
+  const craftsmanIds = proposals.map((p) => p.craftsman_id);
+  const verifiedCraftsmanIds = new Set<string>();
+  if (craftsmanIds.length > 0) {
+    const { data: verifiedRows } = await supabase
+      .from("craftsman_profiles")
+      .select("profile_id")
+      .in("profile_id", craftsmanIds)
+      .eq("grade_verified", true);
+    for (const row of verifiedRows ?? []) verifiedCraftsmanIds.add(row.profile_id);
+  }
+
   const { data: order } = await supabase
     .from("orders")
     .select("id")
     .eq("request_id", id)
     .maybeSingle();
+
+  const clientRating = await getRatingSummary(supabase, request.client_id);
 
   const current = await getCurrentUser();
   const isOwner = current?.id === request.client_id;
@@ -81,6 +97,9 @@ export default async function RequestDetailPage({
         {" ・ ステータス: "}
         {request.status === "open" ? "募集中" : request.status === "matched" ? "マッチング済み" : "終了"}
       </p>
+      <div className="mt-1">
+        <StarRating rating={clientRating.average} count={clientRating.count} />
+      </div>
       {(request.budget_min || request.budget_max) && (
         <p className="mt-2 text-sm font-semibold">
           予算: {request.budget_min ? `¥${request.budget_min.toLocaleString()}` : "〜"}
@@ -115,9 +134,12 @@ export default async function RequestDetailPage({
           {proposals.map((p) => (
             <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-4">
               <div className="flex items-center justify-between">
-                <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
-                  {p.profiles.display_name}
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
+                    {p.profiles.display_name}
+                  </Link>
+                  {verifiedCraftsmanIds.has(p.craftsman_id) && <VerifiedBadge />}
+                </div>
                 <span className="text-sm font-bold">¥{p.price.toLocaleString()}</span>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm">{p.message}</p>

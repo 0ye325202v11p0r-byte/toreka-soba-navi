@@ -87,6 +87,16 @@ export default function ProfileForm({
             </select>
           </div>
 
+          {craftsmanProfile?.grade && (
+            <p className="text-xs">
+              {craftsmanProfile.grade_verified ? (
+                <span className="text-good">✓ 運営による資格確認済み</span>
+              ) : (
+                <span className="text-ink-muted">未確認（証明書URLを登録すると運営が確認します）</span>
+              )}
+            </p>
+          )}
+
           <div>
             <label htmlFor="years_experience" className="block text-sm font-medium">
               経験年数
@@ -99,6 +109,23 @@ export default function ProfileForm({
               defaultValue={craftsmanProfile?.years_experience ?? ""}
               className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
+          </div>
+
+          <div>
+            <label htmlFor="certificate_url" className="block text-sm font-medium">
+              資格証明書の画像/PDFのURL（任意）
+            </label>
+            <input
+              id="certificate_url"
+              name="certificate_url"
+              type="url"
+              defaultValue={craftsmanProfile?.certificate_url ?? ""}
+              placeholder="https://..."
+              className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-ink-muted">
+              運営が内容を確認できると、プロフィールに「確認済み」バッジが表示されます。資格級位または証明書URLを変更すると確認状態はリセットされます。
+            </p>
           </div>
 
           <fieldset>

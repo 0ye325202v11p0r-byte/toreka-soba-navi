@@ -5,13 +5,13 @@ import { submitReview, type ReviewFormState } from "./actions";
 
 const initialState: ReviewFormState = {};
 
-export default function ReviewForm({ orderId }: { orderId: string }) {
+export default function ReviewForm({ orderId, revieweeLabel }: { orderId: string; revieweeLabel: string }) {
   const [state, formAction, pending] = useActionState(submitReview, initialState);
 
   return (
     <form action={formAction} className="space-y-3 rounded-lg border border-border bg-bg-elevated p-4">
       <input type="hidden" name="order_id" value={orderId} />
-      <h3 className="text-sm font-semibold">この和裁士を評価する</h3>
+      <h3 className="text-sm font-semibold">{revieweeLabel}を評価する</h3>
 
       <div>
         <label htmlFor="rating" className="block text-sm font-medium">
