@@ -55,7 +55,7 @@ email」設定がオンのままだと、新規登録時に依然として確認
 送らなくなる。パスワードを忘れた場合の再設定フロー（`/reset-password`）
 は2026-09-13中に追加実装済み。
 
-### 1c. CAPTCHA（Cloudflare Turnstile + Supabase Attack Protection）— コード側は準備済み、有効化は未実施
+### 1c. CAPTCHA（Cloudflare Turnstile + Supabase Attack Protection）✅ 完了（2026-09-15、本番`/login`で実際に検証成功まで確認済み）
 
 **発覚した問題（セキュリティ監査）：** 新規登録・ログインの両方に
 リクエスト回数の上限が無く、①誰でも無制限に適当なアカウントを作れる
@@ -80,10 +80,10 @@ Site Key（`NEXT_PUBLIC_TURNSTILE_SITE_KEY`、非秘密のため今回このセ�
 Vercelに設定・再デプロイ済み）とSecret Key（秘密情報のため未設定——
 ユーザー自身の入力が必要）を取得済み。
 
-**残作業（ユーザー自身が行う必要あり——秘密情報の入力のため）：**
-1. Supabaseダッシュボード → **Authentication** → **Attack Protection**
-   でTurnstileを有効化し、発行済みのSecret Keyを設定（値はCloudflare
-   ダッシュボードのTurnstileウィジェット詳細からいつでも再確認できる）
+ユーザー本人がSupabaseダッシュボード → **Authentication** →
+**Attack Protection** でCaptcha providerをTurnstileに変更しSecret Keyを
+設定・保存。本番`/login`にアクセスし、Turnstileウィジェットが表示され
+「成功しました！」と自動検証まで通ることを実際に確認済み。
 
 **検証：** `/login`にアクセスし、CAPTCHAウィジェットが表示され、チェック
 完了後にログイン/新規登録ボタンが押せるようになることを確認する。
