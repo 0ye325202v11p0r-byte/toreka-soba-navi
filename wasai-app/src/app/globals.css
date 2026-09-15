@@ -87,7 +87,13 @@
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  /* Noto Sans JP/CJK JP added as a fallback for platforms without Hiragino
+     (Mac/iOS) or Yu Gothic/Meiryo (Windows) — notably Android and Linux,
+     where the previous stack fell through to whatever CJK font happened to
+     be installed (often a dated-looking Mincho/Gothic substitute) instead
+     of a normal-looking sans. */
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo,
+    "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
 }
 
 /* Keeps the printed/PDF-saved transaction statement (/orders/[id]/receipt)
