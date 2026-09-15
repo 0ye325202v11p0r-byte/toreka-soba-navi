@@ -54,7 +54,7 @@ export default async function RequestsPage({
         依頼者が募集中の見積り依頼一覧です。和裁士は気になる依頼に提案できます。
       </p>
 
-      <form className="mt-4 flex gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
+      <form className="mt-4 flex flex-wrap gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
         <input
           type="search"
           name="q"

@@ -44,7 +44,7 @@ export default async function ServicesPage({
         </Link>
       </div>
 
-      <form className="mt-4 flex gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
+      <form className="mt-4 flex flex-wrap gap-3 rounded-lg border border-border bg-bg-elevated p-4 text-sm">
         <input
           type="search"
           name="q"
