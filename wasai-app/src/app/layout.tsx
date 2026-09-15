@@ -6,8 +6,8 @@ import { SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f2e7" },
-    { media: "(prefers-color-scheme: dark)", color: "#131e26" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#18181b" },
   ],
 };
 
