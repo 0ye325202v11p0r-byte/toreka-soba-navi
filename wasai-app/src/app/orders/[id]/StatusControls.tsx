@@ -1,10 +1,15 @@
 "use client";
 
-import { useActionState, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { updateOrderStatus, type StatusFormState } from "./actions";
 import type { OrderStatus } from "@/lib/types";
 
 const initialState: StatusFormState = {};
+
+// Yamato/Sagawa's standard per-shipment compensation caps at ¥300,000
+// without extra insurance; above that, without action, an expensive kimono
+// in transit could go uncompensated if something goes wrong.
+const CARRIER_COMPENSATION_LIMIT = 300000;
 
 function StatusButton({
   orderId,
@@ -40,6 +45,10 @@ function StatusButton({
 
 function DeliverButton({ orderId }: { orderId: string }) {
   const [state, formAction, pending] = useActionState(updateOrderStatus, initialState);
+  const [declaredValue, setDeclaredValue] = useState("");
+  const exceedsCompensationLimit =
+    declaredValue !== "" && Number(declaredValue) > CARRIER_COMPENSATION_LIMIT;
+
   return (
     <form action={formAction} className="w-full space-y-2 rounded-lg border border-border bg-bg-elevated p-3">
       <input type="hidden" name="order_id" value={orderId} />
@@ -59,6 +68,25 @@ function DeliverButton({ orderId }: { orderId: string }) {
           placeholder="追跡番号（任意）"
           className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 text-sm"
         />
+      </div>
+      <div>
+        <input
+          name="declared_value"
+          type="number"
+          min={0}
+          value={declaredValue}
+          onChange={(e) => setDeclaredValue(e.target.value)}
+          placeholder="品物の想定価値（任意・円）"
+          className="w-full rounded-md border border-border bg-bg px-2 py-1.5 text-sm"
+        />
+        <p className="mt-1 text-xs text-ink-muted">
+          宅急便・飛脚宅配便は1個30万円まで、ゆうパックは通常30万円（セキュリティサービス利用時50万円）まで配送業者の補償が自動で付きます。それを超える場合は運送保険等のご検討を。
+        </p>
+        {exceedsCompensationLimit && (
+          <p role="alert" className="mt-1 text-xs text-warn">
+            30万円を超える想定価値です。標準の補償上限を超えるため、佐川急便の運送保険やゆうパックのセキュリティサービスなど、価値に見合った配送方法のご利用をおすすめします。
+          </p>
+        )}
       </div>
       <button
         type="submit"

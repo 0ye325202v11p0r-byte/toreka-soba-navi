@@ -132,6 +132,12 @@ export default async function OrderDetailPage({
         <p className="mt-2 text-xs text-ink-muted">
           配送方法: {order.shipping_method || "未入力"}
           {order.tracking_number ? ` ・ 追跡番号: ${order.tracking_number}` : ""}
+          {order.declared_value != null ? ` ・ 想定価値: ¥${order.declared_value.toLocaleString()}` : ""}
+        </p>
+      )}
+      {order.declared_value != null && order.declared_value > 300000 && (
+        <p className="mt-1 text-xs text-warn">
+          配送業者の標準補償上限（30万円前後）を超える想定価値です。運送保険等でカバーされているか、当事者間でご確認ください。
         </p>
       )}
 

@@ -150,6 +150,10 @@ export async function updateOrderStatus(
   // it later.
   const shippingMethod = String(formData.get("shipping_method") ?? "").trim();
   const trackingNumber = String(formData.get("tracking_number") ?? "").trim();
+  const declaredValueRaw = String(formData.get("declared_value") ?? "").trim();
+  const declaredValue = declaredValueRaw && Number.isFinite(Number(declaredValueRaw))
+    ? Number(declaredValueRaw)
+    : null;
 
   const { error } = await supabase
     .from("orders")
@@ -159,6 +163,7 @@ export async function updateOrderStatus(
       delivered_at: nextStatus === "delivered" ? new Date().toISOString() : undefined,
       shipping_method: nextStatus === "delivered" ? shippingMethod || null : undefined,
       tracking_number: nextStatus === "delivered" ? trackingNumber || null : undefined,
+      declared_value: nextStatus === "delivered" ? declaredValue : undefined,
     })
     .eq("id", orderId);
   if (error) return { error: error.message };

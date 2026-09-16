@@ -535,3 +535,15 @@ create index if not exists idx_craftsman_rates_garment_price on craftsman_rates(
 -- 期日が決まっている依頼が多い和裁の性質上、これは実務上の抜けだった。
 -- ---------------------------------------------------------------------------
 alter table orders add column if not exists desired_by date;
+
+-- ---------------------------------------------------------------------------
+-- Phase 19（2026-09-16追加）: 配送中の破損・紛失リスクへの対応。プラット
+-- フォーム自身が保険を提供すると保険業法の免許が必要になりうるため、
+-- 既存の配送業者の補償制度（宅急便/飛脚宅配便は30万円、ゆうパックは
+-- セキュリティサービスで50万円まで等）に乗せる方針とし、想定価値を
+-- 申告してもらった上で超過の可能性がある場合に注意喚起するに留める。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists declared_value integer;
+alter table orders drop constraint if exists orders_declared_value_check;
+alter table orders add constraint orders_declared_value_check
+  check (declared_value is null or declared_value >= 0);
