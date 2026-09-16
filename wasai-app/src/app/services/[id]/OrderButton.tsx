@@ -9,8 +9,19 @@ export default function OrderButton({ serviceId }: { serviceId: string }) {
   const [state, formAction, pending] = useActionState(orderService, initialState);
 
   return (
-    <form action={formAction}>
+    <form action={formAction} className="space-y-2">
       <input type="hidden" name="service_id" value={serviceId} />
+      <div>
+        <label htmlFor="desired_by" className="block text-sm font-medium">
+          希望納期（任意）
+        </label>
+        <input
+          id="desired_by"
+          name="desired_by"
+          type="date"
+          className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
+        />
+      </div>
       {state.error && (
         <p role="alert" className="mb-2 rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
           {state.error}

@@ -110,6 +110,9 @@ export default async function OrderDetailPage({
           </Link>
         </p>
       )}
+      {order.desired_by && (
+        <p className="mt-2 text-sm font-semibold text-warn">希望納期: {order.desired_by}</p>
+      )}
 
       {order.status === "pending_payment" && viewerRole === "client" && (
         <div className="mt-4 rounded-lg border border-warn bg-warn-soft p-4">

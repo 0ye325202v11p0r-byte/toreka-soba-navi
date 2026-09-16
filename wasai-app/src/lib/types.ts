@@ -115,6 +115,7 @@ export interface Order {
   stripe_transfer_id: string | null;
   shipping_method: string | null;
   tracking_number: string | null;
+  desired_by: string | null;
   platform_fee_amount: number | null;
   created_at: string;
   completed_at: string | null;

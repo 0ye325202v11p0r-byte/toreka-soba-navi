@@ -14,6 +14,7 @@ export async function orderService(
   formData: FormData
 ): Promise<OrderFromServiceState> {
   const serviceId = String(formData.get("service_id") ?? "");
+  const desiredBy = String(formData.get("desired_by") ?? "").trim();
   if (!serviceId) return { error: "サービスが見つかりません。" };
   if (!isStripeConfigured()) return { error: "決済機能は準備中です。しばらくお待ちください。" };
 
@@ -55,6 +56,7 @@ export async function orderService(
       garment_type: service.garment_type,
       price: service.price,
       status: "pending_payment",
+      desired_by: desiredBy || null,
     })
     .select("id, title, price")
     .single();

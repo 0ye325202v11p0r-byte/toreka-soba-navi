@@ -527,3 +527,11 @@ create policy "craftsman_rates_delete_own" on craftsman_rates for delete using (
 
 create index if not exists idx_craftsman_rates_craftsman on craftsman_rates(craftsman_id);
 create index if not exists idx_craftsman_rates_garment_price on craftsman_rates(garment_type, price);
+
+-- ---------------------------------------------------------------------------
+-- Phase 18（2026-09-16追加）: 希望納期をordersに統一する。依頼掲示板
+-- （requests.deadline）は元からあったが、出品（services）を直接購入する
+-- 流れには依頼者が希望納期を伝える手段が一切なかった。成人式・卒業式など
+-- 期日が決まっている依頼が多い和裁の性質上、これは実務上の抜けだった。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists desired_by date;

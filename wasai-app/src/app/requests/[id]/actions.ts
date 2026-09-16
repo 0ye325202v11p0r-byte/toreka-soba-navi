@@ -197,7 +197,7 @@ export async function respondProposal(
 
   const { data: request, error: requestFetchError } = await supabase
     .from("requests")
-    .select("id, client_id, title, garment_type, status")
+    .select("id, client_id, title, garment_type, status, deadline")
     .eq("id", proposal.request_id)
     .maybeSingle();
   if (requestFetchError || !request) return { error: "依頼が見つかりません。" };
@@ -231,6 +231,7 @@ export async function respondProposal(
         garment_type: request.garment_type,
         price: finalPrice,
         status: "pending_payment",
+        desired_by: request.deadline,
       })
       .select("id, title, price")
       .single();
