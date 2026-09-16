@@ -95,6 +95,69 @@ export async function submitProposal(
   return {};
 }
 
+export interface CounterProposalState {
+  error?: string;
+}
+
+// The client's one counter-offer against a pending proposal. Deliberately
+// one round only (see supabase/schema.sql Phase 14) — the craftsman then
+// just accepts or declines the countered price via respondProposal, rather
+// than the two sides being able to bounce offers back and forth forever.
+export async function counterProposal(
+  _prevState: CounterProposalState,
+  formData: FormData
+): Promise<CounterProposalState> {
+  const proposalId = String(formData.get("proposal_id") ?? "");
+  const counteredPrice = Number(formData.get("countered_price"));
+  const counteredMessage = String(formData.get("countered_message") ?? "").trim();
+
+  if (!proposalId) return { error: "提案が見つかりません。" };
+  if (!Number.isFinite(counteredPrice) || counteredPrice < 0) {
+    return { error: "提示価格を正しく入力してください。" };
+  }
+  if (containsContactInfo(counteredMessage)) return { error: CONTACT_INFO_ERROR };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: proposal } = await supabase
+    .from("proposals")
+    .select("id, request_id, craftsman_id, status")
+    .eq("id", proposalId)
+    .maybeSingle();
+  if (!proposal) return { error: "提案が見つかりません。" };
+  if (proposal.status !== "pending") return { error: "この提案には交渉できません。" };
+
+  const { data: request } = await supabase
+    .from("requests")
+    .select("client_id, title")
+    .eq("id", proposal.request_id)
+    .maybeSingle();
+  if (!request || request.client_id !== user.id) {
+    return { error: "この操作を行う権限がありません。" };
+  }
+
+  const { error } = await supabase
+    .from("proposals")
+    .update({ status: "countered", countered_price: counteredPrice, countered_message: counteredMessage || null })
+    .eq("id", proposalId);
+  if (error) return { error: error.message };
+
+  await notify(supabase, {
+    userId: proposal.craftsman_id,
+    type: "proposal_countered",
+    title: "価格交渉の提案が届きました",
+    body: request.title,
+    link: `/requests/${proposal.request_id}`,
+  });
+
+  revalidatePath(`/requests/${proposal.request_id}`);
+  return {};
+}
+
 export interface RespondProposalState {
   error?: string;
 }
@@ -118,30 +181,41 @@ export async function respondProposal(
 
   const { data: proposal, error: proposalFetchError } = await supabase
     .from("proposals")
-    .select("id, request_id, craftsman_id, price, status")
+    .select("id, request_id, craftsman_id, price, status, countered_price")
     .eq("id", proposalId)
     .maybeSingle();
 
   if (proposalFetchError || !proposal) return { error: "提案が見つかりません。" };
-  if (proposal.status !== "pending") return { error: "この提案はすでに処理済みです。" };
-
-  if (decision === "accepted" && !isStripeConfigured()) {
-    return { error: "決済機能は準備中です。しばらくお待ちください。" };
+  if (proposal.status !== "pending" && proposal.status !== "countered") {
+    return { error: "この提案はすでに処理済みです。" };
   }
+
+  // A plain "pending" proposal is the client's call (accept/decline the
+  // craftsman's asking price). Once the client has countered, the ball is in
+  // the craftsman's court — they accept/decline the countered price instead.
+  const isCountered = proposal.status === "countered";
 
   const { data: request, error: requestFetchError } = await supabase
     .from("requests")
     .select("id, client_id, title, garment_type, status")
     .eq("id", proposal.request_id)
     .maybeSingle();
+  if (requestFetchError || !request) return { error: "依頼が見つかりません。" };
 
-  if (requestFetchError || !request || request.client_id !== user.id) {
-    return { error: "この操作を行う権限がありません。" };
+  const actorIsAllowed = isCountered
+    ? proposal.craftsman_id === user.id
+    : request.client_id === user.id;
+  if (!actorIsAllowed) return { error: "この操作を行う権限がありません。" };
+
+  if (decision === "accepted" && !isStripeConfigured()) {
+    return { error: "決済機能は準備中です。しばらくお待ちください。" };
   }
+
+  const finalPrice = isCountered ? proposal.countered_price! : proposal.price;
 
   const { error: updateError } = await supabase
     .from("proposals")
-    .update({ status: decision })
+    .update(isCountered ? { status: decision, price: finalPrice } : { status: decision })
     .eq("id", proposalId);
   if (updateError) return { error: updateError.message };
 
@@ -155,7 +229,7 @@ export async function respondProposal(
         proposal_id: proposal.id,
         title: request.title,
         garment_type: request.garment_type,
-        price: proposal.price,
+        price: finalPrice,
         status: "pending_payment",
       })
       .select("id, title, price")
@@ -173,9 +247,12 @@ export async function respondProposal(
       .eq("status", "pending");
 
     await notify(supabase, {
-      userId: proposal.craftsman_id,
+      // A plain accept is the client accepting the craftsman's asking price
+      // (notify the craftsman); accepting a counter is the craftsman
+      // agreeing to the client's counter-offer (notify the client instead).
+      userId: isCountered ? request.client_id : proposal.craftsman_id,
       type: "proposal_accepted",
-      title: "提案が承諾されました",
+      title: isCountered ? "交渉価格が承諾されました" : "提案が承諾されました",
       body: request.title,
       link: `/orders/${order.id}`,
     });
@@ -184,9 +261,9 @@ export async function respondProposal(
     redirect(checkoutUrl);
   } else {
     await notify(supabase, {
-      userId: proposal.craftsman_id,
+      userId: isCountered ? request.client_id : proposal.craftsman_id,
       type: "proposal_declined",
-      title: "提案が見送られました",
+      title: isCountered ? "交渉価格が見送られました" : "提案が見送られました",
       body: request.title,
       link: `/requests/${proposal.request_id}`,
     });
@@ -222,7 +299,7 @@ export async function withdrawProposal(
   if (!proposal || proposal.craftsman_id !== user.id) {
     return { error: "この操作を行う権限がありません。" };
   }
-  if (proposal.status !== "pending") {
+  if (proposal.status !== "pending" && proposal.status !== "countered") {
     return { error: "検討中の提案のみ取り下げできます。" };
   }
 

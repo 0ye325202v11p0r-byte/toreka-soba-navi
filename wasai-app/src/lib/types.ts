@@ -73,7 +73,7 @@ export interface JobRequest {
   created_at: string;
 }
 
-export type ProposalStatus = "pending" | "accepted" | "declined" | "withdrawn";
+export type ProposalStatus = "pending" | "accepted" | "declined" | "withdrawn" | "countered";
 
 export interface Proposal {
   id: string;
@@ -82,6 +82,8 @@ export interface Proposal {
   price: number;
   message: string;
   status: ProposalStatus;
+  countered_price: number | null;
+  countered_message: string | null;
   created_at: string;
 }
 

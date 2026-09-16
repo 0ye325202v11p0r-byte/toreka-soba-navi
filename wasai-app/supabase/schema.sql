@@ -479,3 +479,19 @@ create index if not exists idx_reviews_reviewee on reviews(reviewee_id);
 -- ---------------------------------------------------------------------------
 alter table orders add column if not exists shipping_method text;
 alter table orders add column if not exists tracking_number text;
+
+-- ---------------------------------------------------------------------------
+-- Phase 14（2026-09-16追加）: 提案への簡易的な価格交渉。依頼者は「承諾/見送り」
+-- の二択だけでなく、対抗価格を提示できるようにする。無限に往復させると
+-- 合意形成もUIも複雑になるため、交渉は一往復（依頼者からの対抗提示→
+-- 和裁士がその金額で承諾するか見送るか）までに制限する。
+-- ---------------------------------------------------------------------------
+alter table proposals add column if not exists countered_price integer;
+alter table proposals drop constraint if exists proposals_countered_price_check;
+alter table proposals add constraint proposals_countered_price_check
+  check (countered_price is null or countered_price >= 0);
+alter table proposals add column if not exists countered_message text;
+
+alter table proposals drop constraint if exists proposals_status_check;
+alter table proposals add constraint proposals_status_check
+  check (status in ('pending', 'accepted', 'declined', 'withdrawn', 'countered'));

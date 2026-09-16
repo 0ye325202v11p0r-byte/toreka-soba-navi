@@ -140,11 +140,13 @@ export default async function DashboardPage() {
                     ¥{p.price.toLocaleString()} ・{" "}
                     {p.status === "pending"
                       ? "検討中"
-                      : p.status === "accepted"
-                        ? "承諾済み"
-                        : p.status === "declined"
-                          ? "見送り"
-                          : "取り下げ"}
+                      : p.status === "countered"
+                        ? "価格交渉中"
+                        : p.status === "accepted"
+                          ? "承諾済み"
+                          : p.status === "declined"
+                            ? "見送り"
+                            : "取り下げ"}
                   </p>
                 </li>
               ))}

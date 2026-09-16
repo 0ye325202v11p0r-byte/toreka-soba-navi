@@ -9,6 +9,8 @@ import StarRating from "@/components/StarRating";
 import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
+import RespondCounterButtons from "./RespondCounterButtons";
+import CounterProposalForm from "./CounterProposalForm";
 import WithdrawProposalButton from "./WithdrawProposalButton";
 import { GRADE_RANK, type Grade, type JobRequest, type Profile, type Proposal } from "@/lib/types";
 
@@ -17,6 +19,7 @@ const STATUS_LABEL: Record<Proposal["status"], string> = {
   accepted: "承諾済み",
   declined: "見送り",
   withdrawn: "取り下げ",
+  countered: "価格交渉中",
 };
 
 export default async function RequestDetailPage({
@@ -144,12 +147,28 @@ export default async function RequestDetailPage({
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm">{p.message}</p>
               <p className="mt-2 text-xs text-ink-muted">状態: {STATUS_LABEL[p.status]}</p>
-              {isOwner && p.status === "pending" && request.status === "open" && (
-                <div className="mt-3">
-                  <RespondProposalButtons proposalId={p.id} />
+              {p.status === "countered" && p.countered_price != null && (
+                <div className="mt-2 rounded-md bg-accent-soft p-3">
+                  <p className="text-sm font-semibold text-accent-strong">
+                    依頼者からの提示: ¥{p.countered_price.toLocaleString()}
+                  </p>
+                  {p.countered_message && (
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{p.countered_message}</p>
+                  )}
                 </div>
               )}
-              {current?.id === p.craftsman_id && p.status === "pending" && (
+              {isOwner && p.status === "pending" && request.status === "open" && (
+                <div className="mt-3 flex flex-wrap items-start gap-2">
+                  <RespondProposalButtons proposalId={p.id} />
+                  <CounterProposalForm proposalId={p.id} />
+                </div>
+              )}
+              {current?.id === p.craftsman_id && p.status === "countered" && (
+                <div className="mt-3">
+                  <RespondCounterButtons proposalId={p.id} counteredPrice={p.countered_price!} />
+                </div>
+              )}
+              {current?.id === p.craftsman_id && (p.status === "pending" || p.status === "countered") && (
                 <div className="mt-3">
                   <WithdrawProposalButton proposalId={p.id} />
                 </div>
