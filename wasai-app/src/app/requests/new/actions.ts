@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
-import type { GradeRequirement } from "@/lib/types";
+import { notify } from "@/lib/notifications";
+import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 
 const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
 
@@ -65,6 +66,34 @@ export async function createRequest(
     .single();
 
   if (error) return { error: error.message };
+
+  // Until now, a newly posted request had zero passive discovery for
+  // craftsmen — they had to browse /requests themselves to notice it. Notify
+  // craftsmen whose specialties/grade/accepting-orders actually match, using
+  // the same eligibility check submitProposal enforces server-side.
+  const { data: matchingCraftsmen } = await supabase
+    .from("craftsman_profiles")
+    .select("profile_id, grade")
+    .contains("specialties", [garmentType])
+    .eq("is_accepting_orders", true);
+
+  const eligibleCraftsmen = (matchingCraftsmen ?? []).filter((c) => {
+    if (!minGrade) return true;
+    const grade = c.grade as Grade | null;
+    return grade != null && GRADE_RANK[grade] <= GRADE_RANK[minGrade];
+  });
+
+  await Promise.all(
+    eligibleCraftsmen.map((c) =>
+      notify(supabase, {
+        userId: c.profile_id,
+        type: "new_matching_request",
+        title: "条件に合う新しい依頼が届きました",
+        body: title,
+        link: `/requests/${request.id}`,
+      })
+    )
+  );
 
   redirect(`/requests/${request.id}`);
 }
