@@ -41,6 +41,14 @@ export interface CraftsmanProfile {
   updated_at: string;
 }
 
+export interface CraftsmanRate {
+  id: string;
+  craftsman_id: string;
+  garment_type: string;
+  price: number;
+  created_at: string;
+}
+
 export type ServiceStatus = "draft" | "published";
 
 export interface Service {

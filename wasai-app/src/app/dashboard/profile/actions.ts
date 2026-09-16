@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { Grade } from "@/lib/types";
+import { GARMENT_TYPES, type Grade } from "@/lib/types";
 
 export interface ProfileFormState {
   error?: string;
@@ -65,6 +65,30 @@ export async function updateProfile(
       .eq("profile_id", user.id);
 
     if (craftsmanError) return { error: craftsmanError.message };
+
+    // Replace-all, same pattern as specialties/portfolio_urls above — only
+    // checked specialties can carry a rate, and re-checking an unchanged
+    // specialty with no price simply clears any rate it had before.
+    const newRates = GARMENT_TYPES.filter((g) => specialties.includes(g))
+      .map((g) => {
+        const raw = String(formData.get(`rate_${g}`) ?? "").trim();
+        if (!raw) return null;
+        const price = Number(raw);
+        if (!Number.isFinite(price) || price < 0) return null;
+        return { craftsman_id: user.id, garment_type: g, price };
+      })
+      .filter((r) => r !== null);
+
+    const { error: deleteRatesError } = await supabase
+      .from("craftsman_rates")
+      .delete()
+      .eq("craftsman_id", user.id);
+    if (deleteRatesError) return { error: deleteRatesError.message };
+
+    if (newRates.length > 0) {
+      const { error: ratesError } = await supabase.from("craftsman_rates").insert(newRates);
+      if (ratesError) return { error: ratesError.message };
+    }
   }
 
   revalidatePath("/dashboard/profile");

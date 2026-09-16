@@ -7,7 +7,7 @@ import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
-import type { CraftsmanProfile, Profile, Service, Review } from "@/lib/types";
+import type { CraftsmanProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
 
 export default async function CraftsmanDetailPage({
   params,
@@ -51,6 +51,12 @@ export default async function CraftsmanDetailPage({
     .order("created_at", { ascending: false })
     .returns<Review[]>();
 
+  const { data: rates } = await supabase
+    .from("craftsman_rates")
+    .select("*")
+    .eq("craftsman_id", id)
+    .returns<CraftsmanRate[]>();
+
   const rating = await getRatingSummary(supabase, id);
 
   return (
@@ -81,6 +87,20 @@ export default async function CraftsmanDetailPage({
               </span>
             ))}
           </p>
+        )}
+        {rates && rates.length > 0 && (
+          <div className="mt-4">
+            <h2 className="text-sm font-semibold">料金の目安</h2>
+            <ul className="mt-2 space-y-1 text-sm">
+              {rates.map((r) => (
+                <li key={r.id} className="flex justify-between">
+                  <span className="text-ink-muted">{r.garment_type}</span>
+                  <span className="font-semibold">¥{r.price.toLocaleString()}〜</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 text-xs text-ink-faint">実際の料金は依頼内容により前後します。</p>
+          </div>
         )}
         {craftsmanProfile && craftsmanProfile.portfolio_urls.length > 0 && (
           <div className="mt-4">

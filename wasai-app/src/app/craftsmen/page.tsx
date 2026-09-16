@@ -6,7 +6,7 @@ import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
-import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type Profile } from "@/lib/types";
+import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type CraftsmanRate, type Profile } from "@/lib/types";
 
 type CraftsmanRow = CraftsmanProfile & { profiles: Profile };
 
@@ -15,7 +15,7 @@ export const metadata = { title: "和裁士を探す" };
 export default async function CraftsmenPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; specialty?: string; prefecture?: string; grade?: string }>;
+  searchParams: Promise<{ q?: string; specialty?: string; prefecture?: string; grade?: string; budget_max?: string }>;
 }) {
   if (!isSupabaseConfigured()) {
     return (
@@ -26,14 +26,26 @@ export default async function CraftsmenPage({
     );
   }
 
-  const { q = "", specialty = "", prefecture = "", grade = "" } = await searchParams;
+  const { q = "", specialty = "", prefecture = "", grade = "", budget_max = "" } = await searchParams;
   const supabase = await createClient();
+
+  // Budget filtering goes through craftsman_rates first — narrow to the
+  // profile_ids that have a matching-garment rate within budget, then apply
+  // that as an extra filter on the main query below.
+  let budgetMatchIds: string[] | null = null;
+  if (budget_max) {
+    let rateQuery = supabase.from("craftsman_rates").select("craftsman_id").lte("price", Number(budget_max));
+    if (specialty) rateQuery = rateQuery.eq("garment_type", specialty);
+    const { data: rateRows } = await rateQuery;
+    budgetMatchIds = Array.from(new Set((rateRows ?? []).map((r) => r.craftsman_id as string)));
+  }
 
   let query = supabase.from("craftsman_profiles").select("*, profiles!inner(*)");
   if (q) query = query.ilike("profiles.display_name", `%${q}%`);
   if (specialty) query = query.contains("specialties", [specialty]);
   if (prefecture) query = query.eq("profiles.prefecture", prefecture);
   if (grade) query = query.eq("grade", grade);
+  if (budgetMatchIds) query = query.in("profile_id", budgetMatchIds);
 
   const { data, error } = await query.order("updated_at", { ascending: false });
   const craftsmen = (data ?? []) as unknown as CraftsmanRow[];
@@ -41,6 +53,18 @@ export default async function CraftsmenPage({
   const ratings = await Promise.all(
     craftsmen.map((c) => getRatingSummary(supabase, c.profile_id))
   );
+
+  const ratesByCraftsman = new Map<string, CraftsmanRate[]>();
+  if (craftsmen.length > 0) {
+    const { data: rateRowsForList } = await supabase
+      .from("craftsman_rates")
+      .select("*")
+      .in("craftsman_id", craftsmen.map((c) => c.profile_id))
+      .returns<CraftsmanRate[]>();
+    for (const r of rateRowsForList ?? []) {
+      ratesByCraftsman.set(r.craftsman_id, [...(ratesByCraftsman.get(r.craftsman_id) ?? []), r]);
+    }
+  }
 
   return (
     <div>
@@ -80,10 +104,23 @@ export default async function CraftsmenPage({
           <option value="3級">3級</option>
           <option value="その他資格">その他資格</option>
         </select>
+        <input
+          type="number"
+          name="budget_max"
+          min={0}
+          defaultValue={budget_max}
+          placeholder="予算（円以下）"
+          className="w-36 rounded-md border border-border bg-bg px-2 py-1.5"
+        />
         <button type="submit" className="rounded-md bg-accent px-4 py-1.5 font-semibold text-bg-elevated">
           絞り込む
         </button>
       </form>
+      {budget_max && (
+        <p className="mt-2 text-xs text-ink-muted">
+          {specialty ? `「${specialty}」で` : ""}¥{Number(budget_max).toLocaleString()}以下の目安料金を登録している和裁士のみ表示しています。
+        </p>
+      )}
 
       {error && <p className="mt-4 text-sm text-warn">読み込みに失敗しました: {error.message}</p>}
 
@@ -110,6 +147,18 @@ export default async function CraftsmenPage({
                 ))}
               </p>
             )}
+            {(() => {
+              const myRates = ratesByCraftsman.get(c.profile_id) ?? [];
+              if (myRates.length === 0) return null;
+              const prices = myRates.map((r) => r.price);
+              const min = Math.min(...prices);
+              const max = Math.max(...prices);
+              return (
+                <p className="mt-2 text-sm font-semibold">
+                  目安料金: ¥{min.toLocaleString()}{min !== max ? `〜¥${max.toLocaleString()}` : ""}
+                </p>
+              );
+            })()}
             <div className="mt-2">
               <StarRating rating={ratings[i]?.average ?? null} count={ratings[i]?.count ?? 0} />
             </div>

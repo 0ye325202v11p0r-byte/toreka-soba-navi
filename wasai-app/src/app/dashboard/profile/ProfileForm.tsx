@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { updateProfile, type ProfileFormState } from "./actions";
-import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type Profile } from "@/lib/types";
+import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type CraftsmanRate, type Profile } from "@/lib/types";
 import Avatar from "@/components/Avatar";
 
 const initialState: ProfileFormState = {};
@@ -10,11 +10,19 @@ const initialState: ProfileFormState = {};
 export default function ProfileForm({
   profile,
   craftsmanProfile,
+  rates,
 }: {
   profile: Profile;
   craftsmanProfile: CraftsmanProfile | null;
+  rates: CraftsmanRate[];
 }) {
   const [state, formAction, pending] = useActionState(updateProfile, initialState);
+  const [specialties, setSpecialties] = useState<string[]>(craftsmanProfile?.specialties ?? []);
+  const ratesByGarment = new Map(rates.map((r) => [r.garment_type, r.price]));
+
+  const toggleSpecialty = (g: string) => {
+    setSpecialties((prev) => (prev.includes(g) ? prev.filter((s) => s !== g) : [...prev, g]));
+  };
 
   return (
     <form action={formAction} className="mt-4 space-y-4">
@@ -163,13 +171,41 @@ export default function ProfileForm({
                     type="checkbox"
                     name="specialties"
                     value={g}
-                    defaultChecked={craftsmanProfile?.specialties.includes(g)}
+                    checked={specialties.includes(g)}
+                    onChange={() => toggleSpecialty(g)}
                   />
                   {g}
                 </label>
               ))}
             </div>
           </fieldset>
+
+          {specialties.length > 0 && (
+            <div>
+              <p className="text-sm font-medium">得意分野ごとの目安料金（任意）</p>
+              <p className="mt-1 text-xs text-ink-muted">
+                依頼者が予算に合う和裁士を探しやすくなります。「出品」ほど作り込まなくても、大まかな相場感だけ伝えられます。
+              </p>
+              <div className="mt-2 space-y-2">
+                {specialties.map((g) => (
+                  <div key={g} className="flex items-center gap-2">
+                    <label htmlFor={`rate_${g}`} className="w-24 shrink-0 text-sm">
+                      {g}
+                    </label>
+                    <input
+                      id={`rate_${g}`}
+                      name={`rate_${g}`}
+                      type="number"
+                      min={0}
+                      placeholder="円"
+                      defaultValue={ratesByGarment.get(g) ?? ""}
+                      className="min-w-0 flex-1 rounded-md border border-border bg-bg px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label htmlFor="portfolio_urls" className="block text-sm font-medium">

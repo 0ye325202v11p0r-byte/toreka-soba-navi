@@ -495,3 +495,35 @@ alter table proposals add column if not exists countered_message text;
 alter table proposals drop constraint if exists proposals_status_check;
 alter table proposals add constraint proposals_status_check
   check (status in ('pending', 'accepted', 'declined', 'withdrawn', 'countered'));
+
+-- ---------------------------------------------------------------------------
+-- Phase 16（2026-09-16追加）: 和裁士が登録時に、得意分野ごとの目安料金を
+-- 任意で入力できるようにする。「出品（services）」ほど作り込まなくても
+-- 相場感が伝わるようにし、依頼者は自分の予算に合う和裁士を探しやすくなる
+-- （/craftsmenで予算による絞り込みが可能になる）。
+-- ---------------------------------------------------------------------------
+create table if not exists craftsman_rates (
+  id uuid primary key default gen_random_uuid(),
+  craftsman_id uuid not null references profiles(id) on delete cascade,
+  garment_type text not null,
+  price integer not null check (price >= 0),
+  created_at timestamptz not null default now(),
+  unique (craftsman_id, garment_type)
+);
+
+alter table craftsman_rates enable row level security;
+
+drop policy if exists "craftsman_rates_select_all" on craftsman_rates;
+create policy "craftsman_rates_select_all" on craftsman_rates for select using (true);
+
+drop policy if exists "craftsman_rates_write_own" on craftsman_rates;
+create policy "craftsman_rates_write_own" on craftsman_rates for insert with check (craftsman_id = auth.uid());
+
+drop policy if exists "craftsman_rates_update_own" on craftsman_rates;
+create policy "craftsman_rates_update_own" on craftsman_rates for update using (craftsman_id = auth.uid());
+
+drop policy if exists "craftsman_rates_delete_own" on craftsman_rates;
+create policy "craftsman_rates_delete_own" on craftsman_rates for delete using (craftsman_id = auth.uid());
+
+create index if not exists idx_craftsman_rates_craftsman on craftsman_rates(craftsman_id);
+create index if not exists idx_craftsman_rates_garment_price on craftsman_rates(garment_type, price);

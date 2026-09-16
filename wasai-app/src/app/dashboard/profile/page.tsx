@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import ProfileForm from "./ProfileForm";
-import type { CraftsmanProfile } from "@/lib/types";
+import type { CraftsmanProfile, CraftsmanRate } from "@/lib/types";
 
 export const metadata = { title: "プロフィール編集" };
 
@@ -15,6 +15,7 @@ export default async function ProfileEditPage() {
   if (!current?.profile) redirect("/login");
 
   let craftsmanProfile: CraftsmanProfile | null = null;
+  let rates: CraftsmanRate[] = [];
   if (current.profile.role === "craftsman") {
     const supabase = await createClient();
     const { data } = await supabase
@@ -23,12 +24,19 @@ export default async function ProfileEditPage() {
       .eq("profile_id", current.id)
       .maybeSingle<CraftsmanProfile>();
     craftsmanProfile = data ?? null;
+
+    const { data: rateRows } = await supabase
+      .from("craftsman_rates")
+      .select("*")
+      .eq("craftsman_id", current.id)
+      .returns<CraftsmanRate[]>();
+    rates = rateRows ?? [];
   }
 
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="text-xl font-bold">プロフィール編集</h1>
-      <ProfileForm profile={current.profile} craftsmanProfile={craftsmanProfile} />
+      <ProfileForm profile={current.profile} craftsmanProfile={craftsmanProfile} rates={rates} />
     </div>
   );
 }
