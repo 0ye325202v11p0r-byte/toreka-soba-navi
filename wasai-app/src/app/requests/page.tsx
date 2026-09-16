@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
+import Avatar from "@/components/Avatar";
 import { GARMENT_TYPES, type JobRequest, type Profile } from "@/lib/types";
 
 type RequestRow = JobRequest & { profiles: Profile };
@@ -97,8 +98,10 @@ export default async function RequestsPage({
                 </span>
               )}
             </div>
-            <p className="mt-1 text-xs text-ink-muted">
-              {r.garment_type} ・ 依頼者: {r.profiles.display_name}
+            <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+              {r.garment_type} ・ 依頼者:
+              <Avatar url={r.profiles.avatar_url} name={r.profiles.display_name} size={20} />
+              {r.profiles.display_name}
               {r.deadline ? ` ・ 希望納期: ${r.deadline}` : ""}
             </p>
             <div className="mt-1">

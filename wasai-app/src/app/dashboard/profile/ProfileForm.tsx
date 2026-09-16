@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateProfile, type ProfileFormState } from "./actions";
 import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type Profile } from "@/lib/types";
+import Avatar from "@/components/Avatar";
 
 const initialState: ProfileFormState = {};
 
@@ -30,6 +31,26 @@ export default function ProfileForm({
           required
           className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
         />
+      </div>
+
+      <div>
+        <label htmlFor="avatar_url" className="block text-sm font-medium">
+          プロフィール画像URL（任意）
+        </label>
+        <div className="mt-1 flex items-center gap-3">
+          <Avatar url={profile.avatar_url} name={profile.display_name} size={48} />
+          <input
+            id="avatar_url"
+            name="avatar_url"
+            type="url"
+            defaultValue={profile.avatar_url ?? ""}
+            placeholder="https://..."
+            className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
+          />
+        </div>
+        <p className="mt-1 text-xs text-ink-muted">
+          画像のアップロード機能は未対応のため、外部に置いた画像のURLを貼り付けてください。未設定の場合は表示名の頭文字が表示されます。
+        </p>
       </div>
 
       <div>

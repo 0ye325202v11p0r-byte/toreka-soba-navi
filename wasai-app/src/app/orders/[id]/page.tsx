@@ -8,6 +8,7 @@ import StatusControls from "./StatusControls";
 import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
+import Avatar from "@/components/Avatar";
 import { platformFeeAmount, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { isRepeatCustomer } from "@/lib/escrow";
 import type { Order, Message, Profile, Review } from "@/lib/types";
@@ -83,8 +84,10 @@ export default async function OrderDetailPage({
 
   return (
     <div>
-      <p className="text-xs text-ink-muted">
-        取引相手: {counterpart?.display_name ?? "不明"} ・ ステータス: {STATUS_LABEL[order.status]}
+      <p className="flex items-center gap-1.5 text-xs text-ink-muted">
+        取引相手:
+        <Avatar url={counterpart?.avatar_url ?? null} name={counterpart?.display_name ?? "不明"} size={20} />
+        {counterpart?.display_name ?? "不明"} ・ ステータス: {STATUS_LABEL[order.status]}
       </p>
       <h1 className="mt-1 text-2xl font-bold">{order.title}</h1>
       <p className="mt-1 text-sm font-semibold">¥{order.price.toLocaleString()}</p>

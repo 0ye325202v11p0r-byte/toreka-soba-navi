@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
 import type { CraftsmanProfile, Profile, Service, Review } from "@/lib/types";
 
@@ -55,9 +56,12 @@ export default async function CraftsmanDetailPage({
   return (
     <div>
       <div className="rounded-lg border border-border bg-bg-elevated p-6">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">{profile.display_name}</h1>
-          {craftsmanProfile?.grade_verified && <VerifiedBadge />}
+        <div className="flex items-center gap-3">
+          <Avatar url={profile.avatar_url} name={profile.display_name} size={56} />
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">{profile.display_name}</h1>
+            {craftsmanProfile?.grade_verified && <VerifiedBadge />}
+          </div>
         </div>
         <p className="mt-1 text-sm text-ink-muted">
           {profile.prefecture ?? "地域未設定"} ・ {craftsmanProfile?.grade ?? "資格未設定"}

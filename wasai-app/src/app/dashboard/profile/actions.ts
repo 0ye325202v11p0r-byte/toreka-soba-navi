@@ -22,6 +22,7 @@ export async function updateProfile(
   const displayName = String(formData.get("display_name") ?? "").trim();
   const prefecture = String(formData.get("prefecture") ?? "").trim();
   const bio = String(formData.get("bio") ?? "").trim();
+  const avatarUrl = String(formData.get("avatar_url") ?? "").trim();
 
   if (!displayName) return { error: "表示名は必須です。" };
 
@@ -31,6 +32,7 @@ export async function updateProfile(
       display_name: displayName,
       prefecture: prefecture || null,
       bio: bio || null,
+      avatar_url: avatarUrl || null,
     })
     .eq("id", user.id);
 

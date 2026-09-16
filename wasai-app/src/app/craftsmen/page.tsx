@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
+import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
 import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type Profile } from "@/lib/types";
 
@@ -90,6 +91,7 @@ export default async function CraftsmenPage({
         {craftsmen.map((c, i) => (
           <li key={c.profile_id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center gap-2">
+              <Avatar url={c.profiles.avatar_url} name={c.profiles.display_name} />
               <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-accent-strong hover:underline">
                 {c.profiles.display_name}
               </Link>

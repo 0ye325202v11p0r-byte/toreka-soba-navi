@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import SetupNotice from "@/components/SetupNotice";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import StarRating from "@/components/StarRating";
+import Avatar from "@/components/Avatar";
 import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
@@ -94,8 +95,10 @@ export default async function RequestDetailPage({
         </span>
       )}
       <h1 className="mt-1 text-2xl font-bold">{request.title}</h1>
-      <p className="mt-1 text-sm text-ink-muted">
-        依頼者: {request.profiles.display_name}
+      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-ink-muted">
+        依頼者:
+        <Avatar url={request.profiles.avatar_url} name={request.profiles.display_name} size={20} />
+        {request.profiles.display_name}
         {request.deadline ? ` ・ 希望納期: ${request.deadline}` : ""}
         {" ・ ステータス: "}
         {request.status === "open" ? "募集中" : request.status === "matched" ? "マッチング済み" : "終了"}
@@ -138,6 +141,7 @@ export default async function RequestDetailPage({
             <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  <Avatar url={p.profiles.avatar_url} name={p.profiles.display_name} size={28} />
                   <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
                     {p.profiles.display_name}
                   </Link>
