@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isAdminUser } from "@/lib/adminAuth";
 import SetupNotice from "@/components/SetupNotice";
@@ -32,6 +33,19 @@ export default async function AdminCraftsmenPage() {
     .order("updated_at", { ascending: false });
   const rows = (data ?? []) as unknown as Row[];
 
+  // certificate_url is a path in the private "certificates" bucket (Phase
+  // 20) — sign it with the service-role client so an admin can view any
+  // craftsman's certificate regardless of the storage RLS owner check.
+  const admin = adminClient();
+  const signedUrls = new Map<string, string>();
+  for (const r of rows) {
+    if (!r.certificate_url) continue;
+    const { data: signed } = await admin.storage
+      .from("certificates")
+      .createSignedUrl(r.certificate_url, 3600);
+    if (signed?.signedUrl) signedUrls.set(r.profile_id, signed.signedUrl);
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold">和裁士の資格確認</h1>
@@ -56,9 +70,9 @@ export default async function AdminCraftsmenPage() {
             <p className="mt-1 text-xs text-ink-muted">
               {r.grade_verified ? `確認済み（${r.grade_verified_at ?? ""}）` : "未確認"}
             </p>
-            {r.certificate_url ? (
+            {signedUrls.has(r.profile_id) ? (
               <a
-                href={r.certificate_url}
+                href={signedUrls.get(r.profile_id)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-1 block text-sm text-accent-strong underline"
@@ -66,7 +80,7 @@ export default async function AdminCraftsmenPage() {
                 証明書を確認する
               </a>
             ) : (
-              <p className="mt-1 text-sm text-ink-faint">証明書URLは未登録です。</p>
+              <p className="mt-1 text-sm text-ink-faint">証明書は未登録です。</p>
             )}
             <div className="mt-3">
               <VerifyButton profileId={r.profile_id} verified={r.grade_verified} />

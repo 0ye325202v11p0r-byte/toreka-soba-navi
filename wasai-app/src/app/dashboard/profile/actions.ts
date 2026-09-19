@@ -49,8 +49,10 @@ export async function updateProfile(
       .map((s) => s.trim())
       .filter(Boolean);
     const isAcceptingOrders = formData.get("is_accepting_orders") === "on";
-    const certificateUrl = String(formData.get("certificate_url") ?? "").trim() || null;
 
+    // certificate_url is intentionally NOT set here — it's a private-bucket
+    // path exclusively managed by uploadCertificate() in uploadActions.ts,
+    // never by this form's plain "保存する" submit.
     const { error: craftsmanError } = await supabase
       .from("craftsman_profiles")
       .update({
@@ -59,7 +61,6 @@ export async function updateProfile(
         specialties,
         portfolio_urls: portfolioUrls,
         is_accepting_orders: isAcceptingOrders,
-        certificate_url: certificateUrl,
         updated_at: new Date().toISOString(),
       })
       .eq("profile_id", user.id);

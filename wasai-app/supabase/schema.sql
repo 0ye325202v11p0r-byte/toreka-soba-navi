@@ -547,3 +547,67 @@ alter table orders add column if not exists declared_value integer;
 alter table orders drop constraint if exists orders_declared_value_check;
 alter table orders add constraint orders_declared_value_check
   check (declared_value is null or declared_value >= 0);
+
+-- ---------------------------------------------------------------------------
+-- Phase 20（2026-09-18追加）: 画像アップロード（Supabase Storage）。
+-- avatar_url・portfolio_urls・certificate_urlはこれまで「外部URLを貼り
+-- 付ける」方式だったが、一般の和裁士・依頼者には現実的でないため実際に
+-- ファイルをアップロードできるようにする。資格証明書は氏名等の個人情報
+-- を含みうるため非公開バケットとし、本人（自分の提出物のみ）と運営
+-- （service_roleでRLSを迂回し署名付きURLを発行）のみが閲覧できる。
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('portfolio', 'portfolio', true)
+on conflict (id) do nothing;
+
+insert into storage.buckets (id, name, public)
+values ('certificates', 'certificates', false)
+on conflict (id) do nothing;
+
+-- 各バケットとも、オブジェクト名は "{auth.uid()}/..." で始める運用とし、
+-- 先頭フォルダ名が自分のuidと一致する場合のみ書き込み・削除を許可する。
+drop policy if exists "avatars_public_read" on storage.objects;
+create policy "avatars_public_read" on storage.objects for select
+  using (bucket_id = 'avatars');
+
+drop policy if exists "avatars_owner_write" on storage.objects;
+create policy "avatars_owner_write" on storage.objects for insert
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatars_owner_update" on storage.objects;
+create policy "avatars_owner_update" on storage.objects for update
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "avatars_owner_delete" on storage.objects;
+create policy "avatars_owner_delete" on storage.objects for delete
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "portfolio_public_read" on storage.objects;
+create policy "portfolio_public_read" on storage.objects for select
+  using (bucket_id = 'portfolio');
+
+drop policy if exists "portfolio_owner_write" on storage.objects;
+create policy "portfolio_owner_write" on storage.objects for insert
+  with check (bucket_id = 'portfolio' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "portfolio_owner_delete" on storage.objects;
+create policy "portfolio_owner_delete" on storage.objects for delete
+  using (bucket_id = 'portfolio' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- certificates: 非公開。本人のみ読み書き可（運営はservice_roleでRLSを
+-- 迂回して署名付きURLを発行するため、専用ポリシーは不要）。
+drop policy if exists "certificates_owner_read" on storage.objects;
+create policy "certificates_owner_read" on storage.objects for select
+  using (bucket_id = 'certificates' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "certificates_owner_write" on storage.objects;
+create policy "certificates_owner_write" on storage.objects for insert
+  with check (bucket_id = 'certificates' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "certificates_owner_update" on storage.objects;
+create policy "certificates_owner_update" on storage.objects for update
+  using (bucket_id = 'certificates' and (storage.foldername(name))[1] = auth.uid()::text);

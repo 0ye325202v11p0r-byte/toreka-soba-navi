@@ -1,5 +1,5 @@
-// No Supabase Storage integration yet (see README "未実装"), so avatar_url
-// is a pasted external URL — same pattern as craftsman_profiles.portfolio_urls.
+// avatar_url is either an uploaded file's public Storage URL or a pasted
+// external URL — both are just URLs by the time they reach this component.
 // Falls back to a colored initial circle when unset, rather than a broken
 // image or blank space.
 export default function Avatar({

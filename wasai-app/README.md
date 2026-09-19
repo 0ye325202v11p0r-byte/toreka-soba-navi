@@ -154,8 +154,17 @@
 - ✅ 利用規約に第8条（納品物の配送）を新設。配送中の事故は利用者が選択した配送業者の補償規定に従うこと、当方は保険業を営むものではなく独自の配送保険は提供しないことを明記
 - 30万円という閾値は現時点の主要配送業者の標準補償額を参考にしたものであり、将来変更される可能性がある（ハードコードしているため、変更があれば追随が必要）
 
+### Phase 20: 画像アップロード（Supabase Storage）
+
+プロフィール画像・実績写真・資格証明書は「外部URLを貼り付ける」方式だったが、外部に画像を置く手段を持たない一般の和裁士・依頼者には現実的でないギャップだった。Supabase Storageを導入し、実際にファイルをアップロードできるようにした。
+
+- ✅ `avatars`（公開）・`portfolio`（公開）・`certificates`（非公開）の3バケットを追加。オブジェクト名は`{auth.uid()}/...`とし、本人のみ書き込み・削除できるRLSポリシーを設定
+- ✅ プロフィール画像・実績写真は引き続きURL直接貼り付けも可能（外部ホスティング済み画像を使いたい場合向け）だが、アップロードボタンも追加し、アップロードすると自動でURL欄に反映される
+- ✅ 資格証明書は氏名等の個人情報を含みうるため非公開バケットに変更し、URL貼り付けを廃止してアップロードのみに。本人は自分のRLSスコープ済みクライアントで、運営はservice_roleクライアント（`adminClient()`、既存のWebhook/資格確認ボタンと同じパターン）でそれぞれ署名付きURL（1時間有効）を発行して閲覧する
+- ✅ ファイルサイズ上限5MB、対応形式はJPEG/PNG/WebP/GIF（証明書はPDFも可）
+
 **未実装（意図的に見送り、次フェーズ）：**
-- 📎 画像アップロード（Supabase Storage）。実績写真は現状「外部URLを貼り付ける」方式（`portfolio_urls`がtext[]）。メッセージへの画像添付も同様に未対応
+- 📎 メッセージへの画像添付は引き続き未対応
 - 💬 メッセージのリアルタイム更新。現状はServer Actionで送信後にページを再検証する方式（送信すると自分の画面には即反映されるが、相手の画面は再読み込みが必要）
 - 🔍 SEO（sitemap/robots/OGP画像等）。トレカ相場ナビには実装済みのパターンがあるので、必要になれば移植可能
 - 🔑 パスワードリセットフロー
@@ -176,10 +185,11 @@ npm run dev
 ### Supabaseプロジェクトの準備
 
 1. 新しいSupabaseプロジェクトを作成（トレカ相場ナビとは別プロジェクトにすること — テーブル名が競合しないよう完全に分離する）
-2. SQL Editorで `supabase/schema.sql` を**全文**実行（Phase 1〜8のテーブル・カラム追加・RLSポリシー・関数・トリガーがすべて含まれる。`add column if not exists`等で冪等なので、スキーマ変更時は差分だけ再実行すればよい）
+2. SQL Editorで `supabase/schema.sql` を**全文**実行（Phase 1〜20のテーブル・カラム追加・RLSポリシー・関数・トリガー・Storageバケットがすべて含まれる。`add column if not exists`等で冪等なので、スキーマ変更時は差分だけ再実行すればよい）
 3. Authentication > Providers > Email で **「Confirm email」をOFF**にする（上記の理由により必須。ONのままだと新規登録後にプロフィール作成が失敗する）
-4. Project Settings > API から `Project URL` / `anon public` キーを `.env.local` に設定
+4. Project Settings > API から `Project URL` / `anon public` キー、および`service_role`キーを `.env.local` に設定（`service_role`は`/admin/craftsmen`の資格証明書表示とStripe Webhookに必須。取り扱いに注意——ブラウザに絶対に出さない）
 5. `.env.local`の`ADMIN_EMAIL`に運営アカウントのメールアドレスを設定（`/admin/craftsmen`で資格級位の確認をするために必要。未設定のままだと誰も確認できない）
+6. Storageバケット（`avatars`・`portfolio`・`certificates`）は`schema.sql`実行時に自動作成される。ダッシュボードでの手動作成は不要
 
 ### Stripe Connectの準備（決済機能を使う場合）
 
@@ -211,3 +221,13 @@ curl "http://localhost:3000/api/cron/auto-complete-orders" -H "Authorization: Be
 ## デプロイ
 
 トレカ相場ナビとは別のVercelプロジェクトとしてデプロイすることを想定。モノレポ内の別ディレクトリなので、Vercel側の「Root Directory」設定を `wasai-app` に指定する。
+
+**手順:**
+1. Vercelで新規プロジェクトを作成し、このリポジトリを連携。Root Directoryに`wasai-app`を指定
+2. Vercelプロジェクトの Environment Variables に `.env.local.example` の全項目を設定（`NEXT_PUBLIC_SITE_URL`は実際にデプロイされるドメイン、`STRIPE_WEBHOOK_SECRET`はデプロイ後にStripe側でWebhookエンドポイント登録して取得したものに差し替え）
+3. 初回デプロイ後、実際のドメインが確定してから、Stripeダッシュボードで`https://<本番ドメイン>/api/webhooks/stripe`をWebhookエンドポイントとして登録（`checkout.session.completed`・`account.updated`）。発行されたsigning secretを`STRIPE_WEBHOOK_SECRET`に反映し、再デプロイ
+4. `vercel.json`のCron設定は自動的に有効化される。`CRON_SECRET`をVercel環境変数に設定していないと`/api/cron/auto-complete-orders`は常に401を返す（意図的なfail-closed）
+5. 独自ドメインを使う場合はVercelのDomains設定で追加し、`NEXT_PUBLIC_SITE_URL`をそのドメインに更新して再デプロイ
+6. Supabase側は`NEXT_PUBLIC_SUPABASE_URL`のAuthentication > URL ConfigurationでもSite URLを本番ドメインに合わせておく（メール内リンク等で使われる）
+
+デプロイ自体はこの手順に沿うだけで完了するが、実際のSupabaseプロジェクト作成・Stripeアカウント開設・ドメイン取得は、いずれもAnthropicの実行環境からは行えない（アカウント作成・本人確認・決済情報の登録が必要なため）——ここは運営者自身の対応が必須。

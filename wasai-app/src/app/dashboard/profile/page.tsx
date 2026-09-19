@@ -16,6 +16,7 @@ export default async function ProfileEditPage() {
 
   let craftsmanProfile: CraftsmanProfile | null = null;
   let rates: CraftsmanRate[] = [];
+  let certificateSignedUrl: string | null = null;
   if (current.profile.role === "craftsman") {
     const supabase = await createClient();
     const { data } = await supabase
@@ -31,12 +32,27 @@ export default async function ProfileEditPage() {
       .eq("craftsman_id", current.id)
       .returns<CraftsmanRate[]>();
     rates = rateRows ?? [];
+
+    // certificate_url is a private-bucket path (see Phase 20), not a
+    // ready-to-use URL — the owner's own RLS-scoped client can still sign
+    // it since the storage policy allows reading files under their own uid.
+    if (craftsmanProfile?.certificate_url) {
+      const { data: signed } = await supabase.storage
+        .from("certificates")
+        .createSignedUrl(craftsmanProfile.certificate_url, 3600);
+      certificateSignedUrl = signed?.signedUrl ?? null;
+    }
   }
 
   return (
     <div className="mx-auto max-w-lg">
       <h1 className="text-xl font-bold">プロフィール編集</h1>
-      <ProfileForm profile={current.profile} craftsmanProfile={craftsmanProfile} rates={rates} />
+      <ProfileForm
+        profile={current.profile}
+        craftsmanProfile={craftsmanProfile}
+        rates={rates}
+        certificateSignedUrl={certificateSignedUrl}
+      />
     </div>
   );
 }

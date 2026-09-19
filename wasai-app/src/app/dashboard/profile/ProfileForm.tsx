@@ -4,6 +4,9 @@ import { useActionState, useState } from "react";
 import { updateProfile, type ProfileFormState } from "./actions";
 import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type CraftsmanRate, type Profile } from "@/lib/types";
 import Avatar from "@/components/Avatar";
+import AvatarUploader from "./AvatarUploader";
+import PortfolioUploader from "./PortfolioUploader";
+import CertificateUploader from "./CertificateUploader";
 
 const initialState: ProfileFormState = {};
 
@@ -11,10 +14,12 @@ export default function ProfileForm({
   profile,
   craftsmanProfile,
   rates,
+  certificateSignedUrl,
 }: {
   profile: Profile;
   craftsmanProfile: CraftsmanProfile | null;
   rates: CraftsmanRate[];
+  certificateSignedUrl: string | null;
 }) {
   const [state, formAction, pending] = useActionState(updateProfile, initialState);
   const [specialties, setSpecialties] = useState<string[]>(craftsmanProfile?.specialties ?? []);
@@ -48,6 +53,7 @@ export default function ProfileForm({
         <div className="mt-1 flex items-center gap-3">
           <Avatar url={profile.avatar_url} name={profile.display_name} size={48} />
           <input
+            key={profile.avatar_url ?? "no-avatar"}
             id="avatar_url"
             name="avatar_url"
             type="url"
@@ -56,8 +62,11 @@ export default function ProfileForm({
             className="min-w-0 flex-1 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
           />
         </div>
+        <div className="mt-1">
+          <AvatarUploader />
+        </div>
         <p className="mt-1 text-xs text-ink-muted">
-          画像のアップロード機能は未対応のため、外部に置いた画像のURLを貼り付けてください。未設定の場合は表示名の頭文字が表示されます。
+          画像をアップロードするか、外部に置いた画像のURLを直接貼り付けてください。未設定の場合は表示名の頭文字が表示されます。
         </p>
       </div>
 
@@ -125,7 +134,7 @@ export default function ProfileForm({
               {craftsmanProfile.grade_verified ? (
                 <span className="text-good">✓ 運営による資格確認済み</span>
               ) : (
-                <span className="text-ink-muted">未確認（証明書URLを登録すると運営が確認します）</span>
+                <span className="text-ink-muted">未確認（証明書をアップロードすると運営が確認します）</span>
               )}
             </p>
           )}
@@ -145,20 +154,13 @@ export default function ProfileForm({
           </div>
 
           <div>
-            <label htmlFor="certificate_url" className="block text-sm font-medium">
-              資格証明書の画像/PDFのURL（任意）
-            </label>
-            <input
-              id="certificate_url"
-              name="certificate_url"
-              type="url"
-              defaultValue={craftsmanProfile?.certificate_url ?? ""}
-              placeholder="https://..."
-              className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
-            />
+            <label className="block text-sm font-medium">資格証明書（画像/PDF、任意）</label>
+            <div className="mt-1">
+              <CertificateUploader signedUrl={certificateSignedUrl} />
+            </div>
             <p className="mt-1 text-xs text-ink-muted">
-              1〜3級の場合は都道府県職業能力開発協会が発行する技能検定合格証書、その他資格の場合は発行団体名が分かる証明書をご登録ください。
-              運営が内容を確認できると、プロフィールに「確認済み」バッジが表示されます。資格級位または証明書URLを変更すると確認状態はリセットされます。
+              1〜3級の場合は都道府県職業能力開発協会が発行する技能検定合格証書、その他資格の場合は発行団体名が分かる証明書をアップロードしてください。
+              非公開で保存され、本人と運営のみが閲覧できます。運営が内容を確認できると、プロフィールに「確認済み」バッジが表示されます。資格級位を変更するか証明書を差し替えると確認状態はリセットされます。
             </p>
           </div>
 
@@ -212,6 +214,7 @@ export default function ProfileForm({
               実績写真URL（1行に1つ）
             </label>
             <textarea
+              key={craftsmanProfile?.portfolio_urls.join(",") ?? "no-portfolio"}
               id="portfolio_urls"
               name="portfolio_urls"
               rows={4}
@@ -219,6 +222,10 @@ export default function ProfileForm({
               placeholder="https://..."
               className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
+            <p className="mt-1 text-xs text-ink-muted">
+              アップロードした写真もこの欄にURLとして追加されます。不要な行を消せば削除できます（削除の反映には「保存する」を押してください）。
+            </p>
+            <PortfolioUploader />
           </div>
 
           <label className="flex items-center gap-2 text-sm">
