@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
 import SetupNotice from "@/components/SetupNotice";
-import type { JobRequest, Order, Proposal, Service } from "@/lib/types";
+import Avatar from "@/components/Avatar";
+import type { JobRequest, Order, Profile, Proposal, Service } from "@/lib/types";
 
 export const metadata = { title: "マイページ" };
 
@@ -35,6 +36,7 @@ export default async function DashboardPage() {
   let requests: JobRequest[] = [];
   let services: Service[] = [];
   let proposals: (Proposal & { requests: JobRequest })[] = [];
+  let pastCraftsmen: Profile[] = [];
 
   if (isClient) {
     const { data } = await supabase
@@ -44,6 +46,27 @@ export default async function DashboardPage() {
       .order("created_at", { ascending: false })
       .returns<JobRequest[]>();
     requests = data ?? [];
+
+    // Once matched with a craftsman, a client has no reason to come back to
+    // the site for the next job unless it's at least as easy as texting them
+    // directly — surface past craftsmen with a one-tap link back to their
+    // profile (which lists their orderable services) instead of leaving that
+    // to memory.
+    const { data: completedOrders } = await supabase
+      .from("orders")
+      .select("craftsman_id")
+      .eq("client_id", current.id)
+      .eq("status", "completed")
+      .returns<Pick<Order, "craftsman_id">[]>();
+    const craftsmanIds = Array.from(new Set((completedOrders ?? []).map((o) => o.craftsman_id)));
+    if (craftsmanIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", craftsmanIds)
+        .returns<Profile[]>();
+      pastCraftsmen = profilesData ?? [];
+    }
   } else {
     const { data: serviceData } = await supabase
       .from("services")
@@ -105,6 +128,22 @@ export default async function DashboardPage() {
               {requests.length === 0 && <p className="text-sm text-ink-muted">まだ依頼を投稿していません。</p>}
             </ul>
           </section>
+
+          {pastCraftsmen.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-lg font-bold">また依頼したい和裁士</h2>
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                {pastCraftsmen.map((p) => (
+                  <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
+                    <Link href={`/craftsmen/${p.id}`} className="flex items-center gap-3">
+                      <Avatar url={p.avatar_url} name={p.display_name} size={40} />
+                      <span className="font-semibold text-accent-strong hover:underline">{p.display_name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </>
       ) : (
         <>
