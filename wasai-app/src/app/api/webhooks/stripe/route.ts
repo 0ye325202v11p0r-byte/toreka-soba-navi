@@ -30,37 +30,89 @@ export async function POST(request: NextRequest) {
 
   const supabase = adminClient();
 
+  // Shared by the two events that actually mean "money has landed": card
+  // payments confirm synchronously via checkout.session.completed, but
+  // delayed-notification methods (konbini, Japanese bank transfer) confirm
+  // later via checkout.session.async_payment_succeeded instead — the
+  // session's payment_status distinguishes the two at completion time (see
+  // markPaidIfNeeded's caller below).
+  async function markPaidIfNeeded(session: Stripe.Checkout.Session) {
+    const orderId = session.client_reference_id ?? session.metadata?.order_id ?? null;
+    if (!orderId) return;
+
+    const paymentIntentId =
+      typeof session.payment_intent === "string" ? session.payment_intent : (session.payment_intent?.id ?? null);
+
+    // Only advance orders still awaiting payment — guards against a
+    // duplicate webhook delivery (Stripe retries on anything but a 2xx)
+    // re-running this after the order has already moved on.
+    const { data: updated } = await supabase
+      .from("orders")
+      .update({
+        status: "in_progress",
+        payment_status: "paid",
+        stripe_payment_intent_id: paymentIntentId,
+      })
+      .eq("id", orderId)
+      .eq("status", "pending_payment")
+      .select("craftsman_id, title")
+      .maybeSingle();
+
+    if (updated) {
+      await notify(supabase, {
+        userId: updated.craftsman_id,
+        type: "payment_received",
+        title: "支払いが完了しました",
+        body: `${updated.title} — 作業を開始できます。`,
+        link: `/orders/${orderId}`,
+      });
+    }
+  }
+
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
+      // For card payments (synchronous), payment_status is already "paid"
+      // here. For konbini/bank transfer (delayed notification), the
+      // customer has only chosen the method — payment_status is "unpaid"
+      // until checkout.session.async_payment_succeeded confirms the money
+      // actually arrived. Marking the order paid here regardless would let
+      // a craftsman start work — and could trigger the eventual payout —
+      // before the client has actually paid anything.
+      if (session.payment_status === "paid") {
+        await markPaidIfNeeded(session);
+      }
+      break;
+    }
+
+    case "checkout.session.async_payment_succeeded": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      await markPaidIfNeeded(session);
+      break;
+    }
+
+    case "checkout.session.async_payment_failed": {
+      const session = event.data.object as Stripe.Checkout.Session;
       const orderId = session.client_reference_id ?? session.metadata?.order_id ?? null;
       if (orderId) {
-        const paymentIntentId =
-          typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : (session.payment_intent?.id ?? null);
-
-        // Only advance orders still awaiting payment — guards against a
-        // duplicate webhook delivery (Stripe retries on anything but a 2xx)
-        // re-running this after the order has already moved on.
-        const { data: updated } = await supabase
+        // The order was never marked paid (see checkout.session.completed
+        // above), so it's already sitting in pending_payment with nothing
+        // to undo — just let the client know their konbini/bank-transfer
+        // payment didn't come through so they can retry (existing
+        // PaymentRetryButton re-creates a Checkout session for any
+        // pending_payment order).
+        const { data: order } = await supabase
           .from("orders")
-          .update({
-            status: "in_progress",
-            payment_status: "paid",
-            stripe_payment_intent_id: paymentIntentId,
-          })
+          .select("client_id, title")
           .eq("id", orderId)
           .eq("status", "pending_payment")
-          .select("craftsman_id, title")
           .maybeSingle();
-
-        if (updated) {
+        if (order) {
           await notify(supabase, {
-            userId: updated.craftsman_id,
-            type: "payment_received",
-            title: "支払いが完了しました",
-            body: `${updated.title} — 作業を開始できます。`,
+            userId: order.client_id,
+            type: "payment_failed",
+            title: "お支払いが完了しませんでした",
+            body: `${order.title} — 期限切れまたは失敗のため、再度お支払い手続きをお願いします。`,
             link: `/orders/${orderId}`,
           });
         }

@@ -163,6 +163,14 @@
 - ✅ 資格証明書は氏名等の個人情報を含みうるため非公開バケットに変更し、URL貼り付けを廃止してアップロードのみに。本人は自分のRLSスコープ済みクライアントで、運営はservice_roleクライアント（`adminClient()`、既存のWebhook/資格確認ボタンと同じパターン）でそれぞれ署名付きURL（1時間有効）を発行して閲覧する
 - ✅ ファイルサイズ上限5MB、対応形式はJPEG/PNG/WebP/GIF（証明書はPDFも可）
 
+### Phase 21: 非同期決済（コンビニ決済・銀行振込）のWebhook対応
+
+Stripe Checkoutはコード上`payment_method_types`を固定していないため、Stripeダッシュボードの設定を変えるだけでカード以外の決済手段も追加できる構成になっている。ただしコンビニ決済・銀行振込は「入金が後から届く」方式で、`checkout.session.completed`イベントが発火した時点では`payment_status`が`"unpaid"`のまま（決済手段を選んだだけの状態）——実際の入金確定は別イベント`checkout.session.async_payment_succeeded`で後から届く。この区別をせず`checkout.session.completed`だけを支払い完了の合図にしていたため、カード以外の決済手段を有効化した場合に入金前の注文を「支払い済み」にしてしまう欠陥があった（現時点ではカードのみ運用中のため実害はまだ発生していないが、他の決済手段を追加した瞬間に問題化する）。
+
+- ✅ `checkout.session.completed`は`payment_status === "paid"`のとき（＝カード決済等の同期確定）のみ支払い完了処理を行うよう変更
+- ✅ `checkout.session.async_payment_succeeded`を新設。コンビニ決済・銀行振込の入金確定はこちらで処理（支払い完了処理自体は`markPaidIfNeeded`として共通化）
+- ✅ `checkout.session.async_payment_failed`を新設。期限切れ等で入金が確定しなかった場合、注文は`pending_payment`のまま変更せず、依頼者に再決済を促す通知を送る
+
 **未実装（意図的に見送り、次フェーズ）：**
 - 📎 メッセージへの画像添付は引き続き未対応
 - 💬 メッセージのリアルタイム更新。現状はServer Actionで送信後にページを再検証する方式（送信すると自分の画面には即反映されるが、相手の画面は再読み込みが必要）
