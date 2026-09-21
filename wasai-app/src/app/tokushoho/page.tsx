@@ -10,16 +10,16 @@ export const metadata: Metadata = {
 };
 
 const ROWS: { label: string; value: React.ReactNode }[] = [
-  { label: "販売事業者", value: "［ここに記入］" },
-  { label: "運営統括責任者", value: "［ここに記入］" },
+  { label: "販売事業者", value: SITE_NAME },
+  { label: "運営統括責任者", value: "柏木涼" },
   {
     label: "所在地",
     value: (
       <>
-        ［ここに記入］
+        ご請求をいただいた場合には、遅滞なく開示いたします。
         <br />
         <span className="text-xs text-ink-faint">
-          ※個人事業主が一定の要件を満たす場合、「請求があれば遅滞なく開示します」という記載に置き換えられる場合があります。該当するかは専門家にご確認ください。
+          ※個人事業主が一定の要件（請求への遅滞ない開示体制等）を満たす場合の代替表示です。要件を満たしているか、公開前に専門家にご確認ください。
         </span>
       </>
     ),
@@ -28,9 +28,9 @@ const ROWS: { label: string; value: React.ReactNode }[] = [
     label: "電話番号",
     value: (
       <>
-        ［ここに記入］
+        ご請求をいただいた場合には、遅滞なく開示いたします。
         <br />
-        <span className="text-xs text-ink-faint">※所在地と同様、要件を満たす場合は開示方法を変更できる場合があります。</span>
+        <span className="text-xs text-ink-faint">※所在地と同様の代替表示です。下記メールアドレスが常設の問い合わせ窓口となります。</span>
       </>
     ),
   },
@@ -41,11 +41,11 @@ export default function TokushohoPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold">特定商取引法に基づく表示</h1>
-      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月15日</p>
+      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月21日</p>
 
       <div className="mb-4 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
         ⚠️
-        「［ここに記入］」のプレースホルダーが埋まるまでは一般公開しないでください。所在地・電話番号の開示方法（常時公開か、請求時開示か）を含め、公開前に専門家へのご確認を推奨します。
+        所在地・電話番号は「請求があれば遅滞なく開示」の代替表示にしています。この表示が認められる要件（開示体制が実際に整っているか等）を満たしているか、一般公開前に専門家へのご確認を推奨します。
       </div>
       <div className="mb-6 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
         ⚠️
