@@ -8,6 +8,7 @@ import StatusControls from "./StatusControls";
 import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
+import FabricCheckForm from "./FabricCheckForm";
 import Avatar from "@/components/Avatar";
 import { platformFeeAmount, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { isRepeatCustomer } from "@/lib/escrow";
@@ -139,6 +140,38 @@ export default async function OrderDetailPage({
         <p className="mt-1 text-xs text-warn">
           配送業者の標準補償上限（30万円前後）を超える想定価値です。運送保険等でカバーされているか、当事者間でご確認ください。
         </p>
+      )}
+
+      {order.status !== "pending_payment" && (
+        <section className="mt-4">
+          {order.fabric_check_completed_at ? (
+            <div className="rounded-lg border border-border bg-bg-elevated p-4">
+              <h2 className="text-sm font-semibold">反物の状態記録</h2>
+              <p className="mt-1 text-xs text-ink-muted">
+                {new Date(order.fabric_check_completed_at).toLocaleString("ja-JP")} に和裁士が記録
+              </p>
+              <ul className="mt-2 space-y-1 text-sm">
+                <li>傷・汚れ・シミ: {order.fabric_check_damage ? "あり" : "なし"}</li>
+                <li>依頼内容に対する分量不足: {order.fabric_check_shortage ? "あり" : "なし"}</li>
+                <li>気になる匂い: {order.fabric_check_odor ? "あり" : "なし"}</li>
+              </ul>
+              {order.fabric_check_notes && (
+                <p className="mt-2 whitespace-pre-wrap text-sm">{order.fabric_check_notes}</p>
+              )}
+              {order.fabric_check_photo_urls.length > 0 && (
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {order.fabric_check_photo_urls.map((url) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URLs, no Next Image domain config in this MVP
+                    <img key={url} src={url} alt="反物の状態" className="aspect-square rounded-md object-cover" />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            order.status === "in_progress" &&
+            viewerRole === "craftsman" && <FabricCheckForm orderId={order.id} />
+          )}
+        </section>
       )}
 
       <div className="mt-4">

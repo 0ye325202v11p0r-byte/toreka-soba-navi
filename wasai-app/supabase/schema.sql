@@ -611,3 +611,32 @@ create policy "certificates_owner_write" on storage.objects for insert
 drop policy if exists "certificates_owner_update" on storage.objects;
 create policy "certificates_owner_update" on storage.objects for update
   using (bucket_id = 'certificates' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------------------
+-- Phase 24（2026-09-24追加）: 反物チェックシート。持ち込み生地の状態を
+-- 作業開始前に写真＋チェック項目で記録しておくことで、「元から傷んでいた」
+-- 「聞いていたのと量が違う」といった後からの水掛け論を防ぐ。記録後は
+-- 編集不可にし、依頼者・和裁士どちらにも同じ内容が見える「共通の記録」と
+-- して機能させる。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists fabric_check_completed_at timestamptz;
+alter table orders add column if not exists fabric_check_damage boolean not null default false;
+alter table orders add column if not exists fabric_check_shortage boolean not null default false;
+alter table orders add column if not exists fabric_check_odor boolean not null default false;
+alter table orders add column if not exists fabric_check_notes text;
+alter table orders add column if not exists fabric_check_photo_urls text[] not null default '{}';
+
+insert into storage.buckets (id, name, public)
+values ('fabric-checks', 'fabric-checks', true)
+on conflict (id) do nothing;
+
+-- avatars/portfolioと同じ「{auth.uid()}/...」規約。記録するのは常に和裁士
+-- （生地を受け取る側）だが、写真自体は当事者間の記録として公開URLで
+-- 両者から見えるようにする（個人情報を含まないため portfolio と同じ扱い）。
+drop policy if exists "fabric_checks_public_read" on storage.objects;
+create policy "fabric_checks_public_read" on storage.objects for select
+  using (bucket_id = 'fabric-checks');
+
+drop policy if exists "fabric_checks_owner_write" on storage.objects;
+create policy "fabric_checks_owner_write" on storage.objects for insert
+  with check (bucket_id = 'fabric-checks' and (storage.foldername(name))[1] = auth.uid()::text);

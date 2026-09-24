@@ -8,6 +8,7 @@ import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { notify } from "@/lib/notifications";
 import { releaseEscrowPayout, refundIfPaid } from "@/lib/escrow";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
+import { validateUploadedFile, uploadUserFile, publicUrlFor } from "@/lib/storage";
 
 async function loadOrderForParticipant(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -244,6 +245,78 @@ export async function submitReview(
     if (error.code === "23505") return { error: "この取引には既にレビュー済みです。" };
     return { error: error.message };
   }
+
+  revalidatePath(`/orders/${orderId}`);
+  return {};
+}
+
+export interface FabricCheckState {
+  error?: string;
+}
+
+// One-time record of the fabric's condition on receipt, filed by the
+// craftsman before work starts — the point of it is to have a timestamped,
+// both-parties-visible snapshot to point back to instead of a later
+// "it was already damaged" / "you didn't send enough" argument. Deliberately
+// write-once: allowing edits after the fact would defeat the purpose.
+export async function submitFabricCheck(
+  _prevState: FabricCheckState,
+  formData: FormData
+): Promise<FabricCheckState> {
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "取引が見つかりません。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, craftsman_id, status, fabric_check_completed_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order || order.craftsman_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (order.status !== "in_progress") return { error: "進行中の取引でのみ記録できます。" };
+  if (order.fabric_check_completed_at) return { error: "すでに記録済みです。" };
+
+  const damage = formData.get("damage") === "on";
+  const shortage = formData.get("shortage") === "on";
+  const odor = formData.get("odor") === "on";
+  const notes = String(formData.get("notes") ?? "").trim();
+  if (containsContactInfo(notes)) return { error: CONTACT_INFO_ERROR };
+
+  const files = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  for (const file of files) {
+    const validationError = validateUploadedFile(file, "image");
+    if (validationError) return { error: validationError };
+  }
+
+  const photoUrls: string[] = [];
+  try {
+    for (const file of files) {
+      const path = await uploadUserFile(supabase, "fabric-checks", user.id, file);
+      photoUrls.push(publicUrlFor(supabase, "fabric-checks", path));
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "写真のアップロードに失敗しました。" };
+  }
+
+  const { error: updateError } = await supabase
+    .from("orders")
+    .update({
+      fabric_check_damage: damage,
+      fabric_check_shortage: shortage,
+      fabric_check_odor: odor,
+      fabric_check_notes: notes || null,
+      fabric_check_photo_urls: photoUrls,
+      fabric_check_completed_at: new Date().toISOString(),
+    })
+    .eq("id", orderId)
+    .eq("status", "in_progress")
+    .is("fabric_check_completed_at", null);
+  if (updateError) return { error: updateError.message };
 
   revalidatePath(`/orders/${orderId}`);
   return {};
