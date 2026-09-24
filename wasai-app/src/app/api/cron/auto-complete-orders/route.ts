@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const { data: staleOrders, error } = await supabase
     .from("orders")
-    .select("id, client_id, craftsman_id, title, price, payment_status")
+    .select("id, client_id, craftsman_id, title, price, payment_status, platform_fee_amount")
     .eq("status", "delivered")
     .lt("delivered_at", cutoff);
 

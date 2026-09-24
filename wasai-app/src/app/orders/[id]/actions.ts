@@ -18,7 +18,7 @@ async function loadOrderForParticipant(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, fabric_check_completed_at, fabric_check_approved_at, spec_confirmed_at, spec_approved_at"
+      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, platform_fee_amount, fabric_check_completed_at, fabric_check_approved_at, spec_confirmed_at, spec_approved_at"
     )
     .eq("id", orderId)
     .maybeSingle();

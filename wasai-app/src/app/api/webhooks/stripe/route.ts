@@ -1,8 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { adminClient } from "@/lib/supabase/admin";
-import { isStripeConfigured, stripeClient } from "@/lib/stripe";
+import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/stripe";
 import { notify } from "@/lib/notifications";
+import { isRepeatCustomer } from "@/lib/escrow";
 
 // Stripe → us only. Verified via the signing secret, not a session — this
 // route intentionally uses the service-role client (bypasses RLS) because
@@ -55,10 +56,19 @@ export async function POST(request: NextRequest) {
       })
       .eq("id", orderId)
       .eq("status", "pending_payment")
-      .select("craftsman_id, title")
+      .select("client_id, craftsman_id, title, price")
       .maybeSingle();
 
     if (updated) {
+      // Lock in the platform's cut the moment money actually changes hands,
+      // not at completion — otherwise changing PLATFORM_FEE_RATE /
+      // REPEAT_PLATFORM_FEE_RATE while this order is still in_progress would
+      // silently change the craftsman's payout at releaseEscrowPayout() time,
+      // despite the order page having shown a fee figure since payment.
+      const isRepeat = await isRepeatCustomer(supabase, updated.client_id, updated.craftsman_id, orderId);
+      const fee = platformFeeAmount(updated.price, isRepeat);
+      await supabase.from("orders").update({ platform_fee_amount: fee }).eq("id", orderId);
+
       await notify(supabase, {
         userId: updated.craftsman_id,
         type: "payment_received",

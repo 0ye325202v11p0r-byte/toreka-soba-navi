@@ -29,7 +29,14 @@ export async function isRepeatCustomer(
 // account setup, and the payout can be retried later (not yet automated).
 export async function releaseEscrowPayout(
   supabase: SupabaseClient,
-  order: { id: string; client_id: string; craftsman_id: string; price: number; payment_status: string }
+  order: {
+    id: string;
+    client_id: string;
+    craftsman_id: string;
+    price: number;
+    payment_status: string;
+    platform_fee_amount?: number | null;
+  }
 ) {
   if (!isStripeConfigured() || order.payment_status !== "paid") return;
 
@@ -41,8 +48,15 @@ export async function releaseEscrowPayout(
 
   if (!craftsmanProfile?.stripe_account_id || !craftsmanProfile.stripe_transfers_enabled) return;
 
-  const isRepeat = await isRepeatCustomer(supabase, order.client_id, order.craftsman_id, order.id);
-  const fee = platformFeeAmount(order.price, isRepeat);
+  // Prefer the fee already locked in when the order was marked paid (see the
+  // Stripe webhook) over recomputing it here — otherwise a platform fee-rate
+  // change made while this order sat in_progress would silently change how
+  // much the craftsman gets, despite the order page having shown them a
+  // fee figure since the moment they got paid. Falls back to a live
+  // computation only for orders paid before this locking existed.
+  const fee =
+    order.platform_fee_amount ??
+    platformFeeAmount(order.price, await isRepeatCustomer(supabase, order.client_id, order.craftsman_id, order.id));
   const transferAmount = order.price - fee;
   if (transferAmount <= 0) return;
 
