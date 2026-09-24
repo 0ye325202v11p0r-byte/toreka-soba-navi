@@ -236,6 +236,24 @@ export default function ProfileForm({
             />
             新規受注を受け付ける
           </label>
+
+          <div>
+            <label htmlFor="max_concurrent_orders" className="block text-sm font-medium">
+              同時受注の上限（任意）
+            </label>
+            <input
+              id="max_concurrent_orders"
+              name="max_concurrent_orders"
+              type="number"
+              min={1}
+              defaultValue={craftsmanProfile?.max_concurrent_orders ?? ""}
+              placeholder="未設定＝上限なし"
+              className="mt-1 w-32 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-ink-muted">
+              進行中の取引がこの件数に達すると、新規受注（提案の送信・提案の承諾・サービスへの直接注文）が自動的に止まります。
+            </p>
+          </div>
         </div>
       )}
 

@@ -664,3 +664,16 @@ alter table orders add column if not exists fabric_check_approved_at timestamptz
 alter table orders add column if not exists spec_confirmation_text text;
 alter table orders add column if not exists spec_confirmed_at timestamptz;
 alter table orders add column if not exists spec_approved_at timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- Phase 27（2026-09-24追加）: 同時受注上限（キャパシティ管理）。納期を
+-- 「自動計算」しようとすると、1件あたりの所要日数を数式で決め打ちすること
+-- になるが、その根拠になる実データが今は無い。数式を外して間違えるくらい
+-- なら、確実な方——今の受注件数が設定した上限に達したら新規受注を
+-- 自動的に止める——だけをやる。is_accepting_ordersが手動のオンオフ
+-- スイッチなのに対し、これは件数に応じて自動で効く歯止め。
+-- ---------------------------------------------------------------------------
+alter table craftsman_profiles add column if not exists max_concurrent_orders integer;
+alter table craftsman_profiles drop constraint if exists craftsman_profiles_max_concurrent_orders_check;
+alter table craftsman_profiles add constraint craftsman_profiles_max_concurrent_orders_check
+  check (max_concurrent_orders is null or max_concurrent_orders > 0);

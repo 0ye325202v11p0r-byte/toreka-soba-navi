@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
+import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
 
 export interface OrderFromServiceState {
   error?: string;
@@ -37,14 +38,8 @@ export async function orderService(
     return { error: "自分自身のサービスには依頼できません。" };
   }
 
-  const { data: craftsmanProfile } = await supabase
-    .from("craftsman_profiles")
-    .select("is_accepting_orders")
-    .eq("profile_id", service.craftsman_id)
-    .maybeSingle();
-  if (craftsmanProfile?.is_accepting_orders === false) {
-    return { error: "この和裁士は現在、新規受注を停止しています。" };
-  }
+  const capacityCheck = await checkCraftsmanCanAcceptWork(supabase, service.craftsman_id);
+  if (!capacityCheck.ok) return { error: capacityCheck.reason };
 
   const { data: order, error } = await supabase
     .from("orders")

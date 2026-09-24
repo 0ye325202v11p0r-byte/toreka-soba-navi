@@ -33,6 +33,7 @@ export interface CraftsmanProfile {
   specialties: string[];
   portfolio_urls: string[];
   is_accepting_orders: boolean;
+  max_concurrent_orders: number | null;
   stripe_account_id: string | null;
   stripe_transfers_enabled: boolean;
   certificate_url: string | null;

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 import { notify } from "@/lib/notifications";
+import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 
 const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
@@ -69,19 +70,23 @@ export async function createRequest(
 
   // Until now, a newly posted request had zero passive discovery for
   // craftsmen — they had to browse /requests themselves to notice it. Notify
-  // craftsmen whose specialties/grade/accepting-orders actually match, using
-  // the same eligibility check submitProposal enforces server-side.
+  // craftsmen whose specialties/grade/capacity actually match, using the
+  // same eligibility check submitProposal enforces server-side — no point
+  // notifying someone who's full and would just be rejected if they tried.
   const { data: matchingCraftsmen } = await supabase
     .from("craftsman_profiles")
     .select("profile_id, grade")
-    .contains("specialties", [garmentType])
-    .eq("is_accepting_orders", true);
+    .contains("specialties", [garmentType]);
 
-  const eligibleCraftsmen = (matchingCraftsmen ?? []).filter((c) => {
+  const gradeEligible = (matchingCraftsmen ?? []).filter((c) => {
     if (!minGrade) return true;
     const grade = c.grade as Grade | null;
     return grade != null && GRADE_RANK[grade] <= GRADE_RANK[minGrade];
   });
+  const capacityResults = await Promise.all(
+    gradeEligible.map((c) => checkCraftsmanCanAcceptWork(supabase, c.profile_id))
+  );
+  const eligibleCraftsmen = gradeEligible.filter((_, i) => capacityResults[i].ok);
 
   await Promise.all(
     eligibleCraftsmen.map((c) =>

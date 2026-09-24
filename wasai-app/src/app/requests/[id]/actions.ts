@@ -8,6 +8,7 @@ import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 import { notify } from "@/lib/notifications";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
+import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
 
 export interface ProposalFormState {
   error?: string;
@@ -52,13 +53,12 @@ export async function submitProposal(
 
   const { data: craftsmanProfile } = await supabase
     .from("craftsman_profiles")
-    .select("grade, is_accepting_orders")
+    .select("grade")
     .eq("profile_id", user.id)
     .maybeSingle();
 
-  if (craftsmanProfile?.is_accepting_orders === false) {
-    return { error: "新規受注を停止中は提案できません。プロフィールで設定を変更してください。" };
-  }
+  const capacityCheck = await checkCraftsmanCanAcceptWork(supabase, user.id);
+  if (!capacityCheck.ok) return { error: capacityCheck.reason };
 
   if (request.min_grade) {
     const myGrade = craftsmanProfile?.grade as Grade | null;
@@ -209,6 +209,10 @@ export async function respondProposal(
 
   if (decision === "accepted" && !isStripeConfigured()) {
     return { error: "決済機能は準備中です。しばらくお待ちください。" };
+  }
+  if (decision === "accepted") {
+    const capacityCheck = await checkCraftsmanCanAcceptWork(supabase, proposal.craftsman_id);
+    if (!capacityCheck.ok) return { error: capacityCheck.reason };
   }
 
   const finalPrice = isCountered ? proposal.countered_price! : proposal.price;

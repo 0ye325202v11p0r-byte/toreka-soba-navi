@@ -49,6 +49,11 @@ export async function updateProfile(
       .map((s) => s.trim())
       .filter(Boolean);
     const isAcceptingOrders = formData.get("is_accepting_orders") === "on";
+    const maxConcurrentRaw = String(formData.get("max_concurrent_orders") ?? "").trim();
+    const maxConcurrentOrders = maxConcurrentRaw ? Number(maxConcurrentRaw) : null;
+    if (maxConcurrentOrders != null && (!Number.isFinite(maxConcurrentOrders) || maxConcurrentOrders < 1)) {
+      return { error: "同時受注の上限は1以上の数値で入力してください。" };
+    }
 
     // certificate_url is intentionally NOT set here — it's a private-bucket
     // path exclusively managed by uploadCertificate() in uploadActions.ts,
@@ -61,6 +66,7 @@ export async function updateProfile(
         specialties,
         portfolio_urls: portfolioUrls,
         is_accepting_orders: isAcceptingOrders,
+        max_concurrent_orders: maxConcurrentOrders,
         updated_at: new Date().toISOString(),
       })
       .eq("profile_id", user.id);

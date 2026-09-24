@@ -36,6 +36,16 @@ export default async function CraftsmanDetailPage({
     .eq("profile_id", id)
     .maybeSingle<CraftsmanProfile>();
 
+  let activeOrderCount = 0;
+  if (craftsmanProfile?.max_concurrent_orders != null) {
+    const { count } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("craftsman_id", id)
+      .eq("status", "in_progress");
+    activeOrderCount = count ?? 0;
+  }
+
   const { data: services } = await supabase
     .from("services")
     .select("*")
@@ -115,6 +125,12 @@ export default async function CraftsmanDetailPage({
         )}
         {craftsmanProfile && !craftsmanProfile.is_accepting_orders && (
           <p className="mt-4 text-sm text-warn">現在、新規受注を停止中です</p>
+        )}
+        {craftsmanProfile?.is_accepting_orders && craftsmanProfile.max_concurrent_orders != null && (
+          <p className={`mt-4 text-sm ${activeOrderCount >= craftsmanProfile.max_concurrent_orders ? "text-warn" : "text-ink-muted"}`}>
+            現在の受注状況: {activeOrderCount}/{craftsmanProfile.max_concurrent_orders}件
+            {activeOrderCount >= craftsmanProfile.max_concurrent_orders && "（満枠のため新規受注を停止中）"}
+          </p>
         )}
       </div>
 
