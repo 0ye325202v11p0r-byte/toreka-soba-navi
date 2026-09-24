@@ -120,6 +120,9 @@ export interface Order {
   platform_fee_amount: number | null;
   fabric_check_completed_at: string | null;
   fabric_check_approved_at: string | null;
+  spec_confirmation_text: string | null;
+  spec_confirmed_at: string | null;
+  spec_approved_at: string | null;
   fabric_check_damage: boolean;
   fabric_check_shortage: boolean;
   fabric_check_odor: boolean;

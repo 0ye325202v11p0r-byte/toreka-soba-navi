@@ -651,3 +651,16 @@ create policy "fabric_checks_owner_write" on storage.objects for insert
 -- これで十分機能する。
 -- ---------------------------------------------------------------------------
 alter table orders add column if not exists fabric_check_approved_at timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- Phase 26（2026-09-24追加）: 仕様確認（作業開始前の最終承認）。提案・依頼の
+-- やり取りは価格と自由記述のメッセージだけなので、実際に何を作るかの細部
+-- （寸法・仕上げ方・特殊な指定など）はチャットで詰めることが多く、「そんな
+-- 仕様聞いてない」の火種になりやすい。取引開始後、和裁士が最終的な仕様を
+-- 一度文章にまとめ、依頼者が明示的に承認するまで納品に進めないようにする。
+-- 承認後の価格・納期変更（＝追加料金の請求）は決済のやり直しが絡む別問題
+-- なので、ここでは扱わない（次フェーズ以降の課題として残す）。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists spec_confirmation_text text;
+alter table orders add column if not exists spec_confirmed_at timestamptz;
+alter table orders add column if not exists spec_approved_at timestamptz;

@@ -10,6 +10,8 @@ import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
 import FabricCheckForm from "./FabricCheckForm";
 import FabricCheckApproveButton from "./FabricCheckApproveButton";
+import SpecConfirmationForm from "./SpecConfirmationForm";
+import SpecConfirmationApproveButton from "./SpecConfirmationApproveButton";
 import Avatar from "@/components/Avatar";
 import { platformFeeAmount, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { isRepeatCustomer } from "@/lib/escrow";
@@ -145,6 +147,32 @@ export default async function OrderDetailPage({
 
       {order.status !== "pending_payment" && (
         <section className="mt-4">
+          {order.spec_confirmed_at ? (
+            <div className="rounded-lg border border-border bg-bg-elevated p-4">
+              <h2 className="text-sm font-semibold">仕様の最終確認</h2>
+              <p className="mt-1 text-xs text-ink-muted">
+                {new Date(order.spec_confirmed_at).toLocaleString("ja-JP")} に和裁士が送信
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm">{order.spec_confirmation_text}</p>
+              {order.spec_approved_at ? (
+                <p className="mt-3 text-xs text-good">
+                  ✓ {new Date(order.spec_approved_at).toLocaleString("ja-JP")} に依頼者が承認済み
+                </p>
+              ) : viewerRole === "client" ? (
+                <SpecConfirmationApproveButton orderId={order.id} />
+              ) : (
+                <p className="mt-3 text-xs text-warn">依頼者の承認待ちです。承認されるまで納品操作はできません。</p>
+              )}
+            </div>
+          ) : (
+            order.status === "in_progress" &&
+            viewerRole === "craftsman" && <SpecConfirmationForm orderId={order.id} />
+          )}
+        </section>
+      )}
+
+      {order.status !== "pending_payment" && (
+        <section className="mt-4">
           {order.fabric_check_completed_at ? (
             <div className="rounded-lg border border-border bg-bg-elevated p-4">
               <h2 className="text-sm font-semibold">反物の状態記録</h2>
@@ -189,7 +217,10 @@ export default async function OrderDetailPage({
           orderId={order.id}
           status={order.status}
           viewerRole={viewerRole}
-          fabricCheckLocked={Boolean(order.fabric_check_completed_at && !order.fabric_check_approved_at)}
+          deliveryLocked={Boolean(
+            (order.fabric_check_completed_at && !order.fabric_check_approved_at) ||
+              (order.spec_confirmed_at && !order.spec_approved_at)
+          )}
         />
       </div>
 

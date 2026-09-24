@@ -18,7 +18,7 @@ async function loadOrderForParticipant(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, fabric_check_completed_at, fabric_check_approved_at"
+      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, fabric_check_completed_at, fabric_check_approved_at, spec_confirmed_at, spec_approved_at"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -153,6 +153,9 @@ export async function updateOrderStatus(
   // a disabled button is not a real guarantee.
   if (nextStatus === "delivered" && order.fabric_check_completed_at && !order.fabric_check_approved_at) {
     return { error: "依頼者が反物チェックの内容を承認するまで、納品操作はできません。" };
+  }
+  if (nextStatus === "delivered" && order.spec_confirmed_at && !order.spec_approved_at) {
+    return { error: "依頼者が仕様の最終確認を承認するまで、納品操作はできません。" };
   }
 
   // Optional, only meaningful on the "delivered" transition — no carrier
@@ -374,6 +377,107 @@ export async function approveFabricCheck(
     type: "fabric_check_approved",
     title: "反物チェックが承認されました",
     body: "依頼者が反物の状態を確認しました。作業を進めてください。",
+    link: `/orders/${orderId}`,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  return {};
+}
+
+export interface SpecConfirmationState {
+  error?: string;
+}
+
+// The point of this isn't to add a step for its own sake — proposals and
+// requests are just a price plus a free-text message, so the actual details
+// (finish, special requests, whatever got hashed out in chat) usually never
+// end up written down anywhere both sides can point back to. This is that
+// write-once record, same idea as the fabric check. Price/delivery date
+// changes after approval aren't handled here — that implies collecting
+// additional payment, which needs its own design (see schema.sql comment).
+export async function submitSpecConfirmation(
+  _prevState: SpecConfirmationState,
+  formData: FormData
+): Promise<SpecConfirmationState> {
+  const orderId = String(formData.get("order_id") ?? "");
+  const specText = String(formData.get("spec_text") ?? "").trim();
+  if (!orderId) return { error: "取引が見つかりません。" };
+  if (!specText) return { error: "仕様の内容を入力してください。" };
+  if (containsContactInfo(specText)) return { error: CONTACT_INFO_ERROR };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, client_id, craftsman_id, status, spec_confirmed_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order || order.craftsman_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (order.status !== "in_progress") return { error: "進行中の取引でのみ記録できます。" };
+  if (order.spec_confirmed_at) return { error: "すでに記録済みです。" };
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ spec_confirmation_text: specText, spec_confirmed_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("status", "in_progress")
+    .is("spec_confirmed_at", null);
+  if (error) return { error: error.message };
+
+  await notify(supabase, {
+    userId: order.client_id,
+    type: "spec_confirmation_submitted",
+    title: "仕様の最終確認が届いています",
+    body: "内容をご確認のうえ、承認をお願いします。",
+    link: `/orders/${orderId}`,
+  });
+
+  revalidatePath(`/orders/${orderId}`);
+  return {};
+}
+
+export interface SpecApprovalState {
+  error?: string;
+}
+
+export async function approveSpecConfirmation(
+  _prevState: SpecApprovalState,
+  formData: FormData
+): Promise<SpecApprovalState> {
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "取引が見つかりません。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, client_id, craftsman_id, spec_confirmed_at, spec_approved_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order || order.client_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (!order.spec_confirmed_at) return { error: "まだ仕様確認が記録されていません。" };
+  if (order.spec_approved_at) return { error: "すでに承認済みです。" };
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ spec_approved_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .is("spec_approved_at", null);
+  if (error) return { error: error.message };
+
+  await notify(supabase, {
+    userId: order.craftsman_id,
+    type: "spec_confirmation_approved",
+    title: "仕様が承認されました",
+    body: "依頼者が仕様内容を確認しました。作業を進めてください。",
     link: `/orders/${orderId}`,
   });
 
