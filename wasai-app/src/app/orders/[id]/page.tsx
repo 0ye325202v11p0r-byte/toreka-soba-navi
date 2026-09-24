@@ -9,6 +9,7 @@ import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
 import FabricCheckForm from "./FabricCheckForm";
+import FabricCheckApproveButton from "./FabricCheckApproveButton";
 import Avatar from "@/components/Avatar";
 import { platformFeeAmount, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { isRepeatCustomer } from "@/lib/escrow";
@@ -166,6 +167,15 @@ export default async function OrderDetailPage({
                   ))}
                 </div>
               )}
+              {order.fabric_check_approved_at ? (
+                <p className="mt-3 text-xs text-good">
+                  ✓ {new Date(order.fabric_check_approved_at).toLocaleString("ja-JP")} に依頼者が承認済み
+                </p>
+              ) : viewerRole === "client" ? (
+                <FabricCheckApproveButton orderId={order.id} />
+              ) : (
+                <p className="mt-3 text-xs text-warn">依頼者の承認待ちです。承認されるまで納品操作はできません。</p>
+              )}
             </div>
           ) : (
             order.status === "in_progress" &&
@@ -175,7 +185,12 @@ export default async function OrderDetailPage({
       )}
 
       <div className="mt-4">
-        <StatusControls orderId={order.id} status={order.status} viewerRole={viewerRole} />
+        <StatusControls
+          orderId={order.id}
+          status={order.status}
+          viewerRole={viewerRole}
+          fabricCheckLocked={Boolean(order.fabric_check_completed_at && !order.fabric_check_approved_at)}
+        />
       </div>
 
       <section className="mt-6">

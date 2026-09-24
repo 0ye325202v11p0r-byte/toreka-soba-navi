@@ -104,14 +104,16 @@ export default function StatusControls({
   orderId,
   status,
   viewerRole,
+  fabricCheckLocked,
 }: {
   orderId: string;
   status: OrderStatus;
   viewerRole: "client" | "craftsman";
+  fabricCheckLocked: boolean;
 }) {
   const buttons: ReactNode[] = [];
 
-  if (status === "in_progress" && viewerRole === "craftsman") {
+  if (status === "in_progress" && viewerRole === "craftsman" && !fabricCheckLocked) {
     buttons.push(<DeliverButton key="deliver" orderId={orderId} />);
   }
   if (status === "delivered" && viewerRole === "client") {

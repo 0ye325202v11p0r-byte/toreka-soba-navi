@@ -640,3 +640,14 @@ create policy "fabric_checks_public_read" on storage.objects for select
 drop policy if exists "fabric_checks_owner_write" on storage.objects;
 create policy "fabric_checks_owner_write" on storage.objects for insert
   with check (bucket_id = 'fabric-checks' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ---------------------------------------------------------------------------
+-- Phase 25（2026-09-24追加）: 反物チェックの依頼者承認（裁断前ロック）。
+-- Phase 24の反物チェックは和裁士が記録するだけで、依頼者がその内容に
+-- 同意したかどうかを確認する場がなかった。裁断は後戻りできない工程なので、
+-- 「依頼者が記録内容を確認・承認するまで、和裁士は納品に進めない」という
+-- チェックポイントを追加する。あくまで納品操作をブロックするだけで、物理的に
+-- 裁断を止められるわけではないが、後から「聞いてない」を防ぐ記録としては
+-- これで十分機能する。
+-- ---------------------------------------------------------------------------
+alter table orders add column if not exists fabric_check_approved_at timestamptz;

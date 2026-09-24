@@ -17,7 +17,9 @@ async function loadOrderForParticipant(
 ) {
   const { data: order } = await supabase
     .from("orders")
-    .select("id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id")
+    .select(
+      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, fabric_check_completed_at, fabric_check_approved_at"
+    )
     .eq("id", orderId)
     .maybeSingle();
   if (!order || (order.client_id !== userId && order.craftsman_id !== userId)) return null;
@@ -144,6 +146,14 @@ export async function updateOrderStatus(
   const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
   const transition = allowed.find((t) => t.by === actorRole && t.to === nextStatus);
   if (!transition) return { error: "この操作は現在の状態では行えません。" };
+
+  // Cut-before-lock: once a fabric check has been recorded, delivering
+  // (implying cutting/work has proceeded) is blocked until the client has
+  // signed off on it — enforced here too, not just hidden in the UI, since
+  // a disabled button is not a real guarantee.
+  if (nextStatus === "delivered" && order.fabric_check_completed_at && !order.fabric_check_approved_at) {
+    return { error: "依頼者が反物チェックの内容を承認するまで、納品操作はできません。" };
+  }
 
   // Optional, only meaningful on the "delivered" transition — no carrier
   // integration, just a free-text paper trail so "納品する" isn't purely
@@ -317,6 +327,55 @@ export async function submitFabricCheck(
     .eq("status", "in_progress")
     .is("fabric_check_completed_at", null);
   if (updateError) return { error: updateError.message };
+
+  revalidatePath(`/orders/${orderId}`);
+  return {};
+}
+
+export interface FabricCheckApprovalState {
+  error?: string;
+}
+
+// The client's sign-off that unblocks delivery (see the cut-before-lock
+// check in updateOrderStatus above). Deliberately no separate "reject" —
+// if something's off, that's exactly what the order chat is for; this isn't
+// a dispute-resolution system, just the record of whether they've looked.
+export async function approveFabricCheck(
+  _prevState: FabricCheckApprovalState,
+  formData: FormData
+): Promise<FabricCheckApprovalState> {
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "取引が見つかりません。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, client_id, craftsman_id, fabric_check_completed_at, fabric_check_approved_at")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order || order.client_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (!order.fabric_check_completed_at) return { error: "まだ反物チェックが記録されていません。" };
+  if (order.fabric_check_approved_at) return { error: "すでに承認済みです。" };
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ fabric_check_approved_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .is("fabric_check_approved_at", null);
+  if (error) return { error: error.message };
+
+  await notify(supabase, {
+    userId: order.craftsman_id,
+    type: "fabric_check_approved",
+    title: "反物チェックが承認されました",
+    body: "依頼者が反物の状態を確認しました。作業を進めてください。",
+    link: `/orders/${orderId}`,
+  });
 
   revalidatePath(`/orders/${orderId}`);
   return {};
