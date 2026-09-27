@@ -264,7 +264,11 @@ npm run dev
 
 1. Stripeアカウントを作成し、ダッシュボードでtest modeの `Secret key` を取得 → `.env.local`の`STRIPE_SECRET_KEY`
 2. Stripeダッシュボード > Settings > Connect で、Express アカウントタイプを有効化
-3. Webhookエンドポイント`https://<デプロイ先ドメイン>/api/webhooks/stripe`を登録し、`checkout.session.completed`と`account.updated`の2イベントを購読 → 発行されるsigning secretを`.env.local`の`STRIPE_WEBHOOK_SECRET`へ
+3. Webhookエンドポイント`https://<デプロイ先ドメイン>/api/webhooks/stripe`を登録し、次の4イベントを購読 → 発行されるsigning secretを`.env.local`の`STRIPE_WEBHOOK_SECRET`へ
+   - `checkout.session.completed`
+   - `checkout.session.async_payment_succeeded`（コンビニ・銀行振込の入金確定。これが無いと、それらの決済が永遠に「支払い待ち」のまま止まる）
+   - `checkout.session.async_payment_failed`（コンビニ・銀行振込の期限切れ）
+   - `account.updated`
    - ローカル開発では`stripe listen --forward-to localhost:3000/api/webhooks/stripe`を使うと、コマンドがそのままsigning secretを表示する
 4. `NEXT_PUBLIC_SITE_URL`を実際のURLに設定（StripeのCheckout成功/キャンセルURL、Connectオンボーディングのreturn/refresh URLの生成に使われる）
 5. Stripeが未設定の間は、出品への依頼・提案の承諾はいずれも「決済機能は準備中です」というエラーで止まる（取引が中途半端な状態で作成されることはない）
@@ -294,9 +298,10 @@ curl "http://localhost:3000/api/cron/auto-complete-orders" -H "Authorization: Be
 **手順:**
 1. Vercelで新規プロジェクトを作成し、このリポジトリを連携。Root Directoryに`wasai-app`を指定
 2. Vercelプロジェクトの Environment Variables に `.env.local.example` の全項目を設定（`NEXT_PUBLIC_SITE_URL`は実際にデプロイされるドメイン、`STRIPE_WEBHOOK_SECRET`はデプロイ後にStripe側でWebhookエンドポイント登録して取得したものに差し替え）
-3. 初回デプロイ後、実際のドメインが確定してから、Stripeダッシュボードで`https://<本番ドメイン>/api/webhooks/stripe`をWebhookエンドポイントとして登録（`checkout.session.completed`・`account.updated`）。発行されたsigning secretを`STRIPE_WEBHOOK_SECRET`に反映し、再デプロイ
+3. 初回デプロイ後、実際のドメインが確定してから、Stripeダッシュボードで`https://<本番ドメイン>/api/webhooks/stripe`をWebhookエンドポイントとして登録（購読するイベントは上の「Stripe Connectの準備」の4つ）。発行されたsigning secretを`STRIPE_WEBHOOK_SECRET`に反映し、再デプロイ
 4. `vercel.json`のCron設定は自動的に有効化される。`CRON_SECRET`をVercel環境変数に設定していないと`/api/cron/auto-complete-orders`は常に401を返す（意図的なfail-closed）
 5. 独自ドメインを使う場合はVercelのDomains設定で追加し、`NEXT_PUBLIC_SITE_URL`をそのドメインに更新して再デプロイ
-6. Supabase側は`NEXT_PUBLIC_SUPABASE_URL`のAuthentication > URL ConfigurationでもSite URLを本番ドメインに合わせておく（メール内リンク等で使われる）
+6. Supabase側は`NEXT_PUBLIC_SUPABASE_URL`のAuthentication > URL ConfigurationでもSite URLを本番ドメインに合わせておく（メール内リンク等で使われる）。あわせて同じ画面の **Redirect URLs** に`https://<本番ドメイン>/auth/callback`を追加する——パスワードリセットのメールは`/auth/callback`に戻す設定（Phase 23）だが、Supabaseは許可リストに無いURLには戻さないので、これを忘れるとリセットのリンクが機能しない
+7. Supabase Authentication > SMTP Settings で独自のメール送信サービスを設定する（Supabase標準のメール送信は1時間あたりの上限がごく少なく、パスワードリセットのメールが本番では届かなくなる）
 
 デプロイ自体はこの手順に沿うだけで完了するが、実際のSupabaseプロジェクト作成・Stripeアカウント開設・ドメイン取得は、いずれもAnthropicの実行環境からは行えない（アカウント作成・本人確認・決済情報の登録が必要なため）——ここは運営者自身の対応が必須。
