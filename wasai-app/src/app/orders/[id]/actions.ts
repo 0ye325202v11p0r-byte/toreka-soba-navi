@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { notify } from "@/lib/notifications";
@@ -182,11 +183,15 @@ export async function updateOrderStatus(
     .eq("id", orderId);
   if (error) return { error: error.message };
 
+  // Service-role client: payment_status/stripe_transfer_id are writable only
+  // by service role (Phase 29 in supabase/schema.sql). The status change
+  // above already went through the user's own client and the DB-side
+  // transition check, so this only runs for a legitimate transition.
   if (nextStatus === "completed") {
-    await releaseEscrowPayout(supabase, order);
+    await releaseEscrowPayout(adminClient(), order);
   }
   if (nextStatus === "cancelled") {
-    await refundIfPaid(supabase, order);
+    await refundIfPaid(adminClient(), order);
   }
 
   // cancelled can now come from either side (see ALLOWED_TRANSITIONS above)
