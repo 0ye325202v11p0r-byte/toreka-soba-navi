@@ -282,6 +282,7 @@ npm run dev
 
 1. Stripeアカウントを作成し、ダッシュボードでtest modeの `Secret key` を取得 → `.env.local`の`STRIPE_SECRET_KEY`
 2. Stripeダッシュボード > Settings > Connect で、Express アカウントタイプを有効化
+   - **Accounts v1 サポートを有効にする**（開発者 > 設定 > APIポリシー > 「Accounts v1 サポート」）。このアプリは和裁士の受取口座を`stripe.accounts.create({ type: "express" })`（Accounts v1）で作るが、2026年時点のStripeは新規のConnectでv1を既定で無効にしており、有効にしないと振込先の設定で「Stripe no longer recommends Accounts v1…」エラーになる。**サンドボックスと本番の両方で個別に**オンにする必要がある
 3. Webhookの送信先を**2つ**登録する（URLはどちらも`https://<デプロイ先ドメイン>/api/webhooks/stripe`。signing secretは送信先ごとに別々に発行される）
    - **送信先A「あなたのアカウント」のイベント** → signing secretを`STRIPE_WEBHOOK_SECRET`へ
      - `checkout.session.completed`

@@ -34,7 +34,7 @@ export async function signup(_prevState: SignupState, formData: FormData): Promi
   const { data, error } = await supabase.auth.signUp({ email, password });
 
   if (error) {
-    return { error: error.message };
+    return { error: signupErrorMessage(error.code, error.message) };
   }
   if (!data.user) {
     return { error: "登録に失敗しました。時間をおいて再度お試しください。" };
@@ -67,4 +67,24 @@ export async function signup(_prevState: SignupState, formData: FormData): Promi
   }
 
   redirect("/dashboard");
+}
+
+// Supabase's auth errors are English; show the ones a user can actually hit
+// here in Japanese, and fall back to the raw message for anything else.
+function signupErrorMessage(code: string | undefined, message: string): string {
+  switch (code) {
+    case "user_already_exists":
+    case "email_exists":
+      return "このメールアドレスはすでに登録されています。ログインしてください。";
+    case "email_address_invalid":
+      return "メールアドレスの形式が正しくありません。";
+    case "weak_password":
+      return "パスワードが弱すぎます。別のパスワードにしてください。";
+    case "over_request_rate_limit":
+      return "短時間に操作が集中しています。しばらく時間をおいて再度お試しください。";
+    case "signup_disabled":
+      return "現在、新規登録を受け付けていません。";
+    default:
+      return `登録に失敗しました（${message}）`;
+  }
 }
