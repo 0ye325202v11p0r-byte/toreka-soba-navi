@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminClient } from "@/lib/supabase/admin";
-import { isStripeConfigured } from "@/lib/stripe";
+import { isStripeConfigured, isValidOrderPrice, MIN_ORDER_PRICE } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 import { notify } from "@/lib/notifications";
@@ -24,7 +24,7 @@ export async function submitProposal(
   const message = String(formData.get("message") ?? "").trim();
 
   if (!requestId) return { error: "依頼が見つかりません。" };
-  if (!Number.isFinite(price) || price < 0) return { error: "見積り価格を正しく入力してください。" };
+  if (!isValidOrderPrice(price)) return { error: `見積り価格は${MIN_ORDER_PRICE}円以上の整数で入力してください。` };
   if (!message) return { error: "提案メッセージを入力してください。" };
   if (containsContactInfo(message)) return { error: CONTACT_INFO_ERROR };
 
@@ -113,8 +113,8 @@ export async function counterProposal(
   const counteredMessage = String(formData.get("countered_message") ?? "").trim();
 
   if (!proposalId) return { error: "提案が見つかりません。" };
-  if (!Number.isFinite(counteredPrice) || counteredPrice < 0) {
-    return { error: "提示価格を正しく入力してください。" };
+  if (!isValidOrderPrice(counteredPrice)) {
+    return { error: `提示価格は${MIN_ORDER_PRICE}円以上の整数で入力してください。` };
   }
   if (containsContactInfo(counteredMessage)) return { error: CONTACT_INFO_ERROR };
 

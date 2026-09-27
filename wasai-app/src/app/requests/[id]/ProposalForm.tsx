@@ -21,7 +21,7 @@ export default function ProposalForm({ requestId }: { requestId: string }) {
           id="price"
           name="price"
           type="number"
-          min={0}
+          min={50}
           required
           className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
         />
