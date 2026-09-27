@@ -32,7 +32,7 @@ export default function CounterProposalForm({ proposalId }: { proposalId: string
           id={`countered_price-${proposalId}`}
           name="countered_price"
           type="number"
-          min={0}
+          min={50}
           required
           className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-2 py-1.5 text-sm"
         />

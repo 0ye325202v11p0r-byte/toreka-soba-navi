@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
+import { isValidOrderPrice, MIN_ORDER_PRICE } from "@/lib/stripe";
 
 export interface ServiceFormState {
   error?: string;
@@ -40,8 +41,8 @@ export async function createService(
   if (containsContactInfo(title) || containsContactInfo(description)) {
     return { error: CONTACT_INFO_ERROR };
   }
-  if (!Number.isFinite(price) || price < 0) {
-    return { error: "価格を正しく入力してください。" };
+  if (!isValidOrderPrice(price)) {
+    return { error: `価格は${MIN_ORDER_PRICE}円以上の整数で入力してください。` };
   }
   if (!Number.isFinite(deliveryDays) || deliveryDays <= 0) {
     return { error: "納期日数を正しく入力してください。" };

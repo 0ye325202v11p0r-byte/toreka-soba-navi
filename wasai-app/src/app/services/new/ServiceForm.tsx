@@ -69,7 +69,7 @@ export default function ServiceForm() {
             id="price"
             name="price"
             type="number"
-            min={0}
+            min={50}
             required
             className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
           />

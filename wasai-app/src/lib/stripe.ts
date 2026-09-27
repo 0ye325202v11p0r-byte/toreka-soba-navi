@@ -29,6 +29,14 @@ export const PLATFORM_FEE_RATE = 0.18;
 // original 8%, which gave up more margin than the leakage risk required.
 export const REPEAT_PLATFORM_FEE_RATE = 0.12;
 
+// Stripe's minimum charge for JPY is ¥50 — a cheaper order could never be
+// paid for, so prices below this are rejected wherever one is entered.
+export const MIN_ORDER_PRICE = 50;
+
+export function isValidOrderPrice(price: number): boolean {
+  return Number.isInteger(price) && price >= MIN_ORDER_PRICE;
+}
+
 export function platformFeeAmount(price: number, isRepeat: boolean = false): number {
   const rate = isRepeat ? REPEAT_PLATFORM_FEE_RATE : PLATFORM_FEE_RATE;
   return Math.round(price * rate);
