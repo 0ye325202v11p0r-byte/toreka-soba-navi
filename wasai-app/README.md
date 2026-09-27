@@ -242,6 +242,24 @@ Phase 2で決めた初回15%・Phase 10で決めたリピート8%を、実際の
 - 🔎 フリーテキスト検索は単一カラムの`ilike`のみ（和裁士の自己紹介文・出品/依頼の本文までは対象外）
 - 🚫 連絡先検知はヒューリスティックで、規約違反者への警告・アカウント停止といった運用面の仕組みは無い（Upwork/ココナラ等も技術だけでなく規約運用で対応している領域）
 
+### Phase 29: 取引データの改ざん防止・送金の取りこぼし防止
+
+Stripe本番化の前に決済まわりを見直して見つかった問題の修正。
+
+- 🔒 **取引（orders）の列単位の保護（DBトリガー）**: RLSは行単位でしか絞れないため、当事者は公開キー＋自分のログインでREST APIを直接叩けば、取引の**どの列でも**書き換えられた。例えば「自分で作った取引を`payment_status='paid'`・`status='delivered'`・高額な`price`にして完了を押す→運営のStripe残高（他の依頼者からの預かり金）から自分の別アカウントへ送金させる」が可能だった。`orders_guard_update`トリガーで、ログインユーザーからの更新について次を強制:
+  - 金額・当事者・決済状態・Stripe ID・手数料は変更不可（service roleのみ）
+  - ステータス遷移はアプリの`ALLOWED_TRANSITIONS`と同じ表・同じ実行者のみ（`pending_payment→in_progress`はWebhookのみ）。反物チェック・仕様確認が未承認なら納品不可
+  - `delivered_at`・`completed_at`・各記録/承認日時はDBの現在時刻で上書き（`delivered_at`を過去にずらして自動完了を早める、等を防止）
+  - 反物チェック・仕様確認の記録は和裁士が1回だけ、承認は依頼者が1回だけ
+- 🔒 取引の直接INSERTを禁止（`orders_insert_client`ポリシーを削除）。サービス購入・提案承諾の取引作成は、Server Actionで権限確認後にservice roleで行う
+- 🔒 **提案（proposals）の保護**: 提案額は提出後に変更不可（依頼者が提案額を1円に書き換えてから承諾する、を防止）。交渉価格の提示は依頼主のみ
+- 🐛 **和裁士が交渉価格を承諾すると取引が作成できなかった**: 取引の作成・依頼の`matched`化・他の提案の見送りを和裁士のログインで行っており、RLSで全部弾かれていた（しかも成功しても和裁士自身がCheckoutに飛ばされていた）。service roleで作成し、和裁士は取引ページへ、依頼者は通知から支払う形に修正。二重送信で取引が2件できないよう、提案のステータスを条件付きで更新
+- 🐛 **和裁士の本人確認完了通知（`account.updated`）が届かない設定だった**: このイベントは和裁士側（連結アカウント）で起きるため、Stripeは「連結アカウント」を対象にした送信先にしか送らない。送信先を2つに分け、2つ目のsigning secret（`STRIPE_CONNECT_WEBHOOK_SECRET`）も受け付けるようにした
+- 🐛 **送金の取りこぼし**: 和裁士が振込先設定を終える前に取引が完了すると、送金されないまま再試行もされなかった。`releasePendingPayouts()`を追加し、本人確認完了時（戻りページ・`account.updated`）と毎日のcronで未送金分を送金する
+- 🐛 支払い直後（Stripeでの入金確定前）に完了すると送金が残高不足で失敗しうるため、送金を元の決済（`source_transaction`）に紐付けた。送金・返金にidempotency keyを付け、同時実行でも二重送金しないようにした
+- 🐛 自動完了cronが、依頼者の操作と競合して更新0件だった場合にも送金・通知していたのを修正
+- ⚠️ **本番DBへの反映が必要**: `supabase/schema.sql`のPhase 29部分をSupabaseのSQL Editorで実行する（ローカルのPostgreSQLで、不正操作8種がすべて拒否され、正規の操作（交渉・反物チェック・承認・納品・完了・キャンセル・Webhook相当の更新）が通ることを確認済み）
+
 ## セットアップ（ローカル開発）
 
 ```bash
@@ -264,12 +282,14 @@ npm run dev
 
 1. Stripeアカウントを作成し、ダッシュボードでtest modeの `Secret key` を取得 → `.env.local`の`STRIPE_SECRET_KEY`
 2. Stripeダッシュボード > Settings > Connect で、Express アカウントタイプを有効化
-3. Webhookエンドポイント`https://<デプロイ先ドメイン>/api/webhooks/stripe`を登録し、次の4イベントを購読 → 発行されるsigning secretを`.env.local`の`STRIPE_WEBHOOK_SECRET`へ
-   - `checkout.session.completed`
-   - `checkout.session.async_payment_succeeded`（コンビニ・銀行振込の入金確定。これが無いと、それらの決済が永遠に「支払い待ち」のまま止まる）
-   - `checkout.session.async_payment_failed`（コンビニ・銀行振込の期限切れ）
-   - `account.updated`
-   - ローカル開発では`stripe listen --forward-to localhost:3000/api/webhooks/stripe`を使うと、コマンドがそのままsigning secretを表示する
+3. Webhookの送信先を**2つ**登録する（URLはどちらも`https://<デプロイ先ドメイン>/api/webhooks/stripe`。signing secretは送信先ごとに別々に発行される）
+   - **送信先A「あなたのアカウント」のイベント** → signing secretを`STRIPE_WEBHOOK_SECRET`へ
+     - `checkout.session.completed`
+     - `checkout.session.async_payment_succeeded`（コンビニ・銀行振込の入金確定。これが無いと、それらの決済が永遠に「支払い待ち」のまま止まる）
+     - `checkout.session.async_payment_failed`（コンビニ・銀行振込の期限切れ）
+   - **送信先B「連結アカウント」のイベント** → signing secretを`STRIPE_CONNECT_WEBHOOK_SECRET`へ
+     - `account.updated`（和裁士のExpressアカウントの本人確認完了。和裁士側のアカウントで起きるイベントなので、Stripeは「連結アカウント」を対象にした送信先にしか送らない。送信先Aに入れても届かない）
+   - ローカル開発では`stripe listen --forward-to localhost:3000/api/webhooks/stripe --forward-connect-to localhost:3000/api/webhooks/stripe`を使うと、コマンドが1つのsigning secretを表示する（`STRIPE_WEBHOOK_SECRET`に設定）
 4. `NEXT_PUBLIC_SITE_URL`を実際のURLに設定（StripeのCheckout成功/キャンセルURL、Connectオンボーディングのreturn/refresh URLの生成に使われる）
 5. Stripeが未設定の間は、出品への依頼・提案の承諾はいずれも「決済機能は準備中です」というエラーで止まる（取引が中途半端な状態で作成されることはない）
 
@@ -284,7 +304,7 @@ curl "http://localhost:3000/api/cron/auto-complete-orders" -H "Authorization: Be
 ## ディレクトリ構成のポイント
 
 - `src/lib/supabase/{client,server,middleware}.ts`：トレカ相場ナビと同じ`@supabase/ssr`ベースのCookie管理パターン
-- `src/lib/supabase/admin.ts`：service roleクライアント。Stripe Webhook（`src/app/api/webhooks/stripe/route.ts`）のみが使用——ユーザーセッションが無いリクエストのため
+- `src/lib/supabase/admin.ts`：service roleクライアント。Stripe Webhook・cron（ユーザーセッションが無いリクエスト）と、当事者のRLSでは書けない行・列を書くサーバー側処理（取引の作成、決済状態・送金の記録、管理画面）が使用——後者は必ずServer Action内で権限確認を済ませてから使う
 - `src/lib/auth.ts`：サーバーコンポーネントから「ログイン中ユーザー＋自分のprofilesレコード」を1回で取得するヘルパー
 - `src/lib/stripe.ts`：Stripeクライアントの初期化・手数料率（`PLATFORM_FEE_RATE`）の一元管理
 - `src/lib/orderPayment.ts`：Checkout Session作成の共通処理（出品への直接依頼・提案承諾・支払いのやり直しの3箇所から呼ばれる）
@@ -298,7 +318,7 @@ curl "http://localhost:3000/api/cron/auto-complete-orders" -H "Authorization: Be
 **手順:**
 1. Vercelで新規プロジェクトを作成し、このリポジトリを連携。Root Directoryに`wasai-app`を指定
 2. Vercelプロジェクトの Environment Variables に `.env.local.example` の全項目を設定（`NEXT_PUBLIC_SITE_URL`は実際にデプロイされるドメイン、`STRIPE_WEBHOOK_SECRET`はデプロイ後にStripe側でWebhookエンドポイント登録して取得したものに差し替え）
-3. 初回デプロイ後、実際のドメインが確定してから、Stripeダッシュボードで`https://<本番ドメイン>/api/webhooks/stripe`をWebhookエンドポイントとして登録（購読するイベントは上の「Stripe Connectの準備」の4つ）。発行されたsigning secretを`STRIPE_WEBHOOK_SECRET`に反映し、再デプロイ
+3. 初回デプロイ後、実際のドメインが確定してから、Stripeダッシュボードで`https://<本番ドメイン>/api/webhooks/stripe`を送信先として2つ登録（内訳は上の「Stripe Connectの準備」の3）。発行された2つのsigning secretを`STRIPE_WEBHOOK_SECRET`・`STRIPE_CONNECT_WEBHOOK_SECRET`に反映し、再デプロイ
 4. `vercel.json`のCron設定は自動的に有効化される。`CRON_SECRET`をVercel環境変数に設定していないと`/api/cron/auto-complete-orders`は常に401を返す（意図的なfail-closed）
 5. 独自ドメインを使う場合はVercelのDomains設定で追加し、`NEXT_PUBLIC_SITE_URL`をそのドメインに更新して再デプロイ
 6. Supabase側は`NEXT_PUBLIC_SUPABASE_URL`のAuthentication > URL ConfigurationでもSite URLを本番ドメインに合わせておく（メール内リンク等で使われる）。あわせて同じ画面の **Redirect URLs** に`https://<本番ドメイン>/auth/callback`を追加する——パスワードリセットのメールは`/auth/callback`に戻す設定（Phase 23）だが、Supabaseは許可リストに無いURLには戻さないので、これを忘れるとリセットのリンクが機能しない

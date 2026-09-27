@@ -677,3 +677,189 @@ alter table craftsman_profiles add column if not exists max_concurrent_orders in
 alter table craftsman_profiles drop constraint if exists craftsman_profiles_max_concurrent_orders_check;
 alter table craftsman_profiles add constraint craftsman_profiles_max_concurrent_orders_check
   check (max_concurrent_orders is null or max_concurrent_orders > 0);
+
+-- ---------------------------------------------------------------------------
+-- Phase 29（2026-09-27追加）: 取引（orders）・提案（proposals）の列単位の保護。
+--
+-- orders_update_participantポリシーは「当事者なら行のどの列でも書き換えられる」
+-- ——RLSは行単位でしか絞れないため。アプリの画面・Server Actionを通さずに
+-- 公開キー（anon key）＋自分のログインセッションでREST APIを直接叩けば、
+-- 例えば次のことができてしまっていた:
+--   - 自分で作った取引をpayment_status='paid'・status='delivered'・高額な
+--     priceにして「完了」を押す → 運営のStripe残高（＝他の依頼者から預かって
+--     いるお金）から自分のもう一つのアカウントへ送金させる
+--   - 和裁士がdelivered_atを過去日付にして、依頼者の確認期間（7日）を待たずに
+--     自動完了→送金させる
+--   - 和裁士が反物チェック・仕様確認の「依頼者承認」を自分で埋める
+-- 画面側の検証は迂回できるので、お金と承認に関わる列はDB側で守る。
+-- service role（Webhook・cron・サーバー側の特権処理）とSQL Editor
+-- （auth.role()がNULL）は対象外。
+-- ---------------------------------------------------------------------------
+
+-- 取引の作成はサーバー側（service role）でのみ行う。依頼者が直接INSERT
+-- できると、status・payment_status・priceを好きな値で作れてしまうため。
+-- アプリ側の作成処理（サービス購入・提案承諾）はadminClient()経由に変更済み。
+drop policy if exists "orders_insert_client" on orders;
+
+create or replace function public.orders_guard_update()
+returns trigger
+language plpgsql
+as $$
+declare
+  actor uuid := auth.uid();
+  is_client boolean := coalesce(actor = old.client_id, false);
+  is_craftsman boolean := coalesce(actor = old.craftsman_id, false);
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  -- 作成後に当事者が変えてはいけない列（お金・当事者・取引内容）。
+  if new.client_id is distinct from old.client_id
+     or new.craftsman_id is distinct from old.craftsman_id
+     or new.service_id is distinct from old.service_id
+     or new.request_id is distinct from old.request_id
+     or new.proposal_id is distinct from old.proposal_id
+     or new.title is distinct from old.title
+     or new.price is distinct from old.price
+     or new.garment_type is distinct from old.garment_type
+     or new.desired_by is distinct from old.desired_by
+     or new.created_at is distinct from old.created_at
+     or new.payment_status is distinct from old.payment_status
+     or new.stripe_payment_intent_id is distinct from old.stripe_payment_intent_id
+     or new.stripe_transfer_id is distinct from old.stripe_transfer_id
+     or new.platform_fee_amount is distinct from old.platform_fee_amount then
+    raise exception 'この項目は変更できません。' using errcode = '42501';
+  end if;
+
+  -- ステータス遷移。アプリのALLOWED_TRANSITIONS
+  -- （src/app/orders/[id]/actions.ts）と同じ表をDB側でも強制する。
+  -- pending_payment→in_progressはWebhook（service role）だけが行う。
+  if new.status is distinct from old.status then
+    if not (
+      (old.status = 'pending_payment' and new.status = 'cancelled' and is_client)
+      or (old.status = 'in_progress' and new.status = 'delivered' and is_craftsman)
+      or (old.status = 'in_progress' and new.status = 'cancelled' and (is_client or is_craftsman))
+      or (old.status = 'delivered' and new.status = 'completed' and is_client)
+      or (old.status = 'delivered' and new.status = 'cancelled' and is_client)
+    ) then
+      raise exception 'この操作は現在の状態では行えません。' using errcode = '42501';
+    end if;
+
+    if new.status = 'delivered' then
+      if old.fabric_check_completed_at is not null and old.fabric_check_approved_at is null then
+        raise exception '依頼者が反物チェックの内容を承認するまで、納品操作はできません。' using errcode = '42501';
+      end if;
+      if old.spec_confirmed_at is not null and old.spec_approved_at is null then
+        raise exception '依頼者が仕様の最終確認を承認するまで、納品操作はできません。' using errcode = '42501';
+      end if;
+    end if;
+  end if;
+
+  -- 日時はクライアントから送られた値を信用せず、DBの現在時刻で決める
+  -- （delivered_atを過去にずらして自動完了を早める、等を防ぐ）。
+  new.delivered_at := case
+    when new.status = 'delivered' and old.status is distinct from 'delivered' then now()
+    else old.delivered_at end;
+  new.completed_at := case
+    when new.status = 'completed' and old.status is distinct from 'completed' then now()
+    else old.completed_at end;
+
+  -- 配送情報は和裁士のみ。
+  if (new.shipping_method is distinct from old.shipping_method
+      or new.tracking_number is distinct from old.tracking_number
+      or new.declared_value is distinct from old.declared_value)
+     and not is_craftsman then
+    raise exception '配送情報は和裁士のみ入力できます。' using errcode = '42501';
+  end if;
+
+  -- 反物チェックの記録: 和裁士が一度だけ。
+  if new.fabric_check_completed_at is distinct from old.fabric_check_completed_at
+     or new.fabric_check_damage is distinct from old.fabric_check_damage
+     or new.fabric_check_shortage is distinct from old.fabric_check_shortage
+     or new.fabric_check_odor is distinct from old.fabric_check_odor
+     or new.fabric_check_notes is distinct from old.fabric_check_notes
+     or new.fabric_check_photo_urls is distinct from old.fabric_check_photo_urls then
+    if not is_craftsman or old.fabric_check_completed_at is not null then
+      raise exception '反物チェックは和裁士が一度だけ記録できます。' using errcode = '42501';
+    end if;
+    new.fabric_check_completed_at := now();
+  end if;
+
+  -- 反物チェックの承認: 依頼者が、記録済みのものを一度だけ。
+  if new.fabric_check_approved_at is distinct from old.fabric_check_approved_at then
+    if not is_client or old.fabric_check_approved_at is not null or old.fabric_check_completed_at is null then
+      raise exception '反物チェックの承認は、記録後に依頼者のみ行えます。' using errcode = '42501';
+    end if;
+    new.fabric_check_approved_at := now();
+  end if;
+
+  -- 仕様確認の記録: 和裁士が一度だけ。
+  if new.spec_confirmation_text is distinct from old.spec_confirmation_text
+     or new.spec_confirmed_at is distinct from old.spec_confirmed_at then
+    if not is_craftsman or old.spec_confirmed_at is not null then
+      raise exception '仕様確認は和裁士が一度だけ記録できます。' using errcode = '42501';
+    end if;
+    new.spec_confirmed_at := now();
+  end if;
+
+  -- 仕様確認の承認: 依頼者が、記録済みのものを一度だけ。
+  if new.spec_approved_at is distinct from old.spec_approved_at then
+    if not is_client or old.spec_approved_at is not null or old.spec_confirmed_at is null then
+      raise exception '仕様確認の承認は、記録後に依頼者のみ行えます。' using errcode = '42501';
+    end if;
+    new.spec_approved_at := now();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_orders_guard_update on orders;
+create trigger trg_orders_guard_update
+  before update on orders
+  for each row
+  execute function public.orders_guard_update();
+
+-- proposals: 金額は提出後に当事者が書き換えられないようにする（依頼者が
+-- 提案額を1円に書き換えてから承諾する、等を防ぐ）。交渉価格での合意時の
+-- price更新はサーバー側（service role）で行う。交渉価格の提示は依頼主のみ。
+create or replace function public.proposals_guard_update()
+returns trigger
+language plpgsql
+as $$
+declare
+  is_request_owner boolean;
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if new.price is distinct from old.price
+     or new.request_id is distinct from old.request_id
+     or new.craftsman_id is distinct from old.craftsman_id
+     or new.message is distinct from old.message
+     or new.created_at is distinct from old.created_at then
+    raise exception 'この項目は変更できません。' using errcode = '42501';
+  end if;
+
+  select exists (
+    select 1 from requests where id = old.request_id and client_id = auth.uid()
+  ) into is_request_owner;
+
+  if (new.countered_price is distinct from old.countered_price
+      or new.countered_message is distinct from old.countered_message
+      or (new.status = 'countered' and old.status is distinct from 'countered'))
+     and not is_request_owner then
+    raise exception '交渉価格の提示は依頼主のみ行えます。' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proposals_guard_update on proposals;
+create trigger trg_proposals_guard_update
+  before update on proposals
+  for each row
+  execute function public.proposals_guard_update();

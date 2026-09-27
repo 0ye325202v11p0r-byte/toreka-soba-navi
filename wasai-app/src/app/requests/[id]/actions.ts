@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
@@ -217,14 +218,28 @@ export async function respondProposal(
 
   const finalPrice = isCountered ? proposal.countered_price! : proposal.price;
 
-  const { error: updateError } = await supabase
+  // Accepting writes rows the actor doesn't own under RLS — when a craftsman
+  // accepts a counter-offer, the order belongs to the client and the
+  // request is the client's too — and a proposal's price is immutable for
+  // either party (Phase 29 in supabase/schema.sql). So the accept path runs
+  // on the service-role client, after the authorization checks above; a
+  // plain decline only touches the proposal and stays on the user's own.
+  const writer = decision === "accepted" ? adminClient() : supabase;
+
+  // Conditional on the status read above, so a double-submit (or both
+  // parties acting at once) can't create a second order for one proposal.
+  const { data: updatedProposal, error: updateError } = await writer
     .from("proposals")
     .update(isCountered ? { status: decision, price: finalPrice } : { status: decision })
-    .eq("id", proposalId);
+    .eq("id", proposalId)
+    .eq("status", proposal.status)
+    .select("id")
+    .maybeSingle();
   if (updateError) return { error: updateError.message };
+  if (!updatedProposal) return { error: "この提案はすでに処理済みです。" };
 
   if (decision === "accepted") {
-    const { data: order, error: orderError } = await supabase
+    const { data: order, error: orderError } = await writer
       .from("orders")
       .insert({
         client_id: request.client_id,
@@ -241,15 +256,15 @@ export async function respondProposal(
       .single();
     if (orderError) return { error: orderError.message };
 
-    await supabase.from("requests").update({ status: "matched" }).eq("id", request.id);
+    await writer.from("requests").update({ status: "matched" }).eq("id", request.id);
     // Decline every other still-pending proposal on this request now that
     // it's matched — best-effort cleanup, not required for correctness
     // (the request's own status already stops new proposals).
-    await supabase
+    await writer
       .from("proposals")
       .update({ status: "declined" })
       .eq("request_id", request.id)
-      .eq("status", "pending");
+      .in("status", ["pending", "countered"]);
 
     await notify(supabase, {
       // A plain accept is the client accepting the craftsman's asking price
@@ -262,6 +277,10 @@ export async function respondProposal(
       link: `/orders/${order.id}`,
     });
 
+    // Only the client pays. When the craftsman is the one accepting (a
+    // counter-offer), send them to the new order instead — the client gets
+    // the notification above and pays from the order page.
+    if (isCountered) redirect(`/orders/${order.id}`);
     const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
     redirect(checkoutUrl);
   } else {

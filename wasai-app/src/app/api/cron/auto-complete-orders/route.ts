@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
-import { releaseEscrowPayout } from "@/lib/escrow";
+import { releaseEscrowPayout, releasePendingPayouts } from "@/lib/escrow";
 import { notify } from "@/lib/notifications";
 
 // A "delivered" order can only be advanced by the client (see
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
   const { data: staleOrders, error } = await supabase
     .from("orders")
-    .select("id, client_id, craftsman_id, title, price, payment_status, platform_fee_amount")
+    .select("id, client_id, craftsman_id, title, price, payment_status, stripe_payment_intent_id, platform_fee_amount")
     .eq("status", "delivered")
     .lt("delivered_at", cutoff);
 
@@ -36,12 +36,16 @@ export async function GET(request: Request) {
 
   let completedCount = 0;
   for (const order of staleOrders ?? []) {
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from("orders")
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", order.id)
-      .eq("status", "delivered"); // guard against a race with a client action in between
-    if (updateError) continue;
+      .eq("status", "delivered") // guard against a race with a client action in between
+      .select("id")
+      .maybeSingle();
+    // No row back = the client completed or cancelled it in the meantime;
+    // that action already handled the payout/refund.
+    if (updateError || !updated) continue;
 
     await releaseEscrowPayout(supabase, order);
     await notify(supabase, {
@@ -60,6 +64,10 @@ export async function GET(request: Request) {
     });
     completedCount += 1;
   }
+
+  // Sweep: completed orders whose payout didn't go out at completion time
+  // (craftsman not yet onboarded then, or a failed transfer call).
+  await releasePendingPayouts(supabase);
 
   return NextResponse.json({ checked: staleOrders?.length ?? 0, completed: completedCount });
 }

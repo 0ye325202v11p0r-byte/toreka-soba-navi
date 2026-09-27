@@ -3,7 +3,7 @@ import type Stripe from "stripe";
 import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/stripe";
 import { notify } from "@/lib/notifications";
-import { isRepeatCustomer } from "@/lib/escrow";
+import { isRepeatCustomer, releasePendingPayouts } from "@/lib/escrow";
 
 // Stripe → us only. Verified via the signing secret, not a session — this
 // route intentionally uses the service-role client (bypasses RLS) because
@@ -13,19 +13,32 @@ export async function POST(request: NextRequest) {
     return new NextResponse("stripe not configured", { status: 503 });
   }
 
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Two Stripe webhook destinations point at this one URL, each with its own
+  // signing secret: "Your account" events (checkout.session.*) are signed
+  // with STRIPE_WEBHOOK_SECRET, and "Connected accounts" events
+  // (account.updated for a craftsman's Express account — Stripe only sends
+  // those to a Connect-scoped destination) with STRIPE_CONNECT_WEBHOOK_SECRET.
+  const webhookSecrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET].filter(
+    (secret): secret is string => Boolean(secret)
+  );
   const signature = request.headers.get("stripe-signature");
-  if (!webhookSecret || !signature) {
+  if (webhookSecrets.length === 0 || !signature) {
     return new NextResponse("missing signature", { status: 400 });
   }
 
   const rawBody = await request.text();
   const stripe = stripeClient();
 
-  let event: Stripe.Event;
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch {
+  let event: Stripe.Event | null = null;
+  for (const secret of webhookSecrets) {
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, secret);
+      break;
+    } catch {
+      // try the next destination's secret
+    }
+  }
+  if (!event) {
     return new NextResponse("invalid signature", { status: 400 });
   }
 
@@ -133,10 +146,18 @@ export async function POST(request: NextRequest) {
     case "account.updated": {
       const account = event.data.object as Stripe.Account;
       const transfersEnabled = account.capabilities?.transfers === "active";
-      await supabase
+      const { data: craftsmanProfile } = await supabase
         .from("craftsman_profiles")
         .update({ stripe_transfers_enabled: transfersEnabled })
-        .eq("stripe_account_id", account.id);
+        .eq("stripe_account_id", account.id)
+        .select("profile_id")
+        .maybeSingle();
+      // Stripe often finishes verifying after the craftsman has already left
+      // the onboarding flow, so this can be the moment payouts become
+      // possible — release anything completed while they weren't.
+      if (transfersEnabled && craftsmanProfile) {
+        await releasePendingPayouts(supabase, craftsmanProfile.profile_id);
+      }
       break;
     }
 

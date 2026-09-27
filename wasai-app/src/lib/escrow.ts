@@ -23,10 +23,12 @@ export async function isRepeatCustomer(
 // and the auto-complete cron (src/app/api/cron/auto-complete-orders/route.ts)
 // — the one place funds actually leave the platform's Stripe account, via a
 // separate Transfer rather than a destination charge (see src/lib/stripe.ts).
+// Must be given the service-role client: payment_status is writable only by
+// service role (Phase 29 in supabase/schema.sql).
 // Best-effort: if the craftsman hasn't finished Stripe onboarding yet, this
-// silently leaves payment_status at "paid" instead of blocking completion —
-// there's nothing the client (or the cron) can do about the craftsman's
-// account setup, and the payout can be retried later (not yet automated).
+// leaves payment_status at "paid" instead of blocking completion — there's
+// nothing the client (or the cron) can do about the craftsman's account
+// setup. releasePendingPayouts() below picks it up once they have.
 export async function releaseEscrowPayout(
   supabase: SupabaseClient,
   order: {
@@ -35,6 +37,7 @@ export async function releaseEscrowPayout(
     craftsman_id: string;
     price: number;
     payment_status: string;
+    stripe_payment_intent_id: string | null;
     platform_fee_amount?: number | null;
   }
 ) {
@@ -61,12 +64,32 @@ export async function releaseEscrowPayout(
   if (transferAmount <= 0) return;
 
   const stripe = stripeClient();
-  const transfer = await stripe.transfers.create({
-    amount: transferAmount,
-    currency: "jpy",
-    destination: craftsmanProfile.stripe_account_id,
-    transfer_group: order.id,
-  });
+
+  // Tie the transfer to the order's own charge. Without source_transaction a
+  // transfer draws on the platform's *available* balance, so completing an
+  // order before its payment has settled (Stripe holds new charges for a
+  // few days) fails outright; with it, Stripe accepts the transfer now and
+  // moves the money once that charge's funds become available.
+  let sourceTransaction: string | undefined;
+  if (order.stripe_payment_intent_id) {
+    const paymentIntent = await stripe.paymentIntents.retrieve(order.stripe_payment_intent_id);
+    const charge = paymentIntent.latest_charge;
+    sourceTransaction = typeof charge === "string" ? charge : (charge?.id ?? undefined);
+  }
+
+  // The idempotency key makes a concurrent second call (e.g. the webhook and
+  // the onboarding return page both retrying pending payouts at once)
+  // return the same transfer instead of paying the craftsman twice.
+  const transfer = await stripe.transfers.create(
+    {
+      amount: transferAmount,
+      currency: "jpy",
+      destination: craftsmanProfile.stripe_account_id,
+      transfer_group: order.id,
+      ...(sourceTransaction ? { source_transaction: sourceTransaction } : {}),
+    },
+    { idempotencyKey: `escrow-transfer-${order.id}` }
+  );
 
   await supabase
     .from("orders")
@@ -90,7 +113,38 @@ export async function refundIfPaid(
   if (!isStripeConfigured() || order.payment_status !== "paid" || !order.stripe_payment_intent_id) return;
 
   const stripe = stripeClient();
-  await stripe.refunds.create({ payment_intent: order.stripe_payment_intent_id });
+  await stripe.refunds.create(
+    { payment_intent: order.stripe_payment_intent_id },
+    { idempotencyKey: `escrow-refund-${order.id}` }
+  );
 
   await supabase.from("orders").update({ payment_status: "refunded" }).eq("id", order.id);
+}
+
+// Completed orders whose payout couldn't go out at completion time — the
+// craftsman hadn't finished Stripe onboarding yet, or the transfer call
+// failed — are left at payment_status "paid". Called when a craftsman's
+// transfers capability turns on (onboarding return page, account.updated
+// webhook) and by the daily cron as a sweep, so no payout stays stuck.
+// Pass craftsmanId to limit it to one craftsman. Service-role client only.
+export async function releasePendingPayouts(supabase: SupabaseClient, craftsmanId?: string) {
+  if (!isStripeConfigured()) return;
+
+  let query = supabase
+    .from("orders")
+    .select("id, client_id, craftsman_id, price, payment_status, stripe_payment_intent_id, platform_fee_amount")
+    .eq("status", "completed")
+    .eq("payment_status", "paid");
+  if (craftsmanId) query = query.eq("craftsman_id", craftsmanId);
+
+  const { data: orders } = await query;
+  for (const order of orders ?? []) {
+    try {
+      await releaseEscrowPayout(supabase, order);
+    } catch (error) {
+      // One failing transfer shouldn't block the rest; it stays "paid" and
+      // the next sweep tries again.
+      console.error(`payout retry failed for order ${order.id}`, error);
+    }
+  }
 }

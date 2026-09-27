@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
@@ -41,7 +42,11 @@ export async function orderService(
   const capacityCheck = await checkCraftsmanCanAcceptWork(supabase, service.craftsman_id);
   if (!capacityCheck.ok) return { error: capacityCheck.reason };
 
-  const { data: order, error } = await supabase
+  // Created with the service-role client: clients can no longer INSERT
+  // orders directly (see Phase 29 in supabase/schema.sql — a direct insert
+  // could set price/status/payment_status to anything). Everything written
+  // here comes from the service row or the session, never the form.
+  const { data: order, error } = await adminClient()
     .from("orders")
     .insert({
       client_id: user.id,
