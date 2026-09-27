@@ -53,6 +53,17 @@ export async function startOnboarding(_prevState: OnboardingState, _formData: Fo
           transfers: { requested: true },
         },
         business_type: "individual",
+        // Prefilled so the craftsman isn't asked for an industry, a website
+        // (most don't have one) and a business description on Stripe's
+        // onboarding screen — every craftsman here does the same kind of
+        // work, and their public profile page on this site serves as the
+        // "website" Stripe uses to see what they sell.
+        business_profile: {
+          mcc: "5697", // Tailors, Seamstresses, Mending, and Alterations
+          url: `${SITE_URL}/craftsmen/${user.id}`,
+          product_description:
+            "着物の仕立て・お直しを請け負っています。依頼は和裁マッチを通じて受け、代金も和裁マッチ経由で受け取ります。",
+        },
       });
       accountId = account.id;
 
