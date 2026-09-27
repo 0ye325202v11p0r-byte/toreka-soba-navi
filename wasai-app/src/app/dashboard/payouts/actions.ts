@@ -39,31 +39,43 @@ export async function startOnboarding(_prevState: OnboardingState, _formData: Fo
   const stripe = stripeClient();
   let accountId = craftsmanProfile?.stripe_account_id ?? null;
 
-  if (!accountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "JP",
-      email: user.email,
-      capabilities: {
-        transfers: { requested: true },
-      },
-      business_type: "individual",
-    });
-    accountId = account.id;
+  // Stripe errors (account setup not allowed, network, ...) would otherwise
+  // surface as a bare "This page couldn't load" screen — log the real
+  // reason for Vercel's logs and show the craftsman something readable.
+  let onboardingUrl: string;
+  try {
+    if (!accountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "JP",
+        email: user.email,
+        capabilities: {
+          transfers: { requested: true },
+        },
+        business_type: "individual",
+      });
+      accountId = account.id;
 
-    const { error: saveError } = await supabase
-      .from("craftsman_profiles")
-      .update({ stripe_account_id: accountId })
-      .eq("profile_id", user.id);
-    if (saveError) return { error: saveError.message };
+      const { error: saveError } = await supabase
+        .from("craftsman_profiles")
+        .update({ stripe_account_id: accountId })
+        .eq("profile_id", user.id);
+      if (saveError) return { error: saveError.message };
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${SITE_URL}/dashboard/payouts/refresh`,
+      return_url: `${SITE_URL}/dashboard/payouts/return`,
+      type: "account_onboarding",
+    });
+    onboardingUrl = accountLink.url;
+  } catch (error) {
+    console.error("Stripe onboarding failed", error);
+    return {
+      error: "振込先の設定画面を開けませんでした。時間をおいて再度お試しください。解決しない場合は運営までお問い合わせください。",
+    };
   }
 
-  const accountLink = await stripe.accountLinks.create({
-    account: accountId,
-    refresh_url: `${SITE_URL}/dashboard/payouts/refresh`,
-    return_url: `${SITE_URL}/dashboard/payouts/return`,
-    type: "account_onboarding",
-  });
-
-  redirect(accountLink.url);
+  redirect(onboardingUrl);
 }
