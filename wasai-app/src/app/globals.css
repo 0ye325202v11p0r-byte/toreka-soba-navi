@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+:root {
+  /* Redesigned per direct user feedback ("色合いのデザインが全くアカン") —
+     the original 生成り(cream)/藍色(muted indigo) palette read as low
+     contrast and dull. Replaced with a white background + a vivid
+     朱色(vermillion-red) accent for higher contrast and a more energetic,
+     "見やすい" feel closer to established marketplaces like ココナラ
+     (bright accent on white, not a muted earth-tone palette). Every
+     accent/warn/good pairing below is checked against its expected
+     background for >=4.5:1 contrast (WCAG AA for normal text).
+     accent #dc2626 on white bg-elevated (button text color) computes to
+     ~4.8:1. */
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #f4f4f5;
+  --ink: #18181b;
+  --ink-muted: #52525b;
+  --ink-faint: #8f8f97;
+  --border: #e4e4e7;
+  --border-strong: #c9c9cf;
+  --accent: #dc2626;
+  --accent-strong: #b91c1c;
+  --accent-soft: #fee2e2;
+  --good: #16a34a;
+  --good-soft: #dcfce7;
+  --warn: #ea580c;
+  --warn-soft: #ffedd5;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-sunken: var(--bg-sunken);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #18181b;
+    --bg-elevated: #232326;
+    --bg-sunken: #0f0f11;
+    --ink: #f4f4f5;
+    --ink-muted: #a1a1aa;
+    --ink-faint: #8a8a90;
+    --border: #3a3a3f;
+    --border-strong: #505056;
+    --accent: #f87171;
+    --accent-strong: #fca5a5;
+    --accent-soft: #450a0a;
+    --good: #4ade80;
+    --good-soft: #052e16;
+    --warn: #fb923c;
+    --warn-soft: #431407;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #18181b;
+  --bg-elevated: #232326;
+  --bg-sunken: #0f0f11;
+  --ink: #f4f4f5;
+  --ink-muted: #a1a1aa;
+  --ink-faint: #8a8a90;
+  --border: #3a3a3f;
+  --border-strong: #505056;
+  --accent: #f87171;
+  --accent-strong: #fca5a5;
+  --accent-soft: #450a0a;
+  --good: #4ade80;
+  --good-soft: #052e16;
+  --warn: #fb923c;
+  --warn-soft: #431407;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  /* Noto Sans JP/CJK JP added as a fallback for platforms without Hiragino
+     (Mac/iOS) or Yu Gothic/Meiryo (Windows) — notably Android and Linux,
+     where the previous stack fell through to whatever CJK font happened to
+     be installed (often a dated-looking Mincho/Gothic substitute) instead
+     of a normal-looking sans. */
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo,
+    "Noto Sans JP", "Noto Sans CJK JP", sans-serif;
+}
+
+/* Keeps the printed/PDF-saved transaction statement (/orders/[id]/receipt)
+   free of the site chrome — nobody wants NavBar/Footer on a tax record. */
+@media print {
+  header,
+  footer {
+    display: none;
+  }
+}

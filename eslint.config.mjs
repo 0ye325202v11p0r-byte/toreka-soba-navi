@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Separate app with its own config and dependencies (see wasai-app/README.md).
+    "wasai-app/**",
   ]),
 ]);
 
