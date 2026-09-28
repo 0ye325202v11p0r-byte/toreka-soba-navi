@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { uploadCertificate, type UploadState } from "./uploadActions";
 
@@ -8,14 +8,12 @@ const initialState: UploadState = {};
 
 export default function CertificateUploader({ signedUrl }: { signedUrl: string | null }) {
   const [state, formAction, pending] = useActionState(uploadCertificate, initialState);
-  const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const wasPending = useRef(false);
 
   useEffect(() => {
     if (wasPending.current && !pending && !state.error) {
       router.refresh();
-      formRef.current?.reset();
     }
     wasPending.current = pending;
   }, [pending, state.error, router]);
@@ -30,22 +28,29 @@ export default function CertificateUploader({ signedUrl }: { signedUrl: string |
           <span className="ml-1 text-xs text-ink-faint">（このリンクは1時間で無効になります）</span>
         </p>
       )}
-      <form ref={formRef} action={formAction}>
+      <div>
         <label className="cursor-pointer text-xs text-accent-strong underline">
           {pending ? "アップロード中…" : signedUrl ? "証明書を差し替える" : "証明書をアップロード"}
           <input
             type="file"
-            name="file"
             accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
             className="hidden"
             disabled={pending}
             onChange={(e) => {
-              if (e.target.files?.length) formRef.current?.requestSubmit();
+              if (!e.target.files?.length) return;
+              // Rendered inside the profile <form>, so this can't be a <form>
+              // of its own (nested forms are invalid HTML and broke hydration)
+              // — dispatch the upload action directly instead. The input has
+              // no name, so it's never sent along with the profile form.
+              const formData = new FormData();
+              for (const file of Array.from(e.target.files)) formData.append("file", file);
+              startTransition(() => formAction(formData));
+              e.target.value = "";
             }}
           />
         </label>
         {state.error && <p role="alert" className="mt-1 text-xs text-warn">{state.error}</p>}
-      </form>
+      </div>
     </div>
   );
 }
