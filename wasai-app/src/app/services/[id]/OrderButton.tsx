@@ -32,7 +32,7 @@ export default function OrderButton({ serviceId }: { serviceId: string }) {
         disabled={pending}
         className="w-full rounded-md bg-accent px-4 py-2 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors disabled:opacity-60"
       >
-        {pending ? "依頼を作成中…" : "このサービスに依頼する"}
+        {pending ? "お支払い画面を準備中…" : "お支払い画面へ進む"}
       </button>
     </form>
   );

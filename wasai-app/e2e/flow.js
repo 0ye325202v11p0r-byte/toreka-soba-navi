@@ -15,7 +15,7 @@ async function webhook(event, secret) {
   const r = await fetch(`${BASE}/api/webhooks/stripe`, { method: "POST", body: payload, headers: { "stripe-signature": header, "content-type": "application/json" } });
   return r.status;
 }
-async function newUser(browser, role, name, email) {
+async function newUser(browser, role, name, email, { skipConsent = false } = {}) {
   const ctx = await browser.newContext();
   await ctx.route(/stripe\.(com|me)/, (route) => route.abort());
   const page = await ctx.newPage();
@@ -25,10 +25,23 @@ async function newUser(browser, role, name, email) {
   await page.fill("input[name=display_name]", name);
   await page.fill("input[name=email]", email);
   await page.fill("input[name=password]", "password123");
+  if (skipConsent) {
+    // Get past the browser's own `required` check so the server-side one is what's tested.
+    await page.evaluate(() => document.querySelectorAll("input[type=checkbox]").forEach((el) => el.removeAttribute("required")));
+    if (skipConsent === "agency") await page.check("input[name=agree_terms]");
+    await page.click("button:has-text('登録する')");
+    await sleep(2500);
+    const alert = await page.locator("p[role=alert]").textContent().catch(() => "");
+    const rows = await q("select id from auth.users where email=$1", [email]);
+    await ctx.close();
+    return { alert, created: rows.length > 0 };
+  }
+  await page.check("input[name=agree_terms]");
+  if (role === "craftsman") await page.check("input[name=agree_payment_agency]");
   await page.click("button:has-text('登録する')");
   await page.waitForURL("**/dashboard", { timeout: 15000 });
-  const [u] = await q("select id from auth.users where email=$1", [email]);
-  return { ctx, page, id: u.id };
+  const [u] = await q("select id, raw_user_meta_data as meta from auth.users where email=$1", [email]);
+  return { ctx, page, id: u.id, meta: u.meta };
 }
 // Clicking a button whose server action redirects to Stripe: the redirect is
 // aborted by the route above, so wait for the attempted request instead.
@@ -42,6 +55,8 @@ async function clickExpectingStripe(page, selector) {
 }
 async function onboard(craft) {
   await craft.page.goto(`${BASE}/dashboard/payouts`);
+  const consent = craft.page.locator("input[name=agree_payment_agency]");
+  if (await consent.count()) await consent.check();
   const url = await clickExpectingStripe(craft.page, "button:has-text('Stripeで振込先を設定する')");
   const [cp] = await q("select stripe_account_id from craftsman_profiles where profile_id=$1", [craft.id]);
   return { url, acct: cp.stripe_account_id };
@@ -59,7 +74,7 @@ async function createService(craft, title, price) {
 }
 async function orderServiceAndPay(client, serviceId) {
   await client.page.goto(`${BASE}/services/${serviceId}`);
-  const url = await clickExpectingStripe(client.page, "button:has-text('このサービスに依頼する')");
+  const url = await clickExpectingStripe(client.page, "button:has-text('お支払い画面へ進む')");
   const [order] = await q("select * from orders where service_id=$1 and client_id=$2 order by created_at desc limit 1", [serviceId, client.id]);
   return { url, order };
 }
@@ -78,9 +93,16 @@ async function clickOnOrder(user, orderId, text) {
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
   const stamp = Date.now();
 
+  // ---- 0. consent is enforced server-side, not just by the checkbox's `required`
+  let refused = await newUser(browser, "client", "同意なし", `noconsent${stamp}@example.com`, { skipConsent: true });
+  ok("規約に同意しないと登録できない（サーバー側でも拒否）", !refused.created && /同意.*が必要/.test(refused.alert || ""), refused.alert);
+  refused = await newUser(browser, "craftsman", "同意なし和裁士", `noconsent-c${stamp}@example.com`, { skipConsent: "agency" });
+  ok("和裁士は規約に同意しても、代金受領に同意しないと登録できない", !refused.created && /代金の受け取りに関する同意/.test(refused.alert || ""), refused.alert);
+
   // ---- 1. craftsman signup + payouts onboarding
   const craft = await newUser(browser, "craftsman", "テスト和裁士", `craft${stamp}@example.com`);
   ok("和裁士の新規登録", !!craft.id);
+  ok("和裁士の同意（規約の版・日時・代金受領）が記録される", !!(craft.meta && craft.meta.terms_version && craft.meta.terms_agreed_at && craft.meta.payment_agency_agreed_at), JSON.stringify(craft.meta));
   const ob = await onboard(craft);
   ok("振込先設定ボタン → Stripeの登録画面へ移動", /stripe\.(com|me)/.test(ob.url), ob.url.slice(0, 60));
   ok("和裁士のStripeアカウントIDが保存される", /^acct_/.test(ob.acct || ""), ob.acct);
@@ -101,8 +123,15 @@ async function clickOnOrder(user, orderId, text) {
 
   // ---- 4. client orders and pays
   const client = await newUser(browser, "client", "テスト依頼者", `client${stamp}@example.com`);
+  ok("依頼者の規約同意が記録され、代金受領の同意は付かない", !!(client.meta && client.meta.terms_agreed_at && !client.meta.payment_agency_agreed_at), JSON.stringify(client.meta));
+  await client.page.goto(`${BASE}/services/${svc[0].id}`);
+  const summary = await client.page.locator("text=お申込み前にご確認ください").locator("..").textContent();
+  ok("申込み前の最終確認（金額・納期・キャンセル・確定の時点）が表示される", /¥1,000/.test(summary) && /約14日/.test(summary) && /全額返金/.test(summary) && /お申込みが確定/.test(summary), summary.slice(0, 80));
   const o1 = await orderServiceAndPay(client, svc[0].id);
   ok("依頼 → Stripeの支払い画面へ移動", /stripe\.(com|me)/.test(o1.url), o1.url.slice(0, 60));
+  const lastCheckout = await (await fetch("http://localhost:12110/__last_checkout")).json();
+  const submitMsg = (lastCheckout && lastCheckout["custom_text[submit][message]"]) || "";
+  ok("Stripeの支払い画面の「支払う」横にも確定の時点・納期・キャンセルを表示", /お申込み/.test(submitMsg) && /約14日/.test(submitMsg) && /全額返金/.test(submitMsg) && submitMsg.length <= 1200, `${submitMsg.length}文字`);
   ok("取引が「支払い待ち」で作成される", o1.order && o1.order.status === "pending_payment" && o1.order.payment_status === "unpaid" && o1.order.price === 1000);
   st = await paidWebhook(o1.order.id, "pi_e2e_1");
   let [ord] = await q("select * from orders where id=$1", [o1.order.id]);
@@ -162,9 +191,16 @@ async function clickOnOrder(user, orderId, text) {
   ok("和裁士が交渉価格を承諾 → 取引が25,000円で作成される", o2 && o2.price === 25000 && o2.status === "pending_payment", o2 ? `${o2.price}/${o2.status}` : "no order");
   ok("和裁士はStripeの支払い画面ではなく取引ページへ移動する", /\/orders\//.test(craft.page.url()), craft.page.url());
   ok("依頼が「成立」になる", rq.status === "matched", rq.status);
+  await client.page.goto(`${BASE}/orders/${o2.id}`);
+  const payBox = await client.page.locator("text=お申込み前にご確認ください").locator("..").textContent().catch(() => "");
+  const payUrl = await clickExpectingStripe(client.page, "button:has-text('お支払い画面へ進む')");
+  ok("交渉成立後、依頼者は取引ページで最終確認を見てから支払いへ進める", /¥25,000/.test(payBox) && /stripe\.(com|me)/.test(payUrl), payBox.slice(0, 60));
 
   // ---- 8. payout left pending because craftsman2 hadn't onboarded, released once they do
   const craft2 = await newUser(browser, "craftsman", "テスト和裁士2", `craft2${stamp}@example.com`);
+  // craft2 plays a craftsman registered before signup asked for the
+  // payment-agency consent: they must give it on the payouts page instead.
+  await q("update auth.users set raw_user_meta_data = raw_user_meta_data - 'payment_agency_agreed_at' where id=$1", [craft2.id]);
   const svc2 = await createService(craft2, "テスト 単衣の仕立て", 2000);
   const o3 = await orderServiceAndPay(client, svc2[0].id);
   await paidWebhook(o3.order.id, "pi_e2e_3");
@@ -172,7 +208,16 @@ async function clickOnOrder(user, orderId, text) {
   await clickOnOrder(client, o3.order.id, "納品を確認して完了にする");
   [ord] = await q("select status, payment_status from orders where id=$1", [o3.order.id]);
   ok("振込先未設定の和裁士の取引は完了しても「支払い済み（未送金）」で保留", ord.status === "completed" && ord.payment_status === "paid", `${ord.status}/${ord.payment_status}`);
+  await craft2.page.goto(`${BASE}/dashboard/payouts`);
+  await craft2.page.evaluate(() => document.querySelectorAll("input[type=checkbox]").forEach((el) => el.removeAttribute("required")));
+  await craft2.page.click("button:has-text('Stripeで振込先を設定する')");
+  await sleep(2500);
+  const payoutAlert = await craft2.page.locator("p[role=alert]").textContent().catch(() => "");
+  let [c2] = await q("select stripe_account_id from craftsman_profiles where profile_id=$1", [craft2.id]);
+  ok("以前からの和裁士は、代金受領に同意しないと振込先を設定できない", /同意.*が必要/.test(payoutAlert || "") && !c2.stripe_account_id, `${payoutAlert} / acct=${c2 && c2.stripe_account_id}`);
   const ob2 = await onboard(craft2);
+  const [m2] = await q("select raw_user_meta_data as meta from auth.users where id=$1", [craft2.id]);
+  ok("振込先設定の画面で同意すると記録される", !!m2.meta.payment_agency_agreed_at && /stripe\.(com|me)/.test(ob2.url), JSON.stringify(m2.meta));
   st = await webhook({ id: "evt_acct2", object: "event", type: "account.updated", account: ob2.acct, created: Math.floor(Date.now()/1000),
     data: { object: { id: ob2.acct, object: "account", capabilities: { transfers: "active" } } } }, "whsec_e2e_connect");
   await sleep(1000);

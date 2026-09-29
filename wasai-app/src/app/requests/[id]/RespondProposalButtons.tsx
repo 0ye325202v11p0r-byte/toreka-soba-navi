@@ -19,7 +19,7 @@ export default function RespondProposalButtons({ proposalId }: { proposalId: str
             disabled={pending}
             className="rounded-md bg-good px-3 py-1.5 text-sm font-semibold text-bg-elevated disabled:opacity-60"
           >
-            承諾する
+            承諾してお支払い画面へ進む
           </button>
         </form>
         <form action={formAction}>

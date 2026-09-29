@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripeClient } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
+import { checkoutSubmitMessage, loadDeliveryNote } from "@/lib/orderTerms";
 
 // Shared by every entry point that turns a freshly-created (pending_payment)
 // order into a Stripe Checkout redirect: a direct service purchase, an
@@ -13,6 +14,13 @@ export async function createCheckoutSessionUrl(
   order: { id: string; title: string; price: number }
 ): Promise<string> {
   const stripe = stripeClient();
+
+  const { data: orderTerms } = await supabase
+    .from("orders")
+    .select("service_id, desired_by")
+    .eq("id", order.id)
+    .maybeSingle();
+  const delivery = await loadDeliveryNote(supabase, orderTerms ?? {});
 
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -28,6 +36,10 @@ export async function createCheckoutSessionUrl(
         quantity: 1,
       },
     ],
+    // Checkout's pay button is the click that places the order, so the
+    // 特定商取引法12条の6 disclosures go right next to it too (the amount
+    // and item are already on Checkout's own summary).
+    custom_text: { submit: { message: checkoutSubmitMessage(delivery) } },
     client_reference_id: order.id,
     metadata: { order_id: order.id },
     success_url: `${SITE_URL}/orders/${order.id}?checkout=success`,

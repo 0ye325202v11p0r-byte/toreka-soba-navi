@@ -1,6 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isStripeConfigured, platformFeeAmount, stripeClient } from "@/lib/stripe";
 
+// How long a "delivered" order waits for the client before the daily cron
+// completes it and releases the payout (src/app/api/cron/auto-complete-orders).
+// Quoted in /terms and the pre-payment confirmation, so keep it here.
+export const AUTO_COMPLETE_AFTER_DAYS = 7;
+
 // "Repeat" = this client/craftsman pair has at least one OTHER completed
 // order together already — see REPEAT_PLATFORM_FEE_RATE in stripe.ts.
 export async function isRepeatCustomer(

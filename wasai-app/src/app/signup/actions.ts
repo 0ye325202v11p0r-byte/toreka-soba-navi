@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/types";
+import { TERMS_VERSION } from "@/lib/legal";
 
 export interface SignupState {
   error?: string;
@@ -24,6 +25,12 @@ export async function signup(_prevState: SignupState, formData: FormData): Promi
   if (role !== "client" && role !== "craftsman") {
     return { error: "登録区分を選択してください。" };
   }
+  if (formData.get("agree_terms") !== "yes") {
+    return { error: "利用規約とプライバシーポリシーへの同意が必要です。" };
+  }
+  if (role === "craftsman" && formData.get("agree_payment_agency") !== "yes") {
+    return { error: "和裁士として登録するには、代金の受け取りに関する同意（利用規約第5条）が必要です。" };
+  }
 
   const supabase = await createClient();
 
@@ -31,7 +38,24 @@ export async function signup(_prevState: SignupState, formData: FormData): Promi
   // through Supabase's shared per-project email-send cap in minutes.
   // Requires "Confirm email" turned OFF in Supabase Auth settings so this
   // returns an active session immediately (see README).
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // The consent record lives in the auth user's metadata rather than a table
+  // column, so it needs no schema migration and is written in the same call
+  // that creates the account — there's no window where a user exists
+  // without it. payment_agency_agreed_at is the craftsman's grant of
+  // authority to collect payment on their behalf (terms 第5条); craftsmen
+  // registered before this existed give it on /dashboard/payouts instead.
+  const agreedAt = new Date().toISOString();
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        terms_version: TERMS_VERSION,
+        terms_agreed_at: agreedAt,
+        ...(role === "craftsman" ? { payment_agency_agreed_at: agreedAt } : {}),
+      },
+    },
+  });
 
   if (error) {
     return { error: signupErrorMessage(error.code, error.message) };

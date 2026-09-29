@@ -7,6 +7,8 @@ import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import OrderButton from "./OrderButton";
+import PrePaymentSummary from "@/components/PrePaymentSummary";
+import { deliveryNote } from "@/lib/orderTerms";
 import ManageServiceButtons from "./ManageServiceButtons";
 import type { Service, Profile } from "@/lib/types";
 
@@ -66,7 +68,13 @@ export default async function ServiceDetailPage({
           {isOwner ? (
             <ManageServiceButtons serviceId={service.id} published={service.status === "published"} />
           ) : (
-            <OrderButton serviceId={service.id} />
+            <div className="space-y-3">
+              <PrePaymentSummary
+                price={service.price}
+                delivery={deliveryNote({ deliveryDays: service.delivery_days })}
+              />
+              <OrderButton serviceId={service.id} />
+            </div>
           )}
         </div>
       </aside>
