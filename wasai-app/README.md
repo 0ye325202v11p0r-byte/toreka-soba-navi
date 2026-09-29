@@ -302,6 +302,21 @@ npm run dev
 curl "http://localhost:3000/api/cron/auto-complete-orders" -H "Authorization: Bearer <CRON_SECRETの値>"
 ```
 
+## Stripeを本番モードに切り替えるときのチェックリスト（2026-09-29時点）
+
+サンドボックスで一通り確認できたこと：本人確認（Express・送金受け取りのみ）→ 依頼 → Checkoutでのカード決済（円）→ Webhookで支払い済み → 納品・完了 → 振込先未設定の間は送金保留 → 本人確認完了後に自動送金（`source_transaction`付き）。
+
+本番モードでは、サンドボックスの設定は引き継がれないので**すべてやり直す**：
+1. Stripeの本番アカウントの審査（事業情報・本人確認・入金先の銀行口座）を完了させる
+2. 開発者 > 設定 > APIポリシーで **Accounts v1 サポート** をオン（オフのままだと振込先設定がエラー）
+3. Connectの設定（ビジネスモデル「支払いを回収し、受取人に支払う」）
+4. 本番の`sk_live_`キーを`STRIPE_SECRET_KEY`に
+5. Webhookの送信先を2つ作り直す（URLは同じ。「あなたのアカウント」＝checkout.session.completed / async_payment_succeeded / async_payment_failed → `STRIPE_WEBHOOK_SECRET`、「連結アカウント」＝account.updated → `STRIPE_CONNECT_WEBHOOK_SECRET`）。APIバージョンはSDKと同じもの（2026-08-26.dahlia）
+6. Vercelで再デプロイし、少額（50円以上）の実決済→返金で1回確認
+7. 本番運用に入る前に：VercelをProプラン（Hobbyは商用不可）、SupabaseをProプラン（無料枠は一定期間アクセスが無いと停止）、SupabaseのカスタムSMTP
+
+注意：Stripeの本人確認画面は自動操作だと画像認証が出るため、振込先設定のテストは人の手で行う。Checkoutは接続元の国に合わせて通貨を自動表示する（日本からは円）。
+
 ## ディレクトリ構成のポイント
 
 - `src/lib/supabase/{client,server,middleware}.ts`：トレカ相場ナビと同じ`@supabase/ssr`ベースのCookie管理パターン
