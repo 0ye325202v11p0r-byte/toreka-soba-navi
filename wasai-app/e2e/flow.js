@@ -209,6 +209,31 @@ async function clickOnOrder(user, orderId, text) {
   [ord] = await q("select payment_status, stripe_transfer_id from orders where id=$1", [o1.order.id]);
   ok("送金済みなのに記録が消えた取引をやり直しても、二重送金しない", ord.payment_status === "transferred" && ord.stripe_transfer_id === firstTransfer && postsAfter === postsBefore, `${firstTransfer} -> ${ord.stripe_transfer_id}, new POSTs: ${postsAfter - postsBefore}`);
 
+  // ---- 12. craftsman pauses / resumes / deletes a listing
+  const svcUrl = `${BASE}/services/${svc[0].id}`;
+  await craft.page.goto(svcUrl);
+  await craft.page.click("button:has-text('出品を停止する')");
+  await sleep(2500);
+  let [sv] = await q("select status from services where id=$1", [svc[0].id]);
+  let r2 = await client.page.goto(svcUrl);
+  ok("和裁士が出品を停止 → 他の人には表示されない", sv.status === "draft" && r2.status() === 404, `${sv.status} / 依頼者側 HTTP ${r2.status()}`);
+  await craft.page.goto(svcUrl);
+  await craft.page.click("button:has-text('出品を再開する')");
+  await sleep(2500);
+  r2 = await client.page.goto(svcUrl);
+  [sv] = await q("select status from services where id=$1", [svc[0].id]);
+  ok("出品を再開 → また表示される", sv.status === "published" && r2.status() === 200, `${sv.status} / HTTP ${r2.status()}`);
+  r2 = await fetch(`http://localhost:54321/rest/v1/services?id=eq.${svc[0].id}`, { method: "DELETE",
+    headers: { apikey: require("fs").readFileSync("/tmp/pgw/e2e/keys.env", "utf8").match(/ANON=(.*)/)[1], Authorization: `Bearer ${access}` } });
+  [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
+  ok("依頼者が他人の出品を消そうとしても消えない", sv.n === 1, `HTTP ${r2.status}`);
+  await craft.page.goto(svcUrl);
+  await craft.page.click("button:has-text('この出品を削除する')");
+  await craft.page.waitForURL("**/dashboard", { timeout: 15000 }).catch(() => {});
+  [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
+  [ord] = await q("select status, price, title, service_id from orders where id=$1", [o1.order.id]);
+  ok("出品を削除 → 消えるが、過去の取引は残る", sv.n === 0 && ord && ord.status === "completed" && ord.price === 1000 && ord.service_id === null, JSON.stringify(ord));
+
   await browser.close();
   await db.end();
   console.log(results.join("\n"));

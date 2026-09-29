@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { adminClient } from "@/lib/supabase/admin";
@@ -65,4 +66,79 @@ export async function orderService(
 
   const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
   redirect(checkoutUrl);
+}
+
+export interface ManageServiceState {
+  error?: string;
+}
+
+// Owner-only: take a listing down (draft = hidden from everyone but its
+// craftsman, per services_select_published_or_own) or put it back up.
+export async function setServiceStatus(
+  _prevState: ManageServiceState,
+  formData: FormData
+): Promise<ManageServiceState> {
+  const serviceId = String(formData.get("service_id") ?? "");
+  const status = String(formData.get("status") ?? "");
+  if (!serviceId || (status !== "draft" && status !== "published")) return { error: "不正なリクエストです。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: updated, error } = await supabase
+    .from("services")
+    .update({ status })
+    .eq("id", serviceId)
+    .eq("craftsman_id", user.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!updated) return { error: "この操作を行う権限がありません。" };
+
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath("/dashboard");
+  return {};
+}
+
+// Owner-only. Past orders keep their own title/price and only lose the
+// link back to the listing (orders.service_id is ON DELETE SET NULL). That
+// SET NULL is an UPDATE on orders, which orders_guard_update (Phase 29)
+// rejects for signed-in users — so the delete itself runs on the service-role
+// client, after ownership is checked here.
+export async function deleteService(
+  _prevState: ManageServiceState,
+  formData: FormData
+): Promise<ManageServiceState> {
+  const serviceId = String(formData.get("service_id") ?? "");
+  if (!serviceId) return { error: "不正なリクエストです。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const { data: owned } = await supabase
+    .from("services")
+    .select("id")
+    .eq("id", serviceId)
+    .eq("craftsman_id", user.id)
+    .maybeSingle();
+  if (!owned) return { error: "この操作を行う権限がありません。" };
+
+  const { data: deleted, error } = await adminClient()
+    .from("services")
+    .delete()
+    .eq("id", serviceId)
+    .eq("craftsman_id", user.id)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!deleted) return { error: "この操作を行う権限がありません。" };
+
+  revalidatePath("/dashboard");
+  redirect("/dashboard");
 }
