@@ -160,6 +160,9 @@ export default async function DashboardPage() {
                   <Link href={`/services/${s.id}`} className="font-semibold text-accent-strong hover:underline">
                     {s.title}
                   </Link>
+                  {s.status !== "published" && (
+                    <span className="ml-2 rounded bg-warn-soft px-1.5 py-0.5 text-xs text-warn">停止中</span>
+                  )}
                   <p className="text-xs text-ink-muted">¥{s.price.toLocaleString()}〜</p>
                 </li>
               ))}

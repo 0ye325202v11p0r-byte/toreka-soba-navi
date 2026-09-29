@@ -7,6 +7,7 @@ import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import OrderButton from "./OrderButton";
+import ManageServiceButtons from "./ManageServiceButtons";
 import type { Service, Profile } from "@/lib/types";
 
 export default async function ServiceDetailPage({
@@ -63,7 +64,7 @@ export default async function ServiceDetailPage({
 
         <div className="mt-4">
           {isOwner ? (
-            <p className="text-sm text-ink-muted">自分が出品したサービスです。</p>
+            <ManageServiceButtons serviceId={service.id} published={service.status === "published"} />
           ) : (
             <OrderButton serviceId={service.id} />
           )}
