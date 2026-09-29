@@ -40,6 +40,11 @@ export async function createCheckoutSessionUrl(
     // 特定商取引法12条の6 disclosures go right next to it too (the amount
     // and item are already on Checkout's own summary).
     custom_text: { submit: { message: checkoutSubmitMessage(delivery) } },
+    // Charge and display in yen only. Left to the dashboard default,
+    // Adaptive Pricing shows visitors from abroad a converted price (e.g.
+    // US$ preselected) — not the ¥ amount the confirmation box and
+    // 特定商取引法に基づく表示 promise, and with Stripe's conversion fee on top.
+    adaptive_pricing: { enabled: false },
     client_reference_id: order.id,
     metadata: { order_id: order.id },
     success_url: `${SITE_URL}/orders/${order.id}?checkout=success`,
