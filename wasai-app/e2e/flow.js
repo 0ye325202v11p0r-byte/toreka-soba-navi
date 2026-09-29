@@ -132,7 +132,7 @@ async function clickOnOrder(user, orderId, text) {
   ok("和裁士が納品できる", ord.status === "delivered" && !!ord.delivered_at, ord.status);
   await clickOnOrder(client, o1.order.id, "納品を確認して完了にする");
   [ord] = await q("select status, payment_status, stripe_transfer_id, completed_at from orders where id=$1", [o1.order.id]);
-  ok("依頼者が完了 → 和裁士へ送金（transferred）", ord.status === "completed" && ord.payment_status === "transferred" && /^tr_/.test(ord.stripe_transfer_id || ""), `${ord.status}/${ord.payment_status}/${ord.stripe_transfer_id}`);
+  ok("依頼者が完了 → 和裁士へ送金（transferred）", ord.status === "completed" && ord.payment_status === "transferred" && /^tr_shim_/.test(ord.stripe_transfer_id || ""), `${ord.status}/${ord.payment_status}/${ord.stripe_transfer_id}`);
 
   // ---- 7. negotiation: counter-offer accepted by the craftsman (was broken)
   await client.page.goto(`${BASE}/requests/new`);
@@ -177,7 +177,7 @@ async function clickOnOrder(user, orderId, text) {
     data: { object: { id: ob2.acct, object: "account", capabilities: { transfers: "active" } } } }, "whsec_e2e_connect");
   await sleep(1000);
   [ord] = await q("select payment_status, stripe_transfer_id, platform_fee_amount from orders where id=$1", [o3.order.id]);
-  ok("本人確認が完了した時点で、保留分が自動で送金される", ord.payment_status === "transferred" && /^tr_/.test(ord.stripe_transfer_id || ""), `${ord.payment_status}/${ord.stripe_transfer_id}`);
+  ok("本人確認が完了した時点で、保留分が自動で送金される", ord.payment_status === "transferred" && /^tr_shim_/.test(ord.stripe_transfer_id || ""), `${ord.payment_status}/${ord.stripe_transfer_id}`);
 
   // ---- 9. cancel a paid order -> refund
   const o4 = await orderServiceAndPay(client, svc[0].id);
@@ -196,6 +196,18 @@ async function clickOnOrder(user, orderId, text) {
   r = await fetch(`${BASE}/api/cron/auto-complete-orders`, { headers: { Authorization: "Bearer e2e-cron" } });
   [ord] = await q("select status, payment_status from orders where id=$1", [o5.order.id]);
   ok("納品から7日間反応がない取引は自動で完了・送金される", r.status === 200 && ord.status === "completed" && ord.payment_status === "transferred", `HTTP ${r.status} ${ord.status}/${ord.payment_status}`);
+
+  // ---- 11. transfer succeeded but recording it failed -> a retry must not pay twice
+  [ord] = await q("select stripe_transfer_id from orders where id=$1", [o1.order.id]);
+  const firstTransfer = ord.stripe_transfer_id;
+  await q("update orders set payment_status='paid', stripe_transfer_id=null where id=$1", [o1.order.id]);
+  const postsBefore = (require("fs").readFileSync("/tmp/pgw/stripe-mock.log", "utf8").match(/POST \/v1\/transfers/g) || []).length;
+  await webhook({ id: "evt_acct3", object: "event", type: "account.updated", account: ob.acct, created: Math.floor(Date.now()/1000),
+    data: { object: { id: ob.acct, object: "account", capabilities: { transfers: "active" } } } }, "whsec_e2e_connect");
+  await sleep(1000);
+  const postsAfter = (require("fs").readFileSync("/tmp/pgw/stripe-mock.log", "utf8").match(/POST \/v1\/transfers/g) || []).length;
+  [ord] = await q("select payment_status, stripe_transfer_id from orders where id=$1", [o1.order.id]);
+  ok("送金済みなのに記録が消えた取引をやり直しても、二重送金しない", ord.payment_status === "transferred" && ord.stripe_transfer_id === firstTransfer && postsAfter === postsBefore, `${firstTransfer} -> ${ord.stripe_transfer_id}, new POSTs: ${postsAfter - postsBefore}`);
 
   await browser.close();
   await db.end();

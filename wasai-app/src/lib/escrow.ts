@@ -77,19 +77,29 @@ export async function releaseEscrowPayout(
     sourceTransaction = typeof charge === "string" ? charge : (charge?.id ?? undefined);
   }
 
-  // The idempotency key makes a concurrent second call (e.g. the webhook and
-  // the onboarding return page both retrying pending payouts at once)
-  // return the same transfer instead of paying the craftsman twice.
-  const transfer = await stripe.transfers.create(
-    {
-      amount: transferAmount,
-      currency: "jpy",
-      destination: craftsmanProfile.stripe_account_id,
-      transfer_group: order.id,
-      ...(sourceTransaction ? { source_transaction: sourceTransaction } : {}),
-    },
-    { idempotencyKey: `escrow-transfer-${order.id}` }
-  );
+  // A transfer for this order may already exist even though payment_status
+  // still says "paid" (the transfer succeeded but recording it here didn't).
+  // Check Stripe first so a retry can never pay the craftsman twice.
+  const existing = await stripe.transfers.list({ transfer_group: order.id, limit: 1 });
+  const transfer =
+    existing.data[0] ??
+    (await stripe.transfers.create(
+      {
+        amount: transferAmount,
+        currency: "jpy",
+        destination: craftsmanProfile.stripe_account_id,
+        transfer_group: order.id,
+        ...(sourceTransaction ? { source_transaction: sourceTransaction } : {}),
+      },
+      // Dedupes concurrent calls (the webhook and the onboarding return page
+      // both releasing pending payouts at once). Scoped to the current hour
+      // because Stripe replays a failed request's error for 24h under the
+      // same key — a payout rejected while the craftsman's transfers
+      // capability was still activating would otherwise stay stuck for a day
+      // (seen in production). Retries in a later hour get a real new attempt;
+      // the list() check above covers the cross-hour case.
+      { idempotencyKey: `escrow-transfer-${order.id}-${new Date().toISOString().slice(0, 13)}` }
+    ));
 
   await supabase
     .from("orders")
