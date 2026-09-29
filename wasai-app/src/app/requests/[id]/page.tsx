@@ -10,6 +10,8 @@ import Avatar from "@/components/Avatar";
 import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
+import PrePaymentSummary from "@/components/PrePaymentSummary";
+import { deliveryNote } from "@/lib/orderTerms";
 import RespondCounterButtons from "./RespondCounterButtons";
 import CounterProposalForm from "./CounterProposalForm";
 import WithdrawProposalButton from "./WithdrawProposalButton";
@@ -163,6 +165,9 @@ export default async function RequestDetailPage({
               )}
               {isOwner && p.status === "pending" && request.status === "open" && (
                 <div className="mt-3 flex flex-wrap items-start gap-2">
+                  <div className="w-full">
+                    <PrePaymentSummary price={p.price} delivery={deliveryNote({ desiredBy: request.deadline })} />
+                  </div>
                   <RespondProposalButtons proposalId={p.id} />
                   <CounterProposalForm proposalId={p.id} />
                 </div>

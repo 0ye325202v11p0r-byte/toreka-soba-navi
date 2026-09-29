@@ -2,11 +2,17 @@
 // GET /v1/transfers?transfer_group=... from what was actually created here.
 const http = require("http");
 const created = new Map(); // transfer_group -> transfer
+let lastCheckout = null; // form body of the latest POST /v1/checkout/sessions
 http.createServer((req, res) => {
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", async () => {
     const url = new URL(req.url, "http://x");
+    if (url.pathname === "/__last_checkout") {
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify(lastCheckout ? Object.fromEntries(new URLSearchParams(lastCheckout)) : null));
+    }
+    if (req.method === "POST" && url.pathname === "/v1/checkout/sessions") lastCheckout = body;
     if (req.method === "GET" && url.pathname === "/v1/transfers") {
       const g = url.searchParams.get("transfer_group");
       const t = created.get(g);

@@ -8,6 +8,8 @@ import StatusControls from "./StatusControls";
 import MessageForm from "./MessageForm";
 import ReviewForm from "./ReviewForm";
 import PaymentRetryButton from "./PaymentRetryButton";
+import PrePaymentSummary from "@/components/PrePaymentSummary";
+import { loadDeliveryNote } from "@/lib/orderTerms";
 import FabricCheckForm from "./FabricCheckForm";
 import FabricCheckApproveButton from "./FabricCheckApproveButton";
 import SpecConfirmationForm from "./SpecConfirmationForm";
@@ -121,6 +123,9 @@ export default async function OrderDetailPage({
       {order.status === "pending_payment" && viewerRole === "client" && (
         <div className="mt-4 rounded-lg border border-warn bg-warn-soft p-4">
           <p className="text-sm text-ink">支払いが完了していません。支払いが完了すると和裁士に作業を依頼できます。</p>
+          <div className="mt-3">
+            <PrePaymentSummary price={order.price} delivery={await loadDeliveryNote(supabase, order)} />
+          </div>
           <div className="mt-3">
             <PaymentRetryButton orderId={order.id} />
           </div>

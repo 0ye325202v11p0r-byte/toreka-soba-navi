@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
 import { signup, type SignupState } from "./actions";
 import { PREFECTURES } from "@/lib/types";
@@ -9,6 +9,7 @@ const initialState: SignupState = {};
 
 export default function SignupPage() {
   const [state, formAction, pending] = useActionState(signup, initialState);
+  const [role, setRole] = useState<"client" | "craftsman">("client");
 
   return (
     <div className="mx-auto max-w-md">
@@ -22,11 +23,25 @@ export default function SignupPage() {
           <legend className="px-1 text-sm font-semibold">登録区分</legend>
           <div className="flex gap-4 text-sm">
             <label className="flex items-center gap-2">
-              <input type="radio" name="role" value="client" defaultChecked required />
+              <input
+                type="radio"
+                name="role"
+                value="client"
+                checked={role === "client"}
+                onChange={() => setRole("client")}
+                required
+              />
               依頼者として登録（仕立てを依頼したい）
             </label>
             <label className="flex items-center gap-2">
-              <input type="radio" name="role" value="craftsman" required />
+              <input
+                type="radio"
+                name="role"
+                value="craftsman"
+                checked={role === "craftsman"}
+                onChange={() => setRole("craftsman")}
+                required
+              />
               和裁士として登録（仕事を受けたい）
             </label>
           </div>
@@ -90,6 +105,31 @@ export default function SignupPage() {
             className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
           />
         </div>
+
+        <fieldset className="space-y-2 rounded-lg border border-border p-3 text-sm">
+          <legend className="px-1 font-semibold">同意事項</legend>
+          <label className="flex items-start gap-2">
+            <input type="checkbox" name="agree_terms" value="yes" required className="mt-1" />
+            <span>
+              <Link href="/terms" target="_blank" className="text-accent-strong underline">
+                利用規約
+              </Link>
+              と
+              <Link href="/privacy" target="_blank" className="text-accent-strong underline">
+                プライバシーポリシー
+              </Link>
+              を読み、同意します。
+            </span>
+          </label>
+          {role === "craftsman" && (
+            <label className="flex items-start gap-2">
+              <input type="checkbox" name="agree_payment_agency" value="yes" required className="mt-1" />
+              <span>
+                依頼者からの代金を、運営者が私の代わりに受け取り、取引完了後に手数料を差し引いて私に引き渡すこと（利用規約第5条）に同意します。依頼者が支払いを済ませた時点で、その代金は私への支払いが済んだものとして扱われます。
+              </span>
+            </label>
+          )}
+        </fieldset>
 
         {state.error && (
           <p role="alert" className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">

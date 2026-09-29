@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
-import { releaseEscrowPayout, releasePendingPayouts } from "@/lib/escrow";
+import { AUTO_COMPLETE_AFTER_DAYS, releaseEscrowPayout, releasePendingPayouts } from "@/lib/escrow";
 import { notify } from "@/lib/notifications";
 
 // A "delivered" order can only be advanced by the client (see
@@ -8,9 +8,7 @@ import { notify } from "@/lib/notifications";
 // goes silent, the craftsman has done the work but has no way to ever get
 // paid. This daily job auto-completes anything left in "delivered" for
 // AUTO_COMPLETE_AFTER_DAYS and releases the held payment, same as if the
-// client had clicked "confirm".
-const AUTO_COMPLETE_AFTER_DAYS = 7;
-
+// client had clicked "confirm". (The /terms page quotes the same number.)
 export async function GET(request: Request) {
   // Fail closed if CRON_SECRET isn't configured — comparing against
   // `Bearer ${undefined}` would otherwise accept a literal

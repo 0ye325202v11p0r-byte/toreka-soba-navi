@@ -9,8 +9,7 @@ export interface OnboardingState {
   error?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- useActionState requires this signature; the action needs neither argument
-export async function startOnboarding(_prevState: OnboardingState, _formData: FormData): Promise<OnboardingState> {
+export async function startOnboarding(_prevState: OnboardingState, formData: FormData): Promise<OnboardingState> {
   if (!isStripeConfigured()) {
     return { error: "Stripeが未設定です（管理者に連絡してください）。" };
   }
@@ -28,6 +27,21 @@ export async function startOnboarding(_prevState: OnboardingState, _formData: Fo
     .maybeSingle();
   if (profile?.role !== "craftsman") {
     return { error: "和裁士アカウントのみ振込先の設定ができます。" };
+  }
+
+  // Craftsmen who signed up before the terms gained 第5条's grant of
+  // authority to collect payment haven't given it yet — take it here, before
+  // they can be paid out (signup records it for everyone newer).
+  if (!user.user_metadata?.payment_agency_agreed_at) {
+    if (formData.get("agree_payment_agency") !== "yes") {
+      return { error: "振込先を設定するには、代金の受け取りに関する同意（利用規約第5条）が必要です。" };
+    }
+    const { error: consentError } = await supabase.auth.updateUser({
+      data: { payment_agency_agreed_at: new Date().toISOString() },
+    });
+    if (consentError) {
+      return { error: "同意の記録に失敗しました。時間をおいて再度お試しください。" };
+    }
   }
 
   const { data: craftsmanProfile } = await supabase

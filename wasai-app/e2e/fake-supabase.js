@@ -22,7 +22,7 @@ function verify(token) {
   return JSON.parse(Buffer.from(p, "base64url").toString());
 }
 const userObj = (u) => ({ id: u.id, aud: "authenticated", role: "authenticated", email: u.email,
-  app_metadata: { provider: "email" }, user_metadata: {}, created_at: u.created_at, email_confirmed_at: u.created_at });
+  app_metadata: { provider: "email" }, user_metadata: u.raw_user_meta_data || {}, created_at: u.created_at, email_confirmed_at: u.created_at });
 function session(u) {
   const now = Math.floor(Date.now() / 1000);
   const access_token = sign({ sub: u.id, role: "authenticated", aud: "authenticated", email: u.email, iat: now, exp: now + 3600 });
@@ -46,10 +46,10 @@ http.createServer(async (req, res) => {
         res.writeHead(r.status, h); return res.end(out);
       }
       if (url.pathname === "/auth/v1/signup") {
-        const { email, password } = JSON.parse(body);
+        const { email, password, data } = JSON.parse(body);
         const ex = await db.query("select * from auth.users where email=$1", [email]);
         if (ex.rows.length) return send(res, 422, { code: "user_already_exists", error_code: "user_already_exists", msg: "User already registered" });
-        const r = await db.query("insert into auth.users(email) values($1) returning *", [email]);
+        const r = await db.query("insert into auth.users(email, raw_user_meta_data) values($1, $2) returning *", [email, data || {}]);
         passwords.set(email, password);
         return send(res, 200, session(r.rows[0]));
       }
@@ -71,7 +71,11 @@ http.createServer(async (req, res) => {
       if (url.pathname === "/auth/v1/user") {
         const claims = verify((req.headers.authorization || "").replace("Bearer ", ""));
         if (!claims || !claims.sub) return send(res, 401, { code: "bad_jwt", msg: "invalid JWT" });
-        const r = await db.query("select * from auth.users where id=$1", [claims.sub]);
+        // PUT = supabase.auth.updateUser: like GoTrue, merge `data` into the
+        // existing user_metadata rather than replacing it.
+        const r = req.method === "PUT"
+          ? await db.query("update auth.users set raw_user_meta_data = coalesce(raw_user_meta_data,'{}'::jsonb) || $2::jsonb where id=$1 returning *", [claims.sub, JSON.parse(body || "{}").data || {}])
+          : await db.query("select * from auth.users where id=$1", [claims.sub]);
         return send(res, 200, userObj(r.rows[0]));
       }
       if (url.pathname === "/auth/v1/logout") { res.writeHead(204); return res.end(); }

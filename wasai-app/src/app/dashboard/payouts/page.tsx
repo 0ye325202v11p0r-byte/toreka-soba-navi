@@ -24,6 +24,13 @@ export default async function PayoutsPage() {
     .maybeSingle<CraftsmanProfile>();
 
   const transfersEnabled = craftsmanProfile?.stripe_transfers_enabled ?? false;
+  // Given at signup since the terms added 第5条's grant of authority to
+  // collect payment; craftsmen registered before that give it here, before
+  // Stripe onboarding (see startOnboarding).
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const agencyAgreed = Boolean(user?.user_metadata?.payment_agency_agreed_at);
 
   return (
     <div className="mx-auto max-w-lg">
@@ -49,7 +56,10 @@ export default async function PayoutsPage() {
               ? "Stripeでの本人確認・口座登録が完了していません。続きから再開してください。"
               : "報酬を受け取るには、Stripeで振込先の口座を登録する必要があります。"}
           </p>
-          <OnboardButton label={craftsmanProfile?.stripe_account_id ? "設定を再開する" : "Stripeで振込先を設定する"} />
+          <OnboardButton
+            label={craftsmanProfile?.stripe_account_id ? "設定を再開する" : "Stripeで振込先を設定する"}
+            needsAgencyConsent={!agencyAgreed}
+          />
         </div>
       )}
     </div>
