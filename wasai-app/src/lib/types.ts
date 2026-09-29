@@ -131,6 +131,13 @@ export interface Order {
   fabric_check_photo_urls: string[];
   created_at: string;
   completed_at: string | null;
+  delivered_at: string | null;
+  // Phase 30: how many times the client may send a delivered order back for
+  // changes, how many they've used, and when they asked the operator to step
+  // in (a disputed order is never auto-completed).
+  revision_limit: number;
+  revision_requests_used: number;
+  disputed_at: string | null;
 }
 
 export interface Message {

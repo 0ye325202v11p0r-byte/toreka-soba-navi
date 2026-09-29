@@ -26,6 +26,8 @@ export async function GET(request: Request) {
     .from("orders")
     .select("id, client_id, craftsman_id, title, price, payment_status, stripe_payment_intent_id, platform_fee_amount")
     .eq("status", "delivered")
+    // The client asked the operator to step in — wait for their decision.
+    .is("disputed_at", null)
     .lt("delivered_at", cutoff);
 
   if (error) {
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
       .update({ status: "completed", completed_at: new Date().toISOString() })
       .eq("id", order.id)
       .eq("status", "delivered") // guard against a race with a client action in between
+      .is("disputed_at", null) // ...including a dispute opened since the select above
       .select("id")
       .maybeSingle();
     // No row back = the client completed or cancelled it in the meantime;

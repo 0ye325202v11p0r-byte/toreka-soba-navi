@@ -17,10 +17,6 @@ export default function PrivacyPage() {
       <h1 className="mb-1 text-2xl font-bold">プライバシーポリシー</h1>
       <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月29日</p>
 
-      <div className="mb-6 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
-        ⚠️ 本ポリシーは弁護士による確認の前の版です。正式な決済の開始前に確認を受ける予定です。
-      </div>
-
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
           <h2 className="mb-2 font-bold">1. 事業者情報</h2>

@@ -226,6 +226,9 @@ export default async function OrderDetailPage({
             (order.fabric_check_completed_at && !order.fabric_check_approved_at) ||
               (order.spec_confirmed_at && !order.spec_approved_at)
           )}
+          everDelivered={Boolean(order.delivered_at)}
+          revisionsLeft={Math.max(0, order.revision_limit - order.revision_requests_used)}
+          disputed={Boolean(order.disputed_at)}
         />
       </div>
 

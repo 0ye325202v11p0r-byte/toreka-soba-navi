@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getCurrentUser } from "@/lib/auth";
+import { isAdminUser } from "@/lib/adminAuth";
+import { adminClient } from "@/lib/supabase/admin";
 import SetupNotice from "@/components/SetupNotice";
 import Avatar from "@/components/Avatar";
 import type { JobRequest, Order, Profile, Proposal, Service } from "@/lib/types";
@@ -84,8 +86,32 @@ export default async function DashboardPage() {
     proposals = (proposalData ?? []) as unknown as (Proposal & { requests: JobRequest })[];
   }
 
+  // The operator's only prompt that a client asked them to step in on a
+  // delivered order (Phase 30) — there's no email notification.
+  let openDisputes: number | null = null;
+  if (isAdminUser(current.email)) {
+    const { count } = await adminClient()
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "delivered")
+      .not("disputed_at", "is", null);
+    openDisputes = count ?? 0;
+  }
+
   return (
     <div>
+      {openDisputes !== null && (
+        <p className={`mb-4 rounded-md p-3 text-sm ${openDisputes > 0 ? "bg-warn-soft text-warn" : "bg-bg-elevated text-ink-muted"}`}>
+          運営：相談中の取引 {openDisputes}件 ・{" "}
+          <Link href="/admin/orders" className="underline">
+            相談中の取引
+          </Link>{" "}
+          ・{" "}
+          <Link href="/admin/craftsmen" className="underline">
+            資格の確認
+          </Link>
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">マイページ</h1>
         <div className="flex gap-4">

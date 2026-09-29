@@ -251,6 +251,9 @@ export async function respondProposal(
         price: finalPrice,
         status: "pending_payment",
         desired_by: request.deadline,
+        // Proposals have no 修正回数 field; one round of changes, same as a
+        // listing's default (Phase 30).
+        revision_limit: 1,
       })
       .select("id, title, price")
       .single();

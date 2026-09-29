@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { SITE_NAME } from "@/lib/site";
 import { PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
-import { AUTO_COMPLETE_AFTER_DAYS } from "@/lib/escrow";
+import { CANCELLATION_SUMMARY } from "@/lib/orderTerms";
 import { CONTACT_EMAIL, OPERATOR_NAME } from "@/lib/legal";
 
 export const metadata: Metadata = {
@@ -45,15 +44,6 @@ export default function TokushohoPage() {
       <h1 className="mb-1 text-2xl font-bold">特定商取引法に基づく表示</h1>
       <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月29日</p>
 
-      <div className="mb-4 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
-        ⚠️
-        本表示は弁護士による確認の前の版です。所在地・電話番号を「請求があれば遅滞なく開示」とする表示を含め、正式な決済の開始前に確認を受ける予定です。
-      </div>
-      <div className="mb-6 rounded-lg border border-dashed border-warn bg-warn-soft p-4 text-sm text-warn">
-        ⚠️
-        この表示は、{SITE_NAME}
-        （マッチング・決済仲介サービス）を運営する当方についてのものです。個々の仕立て・お直し等の役務そのものの提供者は各和裁士であり、和裁士が事業として消費者に役務を提供する場合、和裁士自身が特定商取引法上の表示義務を負う可能性があります。この点も含め専門家にご確認ください。
-      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
@@ -115,9 +105,7 @@ export default function TokushohoPage() {
                 キャンセル・返金について
               </th>
               <td className="py-3 leading-relaxed">
-                決済の完了前は、依頼者はいつでも申込みを取りやめられます（代金は発生しません）。決済の完了後も、依頼者が完了を確認するまではキャンセルでき、代金は全額返金されます（和裁士の納品操作から
-                {AUTO_COMPLETE_AFTER_DAYS}
-                日たつと自動的に完了となり、それ以降はキャンセルできません）。作業の一部が済んでいた場合の費用や着物の返送は、依頼者と和裁士の話し合いによります。詳細は
+                {CANCELLATION_SUMMARY}詳細は
                 <a href="/terms" className="text-accent-strong underline">
                   利用規約
                 </a>
