@@ -10,6 +10,7 @@ import Avatar from "@/components/Avatar";
 import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
+import CloseRequestButton from "./CloseRequestButton";
 import PrePaymentSummary from "@/components/PrePaymentSummary";
 import { deliveryNote } from "@/lib/orderTerms";
 import RespondCounterButtons from "./RespondCounterButtons";
@@ -103,7 +104,7 @@ export default async function RequestDetailPage({
         {request.profiles.display_name}
         {request.deadline ? ` ・ 希望納期: ${request.deadline}` : ""}
         {" ・ ステータス: "}
-        {request.status === "open" ? "募集中" : request.status === "matched" ? "マッチング済み" : "終了"}
+        {request.status === "open" ? "募集中" : request.status === "matched" ? "マッチング済み" : "締め切り済み"}
       </p>
       <div className="mt-1">
         <StarRating rating={clientRating.average} count={clientRating.count} />
@@ -116,6 +117,15 @@ export default async function RequestDetailPage({
         </p>
       )}
       <p className="mt-4 whitespace-pre-wrap text-sm">{request.description}</p>
+
+      {isOwner && request.status === "open" && (
+        <div className="mt-4">
+          <CloseRequestButton requestId={request.id} />
+          <p className="mt-1 text-xs text-ink-muted">
+            頼む和裁士が決まらなかったときや、依頼をやめるときに押してください。掲示板に表示されなくなります。
+          </p>
+        </div>
+      )}
 
       {order && (isOwner || current?.id) && (
         <p className="mt-4">
