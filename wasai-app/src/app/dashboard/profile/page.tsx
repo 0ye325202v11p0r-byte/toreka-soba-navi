@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import SetupNotice from "@/components/SetupNotice";
 import ProfileForm from "./ProfileForm";
@@ -19,7 +20,9 @@ export default async function ProfileEditPage() {
   let certificateSignedUrl: string | null = null;
   if (current.profile.role === "craftsman") {
     const supabase = await createClient();
-    const { data } = await supabase
+    // The craftsman's own row, private columns included (certificate_url) —
+    // not readable through the user's own client since Phase 32.
+    const { data } = await adminClient()
       .from("craftsman_profiles")
       .select("*")
       .eq("profile_id", current.id)

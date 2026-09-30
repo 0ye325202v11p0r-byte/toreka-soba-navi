@@ -6,9 +6,9 @@ import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
-import { GARMENT_TYPES, PREFECTURES, type CraftsmanProfile, type CraftsmanRate, type Profile } from "@/lib/types";
+import { CRAFTSMAN_PUBLIC_COLUMNS, GARMENT_TYPES, PREFECTURES, type CraftsmanPublicProfile, type CraftsmanRate, type Profile } from "@/lib/types";
 
-type CraftsmanRow = CraftsmanProfile & { profiles: Profile };
+type CraftsmanRow = CraftsmanPublicProfile & { profiles: Profile };
 
 export const metadata = { title: "和裁士を探す" };
 
@@ -40,7 +40,7 @@ export default async function CraftsmenPage({
     budgetMatchIds = Array.from(new Set((rateRows ?? []).map((r) => r.craftsman_id as string)));
   }
 
-  let query = supabase.from("craftsman_profiles").select("*, profiles!inner(*)");
+  let query = supabase.from("craftsman_profiles").select(`${CRAFTSMAN_PUBLIC_COLUMNS}, profiles!inner(*)`);
   if (q) query = query.ilike("profiles.display_name", `%${q}%`);
   if (specialty) query = query.contains("specialties", [specialty]);
   if (prefecture) query = query.eq("profiles.prefecture", prefecture);

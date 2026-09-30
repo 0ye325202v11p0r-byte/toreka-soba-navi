@@ -65,7 +65,13 @@ export default async function NotificationsPage() {
             </div>
           );
           return (
-            <li key={n.id}>{n.link ? <Link href={n.link}>{content}</Link> : content}</li>
+            <li key={n.id}>
+                {n.link && n.link.startsWith("/") && !n.link.startsWith("//") ? (
+                  <Link href={n.link}>{content}</Link>
+                ) : (
+                  content
+                )}
+              </li>
           );
         })}
         {notifications.length === 0 && (

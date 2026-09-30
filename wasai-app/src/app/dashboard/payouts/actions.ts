@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured, stripeClient } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
@@ -44,7 +45,10 @@ export async function startOnboarding(_prevState: OnboardingState, formData: For
     }
   }
 
-  const { data: craftsmanProfile } = await supabase
+  // The Stripe columns are service-role only (Phase 32): not readable or
+  // writable through the craftsman's own client.
+  const admin = adminClient();
+  const { data: craftsmanProfile } = await admin
     .from("craftsman_profiles")
     .select("stripe_account_id")
     .eq("profile_id", user.id)
@@ -81,7 +85,7 @@ export async function startOnboarding(_prevState: OnboardingState, formData: For
       });
       accountId = account.id;
 
-      const { error: saveError } = await supabase
+      const { error: saveError } = await admin
         .from("craftsman_profiles")
         .update({ stripe_account_id: accountId })
         .eq("profile_id", user.id);

@@ -90,7 +90,7 @@ export async function createRequest(
 
   await Promise.all(
     eligibleCraftsmen.map((c) =>
-      notify(supabase, {
+      notify({
         userId: c.profile_id,
         type: "new_matching_request",
         title: "条件に合う新しい依頼が届きました",

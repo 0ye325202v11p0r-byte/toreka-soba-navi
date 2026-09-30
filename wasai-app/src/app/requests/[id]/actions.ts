@@ -90,7 +90,7 @@ export async function submitProposal(
     return { error: error.message };
   }
 
-  await notify(supabase, {
+  await notify({
     userId: request.client_id,
     type: "proposal_received",
     title: "新しい提案が届きました",
@@ -153,7 +153,7 @@ export async function counterProposal(
     .eq("id", proposalId);
   if (error) return { error: error.message };
 
-  await notify(supabase, {
+  await notify({
     userId: proposal.craftsman_id,
     type: "proposal_countered",
     title: "価格交渉の提案が届きました",
@@ -275,7 +275,7 @@ export async function respondProposal(
       .eq("request_id", request.id)
       .in("status", ["pending", "countered"]);
 
-    await notify(supabase, {
+    await notify({
       // A plain accept is the client accepting the craftsman's asking price
       // (notify the craftsman); accepting a counter is the craftsman
       // agreeing to the client's counter-offer (notify the client instead).
@@ -293,7 +293,7 @@ export async function respondProposal(
     const checkoutUrl = await createCheckoutSessionUrl(supabase, order);
     redirect(checkoutUrl);
   } else {
-    await notify(supabase, {
+    await notify({
       userId: isCountered ? request.client_id : proposal.craftsman_id,
       type: "proposal_declined",
       title: isCountered ? "交渉価格が見送られました" : "提案が見送られました",
@@ -385,7 +385,7 @@ export async function closeRequest(_prevState: CloseRequestState, formData: Form
     .in("status", ["pending", "countered"])
     .select("craftsman_id");
   for (const p of waiting ?? []) {
-    await notify(supabase, {
+    await notify({
       userId: p.craftsman_id,
       type: "request_closed",
       title: "提案した依頼が締め切られました",

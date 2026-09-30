@@ -24,6 +24,9 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
   { key: "Content-Security-Policy", value: contentSecurityPolicy },
+  // The site uses none of these; deny them outright so an injected script
+  // or embedded page can't ask the visitor for them.
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
 ];
 
 const nextConfig: NextConfig = {

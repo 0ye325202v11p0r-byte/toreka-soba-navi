@@ -7,7 +7,8 @@ import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
-import type { CraftsmanProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
+import { CRAFTSMAN_PUBLIC_COLUMNS } from "@/lib/types";
+import type { CraftsmanPublicProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
 
 export default async function CraftsmanDetailPage({
   params,
@@ -32,9 +33,9 @@ export default async function CraftsmanDetailPage({
 
   const { data: craftsmanProfile } = await supabase
     .from("craftsman_profiles")
-    .select("*")
+    .select(CRAFTSMAN_PUBLIC_COLUMNS)
     .eq("profile_id", id)
-    .maybeSingle<CraftsmanProfile>();
+    .maybeSingle<CraftsmanPublicProfile>();
 
   let activeOrderCount = 0;
   if (craftsmanProfile?.max_concurrent_orders != null) {

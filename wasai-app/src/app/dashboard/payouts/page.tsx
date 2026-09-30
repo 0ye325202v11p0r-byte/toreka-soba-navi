@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { isStripeConfigured, PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import SetupNotice from "@/components/SetupNotice";
@@ -17,7 +18,9 @@ export default async function PayoutsPage() {
   if (current.profile.role !== "craftsman") redirect("/dashboard");
 
   const supabase = await createClient();
-  const { data: craftsmanProfile } = await supabase
+  // Own row incl. the private Stripe columns (Phase 32) — service role,
+  // scoped to the signed-in craftsman.
+  const { data: craftsmanProfile } = await adminClient()
     .from("craftsman_profiles")
     .select("*")
     .eq("profile_id", current.id)
