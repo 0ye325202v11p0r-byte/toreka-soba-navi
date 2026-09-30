@@ -60,7 +60,7 @@ export async function resolveDispute(
 
   const title = decision === "completed" ? "運営の判断により取引が完了しました" : "運営の判断により取引がキャンセル（返金）されました";
   for (const userId of [order.client_id, order.craftsman_id]) {
-    await notify(admin, { userId, type: `order_dispute_${decision}`, title, body: order.title, link: `/orders/${orderId}` });
+    await notify({ userId, type: `order_dispute_${decision}`, title, body: order.title, link: `/orders/${orderId}` });
   }
 
   revalidatePath("/admin/orders");

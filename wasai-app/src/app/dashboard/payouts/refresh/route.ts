@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured, stripeClient } from "@/lib/stripe";
 import { SITE_URL } from "@/lib/site";
 
@@ -17,7 +18,7 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(`${SITE_URL}/login`);
 
-  const { data: craftsmanProfile } = await supabase
+  const { data: craftsmanProfile } = await adminClient()
     .from("craftsman_profiles")
     .select("stripe_account_id")
     .eq("profile_id", user.id)

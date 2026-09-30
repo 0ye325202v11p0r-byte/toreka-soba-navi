@@ -37,7 +37,7 @@ CRON_SECRET=e2e-cron
 
 新規登録／振込先設定（Stripeアカウント作成・業種等の自動入力）／本人確認完了通知（Connect用の鍵）と偽署名の拒否／50円未満の出品拒否／依頼→支払い待ち→支払い完了通知→手数料確定／依頼者によるAPI直叩きの金額改ざん拒否／納品→完了→送金／交渉価格の提示→和裁士の承諾→取引作成（和裁士は支払い画面に飛ばない）／振込先未設定の和裁士の送金保留→本人確認完了で自動送金／支払い済み取引のキャンセル→返金／7日無反応の自動完了→送金とcronの合言葉チェック／送金は成功したが記録に失敗した取引をやり直しても二重送金しない／出品の停止・再開・削除（削除しても過去の取引は残る、他人の出品は消せない）
 
-`phase29-guard-test.sql` はDBトリガー（Phase 29）単体のテスト（21項目）、`phase30-guard-test.sql` は納品後のキャンセル規則（Phase 30）単体のテスト（13項目）、`phase31-guard-test.sql` は提案の納期目安（Phase 31）単体のテスト（5項目）。どちらも新しいデータベースに `supabase-shim.sql` と `supabase/schema.sql` を流してから実行する。
+`phase29-guard-test.sql` はDBトリガー（Phase 29）単体のテスト（21項目）、`phase30-guard-test.sql` は納品後のキャンセル規則（Phase 30）単体のテスト（13項目）、`phase31-guard-test.sql` は提案の納期目安（Phase 31）単体のテスト（5項目）、`phase32-guard-test.sql` は通知の偽造防止・和裁士の非公開情報・振込先の保護（Phase 32）単体のテスト（14項目）。どちらも新しいデータベースに `supabase-shim.sql` と `supabase/schema.sql` を流してから実行する。
 
 ## 模倣では確認できないこと
 - stripe-mockのPaymentIntentは`latest_charge`が空なので、送金の`source_transaction`指定は通っていない（2026-09-29に本物のStripeサンドボックスで送られていることを確認済み）

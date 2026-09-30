@@ -20,7 +20,8 @@ export async function GET() {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(`${SITE_URL}/login`);
 
-  const { data: craftsmanProfile } = await supabase
+  const admin = adminClient();
+  const { data: craftsmanProfile } = await admin
     .from("craftsman_profiles")
     .select("stripe_account_id")
     .eq("profile_id", user.id)
@@ -31,7 +32,7 @@ export async function GET() {
     const account = await stripe.accounts.retrieve(craftsmanProfile.stripe_account_id);
     const transfersEnabled = account.capabilities?.transfers === "active";
 
-    await supabase
+    await admin
       .from("craftsman_profiles")
       .update({ stripe_transfers_enabled: transfersEnabled })
       .eq("profile_id", user.id);

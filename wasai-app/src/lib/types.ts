@@ -42,6 +42,18 @@ export interface CraftsmanProfile {
   updated_at: string;
 }
 
+// Columns of craftsman_profiles anyone may read (Phase 32 in
+// supabase/schema.sql grants SELECT on exactly these to anon/authenticated).
+// stripe_account_id, stripe_transfers_enabled and certificate_url are the
+// craftsman's and the operator's only — read them with the service-role
+// client after checking who's asking.
+export const CRAFTSMAN_PUBLIC_COLUMNS =
+  "profile_id, grade, years_experience, specialties, portfolio_urls, is_accepting_orders, max_concurrent_orders, grade_verified, grade_verified_at, updated_at";
+export type CraftsmanPublicProfile = Omit<
+  CraftsmanProfile,
+  "stripe_account_id" | "stripe_transfers_enabled" | "certificate_url"
+>;
+
 export interface CraftsmanRate {
   id: string;
   craftsman_id: string;

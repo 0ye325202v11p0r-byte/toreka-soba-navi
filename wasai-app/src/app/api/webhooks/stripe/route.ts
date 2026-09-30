@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       const fee = platformFeeAmount(updated.price, isRepeat);
       await supabase.from("orders").update({ platform_fee_amount: fee }).eq("id", orderId);
 
-      await notify(supabase, {
+      await notify({
         userId: updated.craftsman_id,
         type: "payment_received",
         title: "支払いが完了しました",
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
           .eq("status", "pending_payment")
           .maybeSingle();
         if (order) {
-          await notify(supabase, {
+          await notify({
             userId: order.client_id,
             type: "payment_failed",
             title: "お支払いが完了しませんでした",

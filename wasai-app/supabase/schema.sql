@@ -932,3 +932,56 @@ create trigger trg_proposals_guard_update
   before update on proposals
   for each row
   execute function public.proposals_guard_update();
+
+-- ---------------------------------------------------------------------------
+-- Phase 32（2026-09-30追加）: セキュリティの点検で見つかった3点の修正。
+--
+-- 1. 通知の偽造: notifications_insert_any_authenticatedにより、ログイン済み
+--    なら誰でも、誰宛てにでも、好きな文面・リンクの通知を作れた（偽の
+--    「運営からのお知らせ」で外部の偽サイトへ誘導、等）。insertはservice
+--    role（アプリのnotify()）だけにし、リンクはサイト内（/で始まる）に限る。
+-- 2. 和裁士の非公開情報: craftsman_profiles_select_allで、Stripeのアカウント
+--    ID・振込可否・資格証明書の保存パスまで誰でも読めた。anon/authenticated
+--    には公開してよい列だけSELECTを許可する（アプリはCRAFTSMAN_PUBLIC_COLUMNS
+--    を指定し、本人・運営の画面はservice roleで読む）。
+-- 3. 振込先の書き換え: 本人がstripe_account_id・stripe_transfers_enabledを
+--    直接書き換えられた。service role（Stripeの登録処理・Webhook）だけにする。
+-- 本番のSupabaseには、この「Phase 32」の部分だけをSQL Editorで実行する
+-- （何度実行しても同じ結果になる）。
+-- ---------------------------------------------------------------------------
+
+drop policy if exists "notifications_insert_any_authenticated" on notifications;
+alter table notifications drop constraint if exists notifications_link_internal;
+alter table notifications add constraint notifications_link_internal
+  check (link is null or (link like '/%' and link not like '//%')) not valid;
+
+revoke select on craftsman_profiles from anon, authenticated;
+grant select (profile_id, grade, years_experience, specialties, portfolio_urls,
+  is_accepting_orders, max_concurrent_orders, grade_verified, grade_verified_at, updated_at)
+  on craftsman_profiles to anon, authenticated;
+
+create or replace function public.craftsman_profiles_guard_stripe()
+returns trigger
+language plpgsql
+as $$
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.stripe_account_id is not null or new.stripe_transfers_enabled then
+      raise exception '振込先の情報は設定できません。' using errcode = '42501';
+    end if;
+  elsif new.stripe_account_id is distinct from old.stripe_account_id
+     or new.stripe_transfers_enabled is distinct from old.stripe_transfers_enabled then
+    raise exception '振込先の情報は変更できません。' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_craftsman_profiles_guard_stripe on craftsman_profiles;
+create trigger trg_craftsman_profiles_guard_stripe
+  before insert or update on craftsman_profiles
+  for each row
+  execute function public.craftsman_profiles_guard_stripe();

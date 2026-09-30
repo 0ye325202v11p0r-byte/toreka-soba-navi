@@ -49,14 +49,14 @@ export async function GET(request: Request) {
     if (updateError || !updated) continue;
 
     await releaseEscrowPayout(supabase, order);
-    await notify(supabase, {
+    await notify({
       userId: order.craftsman_id,
       type: "order_auto_completed",
       title: "取引が自動的に完了しました",
       body: `${order.title} — 納品から${AUTO_COMPLETE_AFTER_DAYS}日間、依頼者からの応答がなかったため自動的に完了扱いとなりました。`,
       link: `/orders/${order.id}`,
     });
-    await notify(supabase, {
+    await notify({
       userId: order.client_id,
       type: "order_auto_completed",
       title: "取引が自動的に完了しました",

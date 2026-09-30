@@ -94,7 +94,7 @@ export async function postMessage(
   if (error) return { error: error.message };
 
   const recipientId = order.client_id === user.id ? order.craftsman_id : order.client_id;
-  await notify(supabase, {
+  await notify({
     userId: recipientId,
     type: "new_message",
     title: "新しいメッセージが届きました",
@@ -228,7 +228,7 @@ export async function updateOrderStatus(
   };
   const statusNotification = STATUS_NOTIFICATIONS[nextStatus];
   if (statusNotification) {
-    await notify(supabase, {
+    await notify({
       userId: statusNotification.userId,
       type: `order_${nextStatus}`,
       title: statusNotification.title,
@@ -266,7 +266,7 @@ export async function openDispute(_prevState: StatusFormState, formData: FormDat
     .eq("id", orderId);
   if (error) return { error: error.message };
 
-  await notify(supabase, {
+  await notify({
     userId: order.craftsman_id,
     type: "order_disputed",
     title: "依頼者が運営に相談しました",
@@ -438,7 +438,7 @@ export async function approveFabricCheck(
     .is("fabric_check_approved_at", null);
   if (error) return { error: error.message };
 
-  await notify(supabase, {
+  await notify({
     userId: order.craftsman_id,
     type: "fabric_check_approved",
     title: "反物チェックが承認されました",
@@ -494,7 +494,7 @@ export async function submitSpecConfirmation(
     .is("spec_confirmed_at", null);
   if (error) return { error: error.message };
 
-  await notify(supabase, {
+  await notify({
     userId: order.client_id,
     type: "spec_confirmation_submitted",
     title: "仕様の最終確認が届いています",
@@ -539,7 +539,7 @@ export async function approveSpecConfirmation(
     .is("spec_approved_at", null);
   if (error) return { error: error.message };
 
-  await notify(supabase, {
+  await notify({
     userId: order.craftsman_id,
     type: "spec_confirmation_approved",
     title: "仕様が承認されました",

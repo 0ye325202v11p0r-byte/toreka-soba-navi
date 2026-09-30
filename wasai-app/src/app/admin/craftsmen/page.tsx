@@ -25,7 +25,9 @@ export default async function AdminCraftsmenPage() {
   // reasoning as the sibling project's /admin/sync-status gate).
   if (!isAdminUser(user.email)) notFound();
 
-  const { data } = await supabase
+  // Service role: certificate_url is readable only by it (Phase 32) — this
+  // page is past the isAdminUser check above.
+  const { data } = await adminClient()
     .from("craftsman_profiles")
     .select("*, profiles!inner(*)")
     .not("grade", "is", null)
