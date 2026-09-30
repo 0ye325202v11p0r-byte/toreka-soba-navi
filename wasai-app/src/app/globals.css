@@ -16,15 +16,15 @@
   --bg-sunken: #f4f4f5;
   --ink: #18181b;
   --ink-muted: #52525b;
-  --ink-faint: #8f8f97;
+  --ink-faint: #6b6b73;
   --border: #e4e4e7;
   --border-strong: #c9c9cf;
   --accent: #dc2626;
   --accent-strong: #b91c1c;
   --accent-soft: #fee2e2;
-  --good: #16a34a;
+  --good: #15803d;
   --good-soft: #dcfce7;
-  --warn: #ea580c;
+  --warn: #b93b0a;
   --warn-soft: #ffedd5;
 }
 
@@ -102,5 +102,19 @@ body {
   header,
   footer {
     display: none;
+  }
+}
+
+/* Checkboxes and radios default to ~13px — too small to hit with a finger,
+   especially for the older users this site is for (the signup consent
+   boxes, 登録区分, the fabric check). In a layer so a className can still
+   override it. */
+@layer base {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    accent-color: var(--accent);
   }
 }
