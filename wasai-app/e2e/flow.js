@@ -344,6 +344,34 @@ async function clickOnOrder(user, orderId, text) {
   [ord] = await q("select status, payment_status from orders where id=$1", [oC.order.id]);
   ok("納品後でも、和裁士が話し合いの結果キャンセルに応じれば返金される", ord.status === "cancelled" && ord.payment_status === "refunded", `${ord.status}/${ord.payment_status}`);
 
+  // ---- 14. the client closes their own request; waiting quotes are declined
+  await client.page.goto(`${BASE}/requests/new`);
+  await client.page.fill("input[name=title]", "締め切りテスト");
+  await client.page.selectOption("select[name=garment_type]", "訪問着");
+  await client.page.fill("textarea[name=description]", "締め切りのテストです");
+  await client.page.click("button:has-text('依頼を投稿する')");
+  await sleep(2500);
+  const [rq2] = await q("select id from requests where client_id=$1 and title='締め切りテスト'", [client.id]);
+  await craft.page.goto(`${BASE}/requests/${rq2.id}`);
+  await craft.page.fill("input[name=price]", "20000");
+  await craft.page.fill("input[name=delivery_days]", "10");
+  await craft.page.fill("textarea[name=message]", "お受けできます");
+  await craft.page.click("button:has-text('提案を送る')");
+  await sleep(2500);
+  const craftSeesClose = await (await craft.page.locator("button:has-text('この依頼を締め切る')").count());
+  await client.page.goto(`${BASE}/requests/${rq2.id}`);
+  await client.page.click("button:has-text('この依頼を締め切る')");
+  await sleep(3500);
+  const [rq2s] = await q("select status from requests where id=$1", [rq2.id]);
+  const [pr2] = await q("select status from proposals where request_id=$1", [rq2.id]);
+  const [nt] = await q("select count(*)::int as n from notifications where user_id=$1 and type='request_closed'", [craft.id]);
+  await client.page.goto(`${BASE}/requests`);
+  const onBoard = await client.page.locator(`a[href="/requests/${rq2.id}"]`).count();
+  ok("依頼者が依頼を締め切れる → 掲示板から消え、届いていた提案は見送り、和裁士に通知", rq2s.status === "closed" && pr2.status === "declined" && nt.n >= 1 && onBoard === 0 && craftSeesClose === 0, `${rq2s.status}/${pr2.status}/通知${nt.n}/掲示板${onBoard}/和裁士にボタン${craftSeesClose}`);
+  await craft.page.goto(`${BASE}/requests/${rq2.id}`);
+  const canPropose = await craft.page.locator("button:has-text('提案を送る')").count();
+  ok("締め切った依頼には提案できない", canPropose === 0, String(canPropose));
+
   await browser.close();
   await db.end();
   console.log(results.join("\n"));

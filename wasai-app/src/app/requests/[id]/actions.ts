@@ -345,3 +345,57 @@ export async function withdrawProposal(
   revalidatePath(`/requests/${proposal.request_id}`);
   return {};
 }
+
+export interface CloseRequestState {
+  error?: string;
+}
+
+// The client's way to take their own request off the board (found nobody,
+// changed their mind, sorted it elsewhere) — without it an unanswered
+// request stayed "募集中" forever. Only an open request: a matched one has
+// an order, which has its own cancel rules. Any quotes still waiting are
+// declined so the craftsmen who sent them aren't left hanging.
+export async function closeRequest(_prevState: CloseRequestState, formData: FormData): Promise<CloseRequestState> {
+  const requestId = String(formData.get("request_id") ?? "");
+  if (!requestId) return { error: "依頼が見つかりません。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  // Conditional on still being open, so a craftsman accepting a counter-offer
+  // at the same moment (which matches the request) wins cleanly.
+  const { data: closed, error } = await supabase
+    .from("requests")
+    .update({ status: "closed" })
+    .eq("id", requestId)
+    .eq("client_id", user.id)
+    .eq("status", "open")
+    .select("id, title")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!closed) return { error: "この依頼は締め切れません（すでに成立または終了しています）。" };
+
+  const { data: waiting } = await supabase
+    .from("proposals")
+    .update({ status: "declined" })
+    .eq("request_id", requestId)
+    .in("status", ["pending", "countered"])
+    .select("craftsman_id");
+  for (const p of waiting ?? []) {
+    await notify(supabase, {
+      userId: p.craftsman_id,
+      type: "request_closed",
+      title: "提案した依頼が締め切られました",
+      body: closed.title,
+      link: `/requests/${requestId}`,
+    });
+  }
+
+  revalidatePath(`/requests/${requestId}`);
+  revalidatePath("/requests");
+  revalidatePath("/dashboard");
+  return {};
+}

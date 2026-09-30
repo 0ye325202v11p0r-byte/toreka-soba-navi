@@ -147,7 +147,7 @@ export default async function DashboardPage() {
                     {r.title}
                   </Link>
                   <p className="text-xs text-ink-muted">
-                    {r.status === "open" ? "募集中" : r.status === "matched" ? "マッチング済み" : "終了"}
+                    {r.status === "open" ? "募集中" : r.status === "matched" ? "マッチング済み" : "締め切り済み"}
                   </p>
                 </li>
               ))}
