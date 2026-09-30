@@ -149,7 +149,12 @@ export default async function RequestDetailPage({
                   </Link>
                   {verifiedCraftsmanIds.has(p.craftsman_id) && <VerifiedBadge />}
                 </div>
-                <span className="text-sm font-bold">¥{p.price.toLocaleString()}</span>
+                <span className="text-right text-sm font-bold">
+                  ¥{p.price.toLocaleString()}
+                  {p.delivery_days && (
+                    <span className="block text-xs font-normal text-ink-muted">納期目安 {p.delivery_days}日</span>
+                  )}
+                </span>
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm">{p.message}</p>
               <p className="mt-2 text-xs text-ink-muted">状態: {STATUS_LABEL[p.status]}</p>
@@ -166,7 +171,10 @@ export default async function RequestDetailPage({
               {isOwner && p.status === "pending" && request.status === "open" && (
                 <div className="mt-3 flex flex-wrap items-start gap-2">
                   <div className="w-full">
-                    <PrePaymentSummary price={p.price} delivery={deliveryNote({ desiredBy: request.deadline })} />
+                    <PrePaymentSummary
+                      price={p.price}
+                      delivery={deliveryNote({ deliveryDays: p.delivery_days, desiredBy: request.deadline })}
+                    />
                   </div>
                   <RespondProposalButtons proposalId={p.id} />
                   <CounterProposalForm proposalId={p.id} />

@@ -173,6 +173,7 @@ async function clickOnOrder(user, orderId, text) {
   const [reqRow] = await q("select id from requests where client_id=$1 and title='交渉テスト'", [client.id]);
   await craft.page.goto(`${BASE}/requests/${reqRow.id}`);
   await craft.page.fill("input[name=price]", "30000");
+  await craft.page.fill("input[name=delivery_days]", "21");
   await craft.page.fill("textarea[name=message]", "お受けできます");
   await craft.page.click("button:has-text('提案を送る')");
   await sleep(2500);
@@ -194,7 +195,10 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.goto(`${BASE}/orders/${o2.id}`);
   const payBox = await client.page.locator("text=お申込み前にご確認ください").locator("..").textContent().catch(() => "");
   const payUrl = await clickExpectingStripe(client.page, "button:has-text('お支払い画面へ進む')");
-  ok("交渉成立後、依頼者は取引ページで最終確認を見てから支払いへ進める", /¥25,000/.test(payBox) && /stripe\.(com|me)/.test(payUrl), payBox.slice(0, 60));
+  ok("交渉成立後、依頼者は取引ページで最終確認を見てから支払いへ進める（提案の納期目安21日も表示）", /¥25,000/.test(payBox) && /約21日/.test(payBox) && /stripe\.(com|me)/.test(payUrl), payBox.slice(0, 60));
+  const [pr] = await q("select delivery_days from proposals where request_id=$1", [reqRow.id]);
+  const lastCo = await (await fetch("http://localhost:12110/__last_checkout")).json();
+  ok("提案の納期目安が保存され、Stripeの支払い画面の文言にも入る", pr.delivery_days === 21 && /約21日/.test((lastCo && lastCo["custom_text[submit][message]"]) || ""), String(pr.delivery_days));
 
   // ---- 8. payout left pending because craftsman2 hadn't onboarded, released once they do
   const craft2 = await newUser(browser, "craftsman", "テスト和裁士2", `craft2${stamp}@example.com`);
@@ -278,6 +282,67 @@ async function clickOnOrder(user, orderId, text) {
   [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
   [ord] = await q("select status, price, title, service_id from orders where id=$1", [o1.order.id]);
   ok("出品を削除 → 消えるが、過去の取引は残る", sv.n === 0 && ord && ord.status === "completed" && ord.price === 1000 && ord.service_id === null, JSON.stringify(ord));
+
+  // ---- 13. after delivery the client can no longer cancel (= full refund) on their own (Phase 30)
+  const svc3 = await createService(craft, "テスト 納品後の扱い", 1000);
+  const buttonsOn = async (user, orderId) => { await user.page.goto(`${BASE}/orders/${orderId}`); return (await user.page.locator("button").allTextContents()).join("|"); };
+  const oA = await orderServiceAndPay(client, svc3[0].id);
+  await paidWebhook(oA.order.id, "pi_e2e_A");
+  await clickOnOrder(craft, oA.order.id, "納品済みにする");
+  let btns = await buttonsOn(client, oA.order.id);
+  [ord] = await q("select revision_limit from orders where id=$1", [oA.order.id]);
+  ok("納品後、依頼者の画面に「キャンセル」は無く、修正依頼（出品の修正回数1回）と運営への相談が出る", !/キャンセルする/.test(btns) && /修正を依頼する（残り1回）/.test(btns) && /運営に相談する/.test(btns) && ord.revision_limit === 1, btns);
+  let r3 = await fetch(`http://localhost:54321/rest/v1/orders?id=eq.${oA.order.id}`, { method: "PATCH",
+    headers: { apikey: require("fs").readFileSync("/tmp/pgw/e2e/keys.env", "utf8").match(/ANON=(.*)/)[1], Authorization: `Bearer ${access}`, "content-type": "application/json" }, body: JSON.stringify({ status: "cancelled" }) });
+  [ord] = await q("select status, payment_status from orders where id=$1", [oA.order.id]);
+  ok("納品後に依頼者がAPIを直接叩いてキャンセルしようとしても拒否される", r3.status >= 400 && ord.status === "delivered" && ord.payment_status === "paid", `HTTP ${r3.status} ${ord.status}/${ord.payment_status}`);
+  await clickOnOrder(client, oA.order.id, "修正を依頼する");
+  [ord] = await q("select status, revision_requests_used from orders where id=$1", [oA.order.id]);
+  btns = await buttonsOn(client, oA.order.id);
+  ok("修正を依頼 → 進行中に戻る（回数を記録）。戻っても依頼者からはキャンセルできない", ord.status === "in_progress" && ord.revision_requests_used === 1 && !/キャンセルする/.test(btns), `${ord.status}/${ord.revision_requests_used} ${btns}`);
+  await clickOnOrder(craft, oA.order.id, "納品済みにする");
+  btns = await buttonsOn(client, oA.order.id);
+  ok("修正回数を使い切ると、修正依頼のボタンは出ない", !/修正を依頼する/.test(btns) && /運営に相談する/.test(btns), btns);
+  await clickOnOrder(client, oA.order.id, "運営に相談する");
+  await q("update orders set delivered_at = now() - interval '8 days' where id=$1", [oA.order.id]);
+  await fetch(`${BASE}/api/cron/auto-complete-orders`, { headers: { Authorization: "Bearer e2e-cron" } });
+  [ord] = await q("select status, disputed_at from orders where id=$1", [oA.order.id]);
+  ok("運営に相談中の取引は、7日たっても自動で完了しない", ord.status === "delivered" && !!ord.disputed_at, `${ord.status} ${ord.disputed_at}`);
+
+  const oB = await orderServiceAndPay(client, svc3[0].id);
+  await paidWebhook(oB.order.id, "pi_e2e_B");
+  await clickOnOrder(craft, oB.order.id, "納品済みにする");
+  await clickOnOrder(client, oB.order.id, "運営に相談する");
+
+  // operator: ADMIN_EMAIL in the test app's .env.local
+  const [oldAdmin] = await q("select id from auth.users where email='admin@example.com'");
+  if (oldAdmin) { await q("delete from notifications where user_id=$1", [oldAdmin.id]); await q("delete from profiles where id=$1", [oldAdmin.id]); await q("delete from auth.users where id=$1", [oldAdmin.id]); }
+  const op = await newUser(browser, "client", "運営", "admin@example.com");
+  await op.page.goto(`${BASE}/dashboard`);
+  const opBanner = await op.page.locator("text=運営：相談中の取引").textContent().catch(() => "");
+  const outsider = await client.page.goto(`${BASE}/admin/orders`);
+  ok("運営のマイページに相談中の件数が出る／運営以外は管理画面を開けない", /相談中の取引 [1-9]\d*件/.test(opBanner) && outsider.status() === 404, `${opBanner} / 依頼者 HTTP ${outsider.status()}`);
+  const resolve = async (orderId, label) => {
+    await op.page.goto(`${BASE}/admin/orders`);
+    const item = op.page.locator(`li[data-order-id="${orderId}"]`);
+    if (!(await item.count())) return false;
+    await item.locator(`button:has-text('${label}')`).click();
+    await sleep(3500);
+    return true;
+  };
+  const didA = await resolve(oA.order.id, "依頼者に返金する");
+  [ord] = await q("select status, payment_status from orders where id=$1", [oA.order.id]);
+  ok("運営が「依頼者に返金する」→ キャンセル・返金", didA && ord.status === "cancelled" && ord.payment_status === "refunded", `${didA} ${ord.status}/${ord.payment_status}`);
+  const didB = await resolve(oB.order.id, "和裁士に支払う");
+  [ord] = await q("select status, payment_status from orders where id=$1", [oB.order.id]);
+  ok("運営が「和裁士に支払う」→ 完了・送金", didB && ord.status === "completed" && ord.payment_status === "transferred", `${didB} ${ord.status}/${ord.payment_status}`);
+
+  const oC = await orderServiceAndPay(client, svc3[0].id);
+  await paidWebhook(oC.order.id, "pi_e2e_C");
+  await clickOnOrder(craft, oC.order.id, "納品済みにする");
+  await clickOnOrder(craft, oC.order.id, "キャンセルに応じる");
+  [ord] = await q("select status, payment_status from orders where id=$1", [oC.order.id]);
+  ok("納品後でも、和裁士が話し合いの結果キャンセルに応じれば返金される", ord.status === "cancelled" && ord.payment_status === "refunded", `${ord.status}/${ord.payment_status}`);
 
   await browser.close();
   await db.end();

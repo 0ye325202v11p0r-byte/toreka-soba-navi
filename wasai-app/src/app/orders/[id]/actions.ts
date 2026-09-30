@@ -19,7 +19,7 @@ async function loadOrderForParticipant(
   const { data: order } = await supabase
     .from("orders")
     .select(
-      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, platform_fee_amount, fabric_check_completed_at, fabric_check_approved_at, spec_confirmed_at, spec_approved_at"
+      "id, client_id, craftsman_id, title, price, status, payment_status, stripe_payment_intent_id, platform_fee_amount, fabric_check_completed_at, fabric_check_approved_at, spec_confirmed_at, spec_approved_at, delivered_at, revision_limit, revision_requests_used, disputed_at"
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -110,19 +110,28 @@ export interface StatusFormState {
   error?: string;
 }
 
+// Mirrored by orders_guard_update (Phase 30 in supabase/schema.sql), which
+// also enforces the two conditions checked in updateOrderStatus below.
 const ALLOWED_TRANSITIONS: Record<string, { by: "client" | "craftsman"; to: string }[]> = {
   pending_payment: [{ by: "client", to: "cancelled" }],
   in_progress: [
     { by: "craftsman", to: "delivered" },
+    // Only while the order has never been delivered — see below.
     { by: "client", to: "cancelled" },
     // A craftsman who can't continue (illness, etc.) needs their own way
     // out too — previously only the client could cancel, which left a
     // craftsman with no self-service option but to simply never deliver.
     { by: "craftsman", to: "cancelled" },
   ],
+  // Once delivered, the client can no longer cancel (= full refund) on their
+  // own: the craftsman has done the work and shipped the kimono back. They
+  // can complete, send it back for changes (up to revision_limit times), or
+  // ask the operator to step in (openDispute). A refund after delivery takes
+  // the craftsman agreeing to it, or the operator's decision (/admin/orders).
   delivered: [
     { by: "client", to: "completed" },
-    { by: "client", to: "cancelled" },
+    { by: "client", to: "in_progress" },
+    { by: "craftsman", to: "cancelled" },
   ],
 };
 
@@ -147,6 +156,20 @@ export async function updateOrderStatus(
   const allowed = ALLOWED_TRANSITIONS[order.status] ?? [];
   const transition = allowed.find((t) => t.by === actorRole && t.to === nextStatus);
   if (!transition) return { error: "この操作は現在の状態では行えません。" };
+
+  // Delivered → back to in_progress for changes: capped, and not while the
+  // operator is looking at it.
+  if (order.status === "delivered" && nextStatus === "in_progress") {
+    if (order.disputed_at) return { error: "運営に相談中のため、修正の依頼はできません。" };
+    if (order.revision_requests_used >= order.revision_limit) {
+      return { error: "修正を依頼できる回数を使い切っています。" };
+    }
+  }
+  // Without this, "request changes, then cancel" would still get a client
+  // a full refund for delivered work.
+  if (nextStatus === "cancelled" && actorRole === "client" && order.delivered_at) {
+    return { error: "納品後の取引は、依頼者からはキャンセルできません。和裁士と話し合うか、運営に相談してください。" };
+  }
 
   // Cut-before-lock: once a fabric check has been recorded, delivering
   // (implying cutting/work has proceeded) is blocked until the client has
@@ -198,6 +221,7 @@ export async function updateOrderStatus(
   // — notify whichever party didn't do the cancelling.
   const counterpartId = actorRole === "client" ? order.craftsman_id : order.client_id;
   const STATUS_NOTIFICATIONS: Record<string, { userId: string; title: string }> = {
+    in_progress: { userId: order.craftsman_id, title: "依頼者から修正の依頼が届きました" },
     delivered: { userId: order.client_id, title: "納品されました" },
     completed: { userId: order.craftsman_id, title: "取引が完了しました" },
     cancelled: { userId: counterpartId, title: "取引がキャンセルされました" },
@@ -212,6 +236,43 @@ export async function updateOrderStatus(
       link: `/orders/${orderId}`,
     });
   }
+
+  revalidatePath(`/orders/${orderId}`);
+  return {};
+}
+
+// The client's way out when a delivered order isn't right and talking to
+// the craftsman (and any revisions) didn't fix it: flags the order for the
+// operator, which also keeps the daily cron from auto-completing it and
+// paying the craftsman meanwhile. The operator settles it on /admin/orders.
+export async function openDispute(_prevState: StatusFormState, formData: FormData): Promise<StatusFormState> {
+  const orderId = String(formData.get("order_id") ?? "");
+  if (!orderId) return { error: "不正なリクエストです。" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+
+  const order = await loadOrderForParticipant(supabase, orderId, user.id);
+  if (!order || order.client_id !== user.id) return { error: "この操作を行う権限がありません。" };
+  if (order.status !== "delivered") return { error: "納品済みの取引でのみ相談できます。" };
+  if (order.disputed_at) return { error: "すでに運営に相談中です。" };
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ disputed_at: new Date().toISOString() })
+    .eq("id", orderId);
+  if (error) return { error: error.message };
+
+  await notify(supabase, {
+    userId: order.craftsman_id,
+    type: "order_disputed",
+    title: "依頼者が運営に相談しました",
+    body: order.title,
+    link: `/orders/${orderId}`,
+  });
 
   revalidatePath(`/orders/${orderId}`);
   return {};

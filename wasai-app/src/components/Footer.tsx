@@ -7,8 +7,8 @@ export default function Footer() {
     <footer className="border-t border-border bg-bg-elevated">
       <div className="mx-auto max-w-5xl px-4 py-6 text-xs text-ink-faint">
         <p>
-          {SITE_NAME}は和裁士と依頼者を直接つなぐマッチングサービスです。お支払いはStripeを通じてプラットフォームが一旦お預かりし（エスクロー）、取引完了後に手数料（初回
-          {Math.round(PLATFORM_FEE_RATE * 100)}%、同じ相手との2回目以降は{Math.round(REPEAT_PLATFORM_FEE_RATE * 100)}%）を差し引いて和裁士へ送金します。
+          {SITE_NAME}は和裁士と依頼者を直接つなぐマッチングサービスです。お支払いは、Stripeを通じて運営者が和裁士に代わって受け取り、取引完了後に手数料（初回
+          {Math.round(PLATFORM_FEE_RATE * 100)}%、同じ相手との2回目以降は{Math.round(REPEAT_PLATFORM_FEE_RATE * 100)}%）を差し引いて和裁士へお渡しします（利用規約第5条）。
         </p>
         <nav className="mt-3 flex flex-wrap gap-x-4 gap-y-1">
           <Link href="/terms" className="hover:underline">

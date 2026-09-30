@@ -701,6 +701,40 @@ alter table craftsman_profiles add constraint craftsman_profiles_max_concurrent_
 -- アプリ側の作成処理（サービス購入・提案承諾）はadminClient()経由に変更済み。
 drop policy if exists "orders_insert_client" on orders;
 
+-- orders_guard_update（列の保護とステータス遷移の強制）は、Phase 30で
+-- 納品後のキャンセル規則を変えた版に置き換えたため、ファイル末尾の
+-- Phase 30にまとめて置いている。
+
+
+-- proposals: 金額は提出後に当事者が書き換えられないようにする（依頼者が
+-- 提案額を1円に書き換えてから承諾する、等を防ぐ）。交渉価格での合意時の
+-- price更新はサーバー側（service role）で行う。交渉価格の提示は依頼主のみ。
+-- proposals_guard_update（提案の列の保護）は、Phase 31で納期目安
+-- （delivery_days）も守る版に置き換えたため、ファイル末尾のPhase 31に置いている。
+
+-- ---------------------------------------------------------------------------
+-- Phase 30（2026-09-29追加）: 納品後のキャンセル（全額返金）を止める。
+--
+-- それまでは、和裁士が納品した後でも依頼者が「キャンセル」を押すだけで
+-- 代金が全額返金されていた（仕立てを終えて品物を送った和裁士が、代金を
+-- 受け取れないまま品物も戻らない危険）。納品後は次の形にする。
+--   - 依頼者: 完了にする／修正を依頼する（revision_limit回まで。出品の
+--     「修正回数」、見積りからの取引は1回）／運営に相談する（disputed_at）
+--   - 和裁士: 依頼者との話し合いの結果キャンセル（全額返金）に応じる
+--   - 運営に相談中の取引は自動完了しない。運営が管理画面（/admin/orders）
+--     から「和裁士に支払う（完了）」か「依頼者に返金する（キャンセル）」を
+--     決める（service role）。
+-- 一度でも納品された取引は、修正のため進行中に戻っても依頼者からは
+-- キャンセルできない（戻してからキャンセル、の抜け道を塞ぐ）。
+-- 本番のSupabaseには、この「Phase 30」の部分だけをSQL Editorで実行する
+-- （何度実行しても同じ結果になる）。
+-- ---------------------------------------------------------------------------
+
+alter table orders add column if not exists revision_limit integer not null default 1
+  check (revision_limit >= 0);
+alter table orders add column if not exists revision_requests_used integer not null default 0;
+alter table orders add column if not exists disputed_at timestamptz;
+
 create or replace function public.orders_guard_update()
 returns trigger
 language plpgsql
@@ -728,20 +762,28 @@ begin
      or new.payment_status is distinct from old.payment_status
      or new.stripe_payment_intent_id is distinct from old.stripe_payment_intent_id
      or new.stripe_transfer_id is distinct from old.stripe_transfer_id
-     or new.platform_fee_amount is distinct from old.platform_fee_amount then
+     or new.platform_fee_amount is distinct from old.platform_fee_amount
+     or new.revision_limit is distinct from old.revision_limit then
     raise exception 'この項目は変更できません。' using errcode = '42501';
   end if;
 
   -- ステータス遷移。アプリのALLOWED_TRANSITIONS
   -- （src/app/orders/[id]/actions.ts）と同じ表をDB側でも強制する。
   -- pending_payment→in_progressはWebhook（service role）だけが行う。
+  -- 納品後（一度でも納品された取引）は、依頼者の一方的なキャンセル
+  -- （＝全額返金）はできない。依頼者にできるのは完了・修正の依頼
+  -- （revision_limit回まで）・運営への相談（disputed_at）で、キャンセル
+  -- （返金）は和裁士が応じた場合か、運営の判断（service role）による。
   if new.status is distinct from old.status then
     if not (
       (old.status = 'pending_payment' and new.status = 'cancelled' and is_client)
       or (old.status = 'in_progress' and new.status = 'delivered' and is_craftsman)
-      or (old.status = 'in_progress' and new.status = 'cancelled' and (is_client or is_craftsman))
+      or (old.status = 'in_progress' and new.status = 'cancelled' and is_craftsman)
+      or (old.status = 'in_progress' and new.status = 'cancelled' and is_client and old.delivered_at is null)
       or (old.status = 'delivered' and new.status = 'completed' and is_client)
-      or (old.status = 'delivered' and new.status = 'cancelled' and is_client)
+      or (old.status = 'delivered' and new.status = 'in_progress' and is_client
+          and old.disputed_at is null and old.revision_requests_used < old.revision_limit)
+      or (old.status = 'delivered' and new.status = 'cancelled' and is_craftsman)
     ) then
       raise exception 'この操作は現在の状態では行えません。' using errcode = '42501';
     end if;
@@ -764,6 +806,20 @@ begin
   new.completed_at := case
     when new.status = 'completed' and old.status is distinct from 'completed' then now()
     else old.completed_at end;
+  -- 修正依頼の回数もクライアントの値は使わず、遷移から数える。
+  new.revision_requests_used := case
+    when old.status = 'delivered' and new.status = 'in_progress' then old.revision_requests_used + 1
+    else old.revision_requests_used end;
+
+  -- 運営への相談: 納品済みの取引で、依頼者が一度だけ（ステータスは変えない）。
+  -- 相談中は自動完了の対象外になる（/api/cron/auto-complete-orders）。
+  if new.disputed_at is distinct from old.disputed_at then
+    if not is_client or old.disputed_at is not null
+       or old.status <> 'delivered' or new.status <> 'delivered' then
+      raise exception '運営への相談は、納品済みの取引で依頼者が一度だけ行えます。' using errcode = '42501';
+    end if;
+    new.disputed_at := now();
+  end if;
 
   -- 配送情報は和裁士のみ。
   if (new.shipping_method is distinct from old.shipping_method
@@ -821,9 +877,21 @@ create trigger trg_orders_guard_update
   for each row
   execute function public.orders_guard_update();
 
--- proposals: 金額は提出後に当事者が書き換えられないようにする（依頼者が
--- 提案額を1円に書き換えてから承諾する、等を防ぐ）。交渉価格での合意時の
--- price更新はサーバー側（service role）で行う。交渉価格の提示は依頼主のみ。
+-- ---------------------------------------------------------------------------
+-- Phase 31（2026-09-30追加）: 提案（見積り）に納期目安（日数）を持たせる。
+--
+-- 出品には納期目安（delivery_days）があるが、提案には無く、見積りから
+-- 決まった取引では、申込み前の最終確認（特定商取引法12条の6）に出す
+-- 「役務の提供時期」を依頼の希望納期と提案文からしか示せなかった。
+-- 提案時に和裁士が日数を入れ、最終確認・Stripeの支払い画面に表示する。
+-- 提出後は価格と同じく当事者が書き換えられない（proposals_guard_update）。
+-- 既存の提案はnullのまま（表示は従来どおり希望納期と提案文から）。
+-- 本番のSupabaseには、この「Phase 31」の部分だけをSQL Editorで実行する。
+-- ---------------------------------------------------------------------------
+
+alter table proposals add column if not exists delivery_days integer
+  check (delivery_days is null or delivery_days > 0);
+
 create or replace function public.proposals_guard_update()
 returns trigger
 language plpgsql
@@ -839,6 +907,7 @@ begin
      or new.request_id is distinct from old.request_id
      or new.craftsman_id is distinct from old.craftsman_id
      or new.message is distinct from old.message
+     or new.delivery_days is distinct from old.delivery_days
      or new.created_at is distinct from old.created_at then
     raise exception 'この項目は変更できません。' using errcode = '42501';
   end if;

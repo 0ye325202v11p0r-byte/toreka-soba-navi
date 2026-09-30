@@ -29,7 +29,7 @@ export async function orderService(
 
   const { data: service, error: serviceError } = await supabase
     .from("services")
-    .select("id, craftsman_id, title, price, garment_type, status")
+    .select("id, craftsman_id, title, price, garment_type, status, revision_count")
     .eq("id", serviceId)
     .maybeSingle();
 
@@ -58,6 +58,8 @@ export async function orderService(
       price: service.price,
       status: "pending_payment",
       desired_by: desiredBy || null,
+      // The listing's 修正回数, fixed at order time (Phase 30).
+      revision_limit: service.revision_count,
     })
     .select("id, title, price")
     .single();

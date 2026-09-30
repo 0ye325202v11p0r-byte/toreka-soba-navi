@@ -22,9 +22,14 @@ export async function submitProposal(
   const requestId = String(formData.get("request_id") ?? "");
   const price = Number(formData.get("price"));
   const message = String(formData.get("message") ?? "").trim();
+  const deliveryDays = Number(formData.get("delivery_days"));
 
   if (!requestId) return { error: "依頼が見つかりません。" };
   if (!isValidOrderPrice(price)) return { error: `見積り価格は${MIN_ORDER_PRICE}円以上の整数で入力してください。` };
+  // Shown to the client as the 提供時期 before they pay (特定商取引法12条の6).
+  if (!Number.isInteger(deliveryDays) || deliveryDays < 1 || deliveryDays > 365) {
+    return { error: "納期目安は1〜365日の整数で入力してください。" };
+  }
   if (!message) return { error: "提案メッセージを入力してください。" };
   if (containsContactInfo(message)) return { error: CONTACT_INFO_ERROR };
 
@@ -75,6 +80,7 @@ export async function submitProposal(
     craftsman_id: user.id,
     price,
     message,
+    delivery_days: deliveryDays,
   });
 
   if (error) {
@@ -251,6 +257,9 @@ export async function respondProposal(
         price: finalPrice,
         status: "pending_payment",
         desired_by: request.deadline,
+        // Proposals have no 修正回数 field; one round of changes, same as a
+        // listing's default (Phase 30).
+        revision_limit: 1,
       })
       .select("id, title, price")
       .single();
