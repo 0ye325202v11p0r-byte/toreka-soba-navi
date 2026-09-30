@@ -12,7 +12,6 @@ export const metadata: Metadata = {
 
 const ROWS: { label: string; value: React.ReactNode }[] = [
   { label: "販売事業者", value: OPERATOR_NAME },
-  { label: "運営統括責任者", value: "柏木 涼" },
   {
     label: "所在地",
     value: (

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_NAME } from "@/lib/site";
-import { CONTACT_EMAIL, OPERATOR_NAME } from "@/lib/legal";
+import { BUSINESS_LABEL, CONTACT_EMAIL } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
@@ -21,12 +21,12 @@ export default function PrivacyPage() {
         <section>
           <h2 className="mb-2 font-bold">1. 事業者情報</h2>
           <p>
-            本サービス「{SITE_NAME}」（以下「本サービス」）は、{OPERATOR_NAME}（以下「当方」）が提供し、当方が個人情報の取扱いの責任を負います。
+            本サービス「{SITE_NAME}」（以下「本サービス」）は、「{SITE_NAME}」の運営者（以下「当方」）が提供し、当方が個人情報の取扱いの責任を負います。
           </p>
           <p className="mt-1">
-            事業者：{OPERATOR_NAME}
+            事業者：{BUSINESS_LABEL}
             <br />
-            住所：ご請求をいただいた場合には、遅滞なくお答えします。
+            運営者の氏名・住所：ご請求をいただいた場合には、遅滞なくお答えします。
             <br />
             連絡先：{CONTACT_EMAIL}
           </p>

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SITE_NAME } from "@/lib/site";
 import { PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { AUTO_COMPLETE_AFTER_DAYS } from "@/lib/escrow";
-import { CONTACT_EMAIL, OPERATOR_NAME, TERMS_UPDATED_LABEL } from "@/lib/legal";
+import { BUSINESS_LABEL, CONTACT_EMAIL, TERMS_UPDATED_LABEL } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "利用規約",
@@ -22,7 +22,7 @@ export default function TermsPage() {
           <h2 className="mb-2 font-bold">第1条（本規約について）</h2>
           <ol className="list-decimal space-y-1 pl-5">
             <li>
-              本規約は、{OPERATOR_NAME}（以下「当方」）が提供する「{SITE_NAME}」（以下「本サービス」）の利用条件を定めるものです。
+              本規約は、「{SITE_NAME}」の運営者（以下「当方」）が提供する「{SITE_NAME}」（以下「本サービス」）の利用条件を定めるものです。
             </li>
             <li>
               利用者は、登録画面で本規約に同意する旨の確認を行ったうえで本サービスに登録するものとし、本規約は、当方と利用者との間の本サービスの利用に関する契約の内容となります。
@@ -246,13 +246,13 @@ export default function TermsPage() {
 
         <section>
           <h2 className="mb-2 font-bold">第18条（事業者情報・お問い合わせ）</h2>
-          <p>事業者：{OPERATOR_NAME}</p>
+          <p>事業者：{BUSINESS_LABEL}</p>
           <p>
-            所在地・電話番号：ご請求をいただいた場合には、遅滞なく開示いたします（
+            運営者の氏名は
             <a href="/tokushoho" className="text-accent-strong underline">
               特定商取引法に基づく表示
             </a>
-            ）。
+            のとおりです。所在地・電話番号は、ご請求をいただいた場合には遅滞なく開示いたします。
           </p>
           <p className="mt-1">本規約に関するお問い合わせは、以下の連絡先までお願いいたします。</p>
           <p className="mt-1">{CONTACT_EMAIL}</p>
