@@ -36,7 +36,7 @@ export default async function PayoutsPage() {
     <div className="mx-auto max-w-lg">
       <h1 className="text-xl font-bold">振込先の設定</h1>
       <p className="mt-2 text-sm text-ink-muted">
-        依頼者からの支払いはプラットフォームが一旦お預かりし（エスクロー）、取引完了後に手数料（
+        依頼者からの支払いは、運営者があなたに代わって受け取り（利用規約第5条）、取引完了後に手数料（
         {Math.round(PLATFORM_FEE_RATE * 100)}%、同じ依頼者との2回目以降の取引は{" "}
         {Math.round(REPEAT_PLATFORM_FEE_RATE * 100)}%）を差し引いて、こちらで設定するStripe口座へ送金します。
       </p>
