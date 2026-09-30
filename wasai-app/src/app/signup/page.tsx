@@ -21,7 +21,7 @@ export default function SignupPage() {
       <form action={formAction} className="mt-6 space-y-4">
         <fieldset className="rounded-lg border border-border p-3">
           <legend className="px-1 text-sm font-semibold">登録区分</legend>
-          <div className="flex gap-4 text-sm">
+          <div className="flex flex-col gap-3 text-sm sm:flex-row sm:gap-4">
             <label className="flex items-center gap-2">
               <input
                 type="radio"
@@ -109,7 +109,7 @@ export default function SignupPage() {
         <fieldset className="space-y-2 rounded-lg border border-border p-3 text-sm">
           <legend className="px-1 font-semibold">同意事項</legend>
           <label className="flex items-start gap-2">
-            <input type="checkbox" name="agree_terms" value="yes" required className="mt-1" />
+            <input type="checkbox" name="agree_terms" value="yes" required className="mt-0.5" />
             <span>
               <Link href="/terms" target="_blank" className="text-accent-strong underline">
                 利用規約
@@ -123,7 +123,7 @@ export default function SignupPage() {
           </label>
           {role === "craftsman" && (
             <label className="flex items-start gap-2">
-              <input type="checkbox" name="agree_payment_agency" value="yes" required className="mt-1" />
+              <input type="checkbox" name="agree_payment_agency" value="yes" required className="mt-0.5" />
               <span>
                 依頼者からの代金を、運営者が私の代わりに受け取り、取引完了後に手数料を差し引いて私に引き渡すこと（利用規約第5条）に同意します。依頼者が支払いを済ませた時点で、その代金は私への支払いが済んだものとして扱われます。
               </span>

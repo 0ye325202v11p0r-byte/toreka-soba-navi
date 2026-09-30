@@ -5,7 +5,7 @@ import { CANCELLATION_SUMMARY, ORDER_CONFIRMATION_POINT } from "@/lib/orderTerms
 // every button that leads to Stripe Checkout — see src/lib/orderTerms.ts.
 export default function PrePaymentSummary({ price, delivery }: { price: number; delivery: string }) {
   return (
-    <div className="rounded-md border border-border bg-bg p-3 text-xs leading-relaxed">
+    <div className="rounded-md border border-border bg-bg p-3 text-sm leading-relaxed">
       <p className="mb-2 font-semibold text-ink">お申込み前にご確認ください</p>
       <dl className="space-y-1.5 text-ink-muted">
         <div>

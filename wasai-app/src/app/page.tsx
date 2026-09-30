@@ -7,16 +7,16 @@ export default function HomePage() {
       <section className="rounded-xl border border-border bg-bg-elevated p-8 text-center">
         <h1 className="text-3xl font-bold text-accent-strong">{SITE_NAME}</h1>
         <p className="mx-auto mt-3 max-w-xl text-sm text-ink-muted">{SITE_DESCRIPTION}</p>
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           <Link
             href="/signup"
-            className="rounded-md bg-accent px-5 py-2.5 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors"
+            className="whitespace-nowrap rounded-md bg-accent px-5 py-3 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors"
           >
             無料で登録する
           </Link>
           <Link
             href="/craftsmen"
-            className="rounded-md border border-border px-5 py-2.5 font-semibold hover:bg-bg-sunken transition-colors"
+            className="whitespace-nowrap rounded-md border border-border px-5 py-3 font-semibold hover:bg-bg-sunken transition-colors"
           >
             和裁士を探す
           </Link>
