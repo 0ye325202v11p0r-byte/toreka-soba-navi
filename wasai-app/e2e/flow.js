@@ -173,6 +173,7 @@ async function clickOnOrder(user, orderId, text) {
   const [reqRow] = await q("select id from requests where client_id=$1 and title='交渉テスト'", [client.id]);
   await craft.page.goto(`${BASE}/requests/${reqRow.id}`);
   await craft.page.fill("input[name=price]", "30000");
+  await craft.page.fill("input[name=delivery_days]", "21");
   await craft.page.fill("textarea[name=message]", "お受けできます");
   await craft.page.click("button:has-text('提案を送る')");
   await sleep(2500);
@@ -194,7 +195,10 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.goto(`${BASE}/orders/${o2.id}`);
   const payBox = await client.page.locator("text=お申込み前にご確認ください").locator("..").textContent().catch(() => "");
   const payUrl = await clickExpectingStripe(client.page, "button:has-text('お支払い画面へ進む')");
-  ok("交渉成立後、依頼者は取引ページで最終確認を見てから支払いへ進める", /¥25,000/.test(payBox) && /stripe\.(com|me)/.test(payUrl), payBox.slice(0, 60));
+  ok("交渉成立後、依頼者は取引ページで最終確認を見てから支払いへ進める（提案の納期目安21日も表示）", /¥25,000/.test(payBox) && /約21日/.test(payBox) && /stripe\.(com|me)/.test(payUrl), payBox.slice(0, 60));
+  const [pr] = await q("select delivery_days from proposals where request_id=$1", [reqRow.id]);
+  const lastCo = await (await fetch("http://localhost:12110/__last_checkout")).json();
+  ok("提案の納期目安が保存され、Stripeの支払い画面の文言にも入る", pr.delivery_days === 21 && /約21日/.test((lastCo && lastCo["custom_text[submit][message]"]) || ""), String(pr.delivery_days));
 
   // ---- 8. payout left pending because craftsman2 hadn't onboarded, released once they do
   const craft2 = await newUser(browser, "craftsman", "テスト和裁士2", `craft2${stamp}@example.com`);

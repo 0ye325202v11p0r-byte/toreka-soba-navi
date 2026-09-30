@@ -268,6 +268,12 @@ Stripe本番化の前に決済まわりを見直して見つかった問題の�
 - 利用規約第5条・第7条、特商法表示、申込み前の確認の文言を合わせて変更
 - ⚠️ **本番DBへの反映が必要**: `supabase/schema.sql`末尾の「Phase 30」部分をSupabaseのSQL Editorで実行する（**アプリを反映する前に**。新しいアプリは取引作成時に`revision_limit`を書くため、列が無いと依頼できなくなる。SQLは古いアプリのままでも問題なく動く）。ローカルで`e2e/phase30-guard-test.sql`（13項目）・`phase29-guard-test.sql`（21項目）・画面の通しテスト（46項目）で確認済み
 
+### Phase 31: 提案の納期目安・処理を東京へ
+
+- 提案（見積り）に「納期目安（日）」を必須で追加（`proposals.delivery_days`）。見積りから決まった取引でも、申込み前の最終確認とStripeの支払い画面に「提供時期」を日数で出す（特定商取引法12条の6）。提出後は価格と同じく当事者が変更できない（`proposals_guard_update`、ファイル末尾のPhase 31に移動）。既存の提案はnullのままで、表示は従来どおり希望納期から
+- `vercel.json`の`regions`を`hnd1`（東京）に。データベース（Supabase、東京）の近くで処理し、表示を速くする。Hobbyプランでも1リージョンは指定できる（[Vercelの説明](https://vercel.com/docs/functions/configuring-functions/region)）。プライバシーポリシーのVercelの処理場所も更新
+- ⚠️ **本番DBへの反映が必要**: Phase 30と同じく、アプリの反映**前に**`supabase/schema.sql`末尾の「Phase 30」「Phase 31」部分を実行する（`phase31-guard-test.sql` 5項目・画面の通しテスト47項目で確認済み）
+
 ## セットアップ（ローカル開発）
 
 ```bash

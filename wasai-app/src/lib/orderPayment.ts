@@ -17,7 +17,7 @@ export async function createCheckoutSessionUrl(
 
   const { data: orderTerms } = await supabase
     .from("orders")
-    .select("service_id, desired_by")
+    .select("service_id, proposal_id, desired_by")
     .eq("id", order.id)
     .maybeSingle();
   const delivery = await loadDeliveryNote(supabase, orderTerms ?? {});

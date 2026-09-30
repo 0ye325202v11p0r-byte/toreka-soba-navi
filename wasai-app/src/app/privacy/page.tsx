@@ -119,7 +119,7 @@ export default function PrivacyPage() {
                 <tr className="border-b border-border align-top">
                   <td className="py-2 pr-3">Vercel Inc.（米国）</td>
                   <td className="py-2 pr-3">本サービスの配信・画面の表示処理（処理の過程で上記の情報が通過します）</td>
-                  <td className="py-2">米国</td>
+                  <td className="py-2">日本（東京）。配信の仕組み上、アクセスの記録などは国外の拠点でも扱われます</td>
                 </tr>
                 <tr className="align-top">
                   <td className="py-2 pr-3">Stripe, Inc.およびその関連会社（米国）</td>

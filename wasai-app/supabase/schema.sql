@@ -709,45 +709,8 @@ drop policy if exists "orders_insert_client" on orders;
 -- proposals: 金額は提出後に当事者が書き換えられないようにする（依頼者が
 -- 提案額を1円に書き換えてから承諾する、等を防ぐ）。交渉価格での合意時の
 -- price更新はサーバー側（service role）で行う。交渉価格の提示は依頼主のみ。
-create or replace function public.proposals_guard_update()
-returns trigger
-language plpgsql
-as $$
-declare
-  is_request_owner boolean;
-begin
-  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
-    return new;
-  end if;
-
-  if new.price is distinct from old.price
-     or new.request_id is distinct from old.request_id
-     or new.craftsman_id is distinct from old.craftsman_id
-     or new.message is distinct from old.message
-     or new.created_at is distinct from old.created_at then
-    raise exception 'この項目は変更できません。' using errcode = '42501';
-  end if;
-
-  select exists (
-    select 1 from requests where id = old.request_id and client_id = auth.uid()
-  ) into is_request_owner;
-
-  if (new.countered_price is distinct from old.countered_price
-      or new.countered_message is distinct from old.countered_message
-      or (new.status = 'countered' and old.status is distinct from 'countered'))
-     and not is_request_owner then
-    raise exception '交渉価格の提示は依頼主のみ行えます。' using errcode = '42501';
-  end if;
-
-  return new;
-end;
-$$;
-
-drop trigger if exists trg_proposals_guard_update on proposals;
-create trigger trg_proposals_guard_update
-  before update on proposals
-  for each row
-  execute function public.proposals_guard_update();
+-- proposals_guard_update（提案の列の保護）は、Phase 31で納期目安
+-- （delivery_days）も守る版に置き換えたため、ファイル末尾のPhase 31に置いている。
 
 -- ---------------------------------------------------------------------------
 -- Phase 30（2026-09-29追加）: 納品後のキャンセル（全額返金）を止める。
@@ -913,3 +876,59 @@ create trigger trg_orders_guard_update
   before update on orders
   for each row
   execute function public.orders_guard_update();
+
+-- ---------------------------------------------------------------------------
+-- Phase 31（2026-09-30追加）: 提案（見積り）に納期目安（日数）を持たせる。
+--
+-- 出品には納期目安（delivery_days）があるが、提案には無く、見積りから
+-- 決まった取引では、申込み前の最終確認（特定商取引法12条の6）に出す
+-- 「役務の提供時期」を依頼の希望納期と提案文からしか示せなかった。
+-- 提案時に和裁士が日数を入れ、最終確認・Stripeの支払い画面に表示する。
+-- 提出後は価格と同じく当事者が書き換えられない（proposals_guard_update）。
+-- 既存の提案はnullのまま（表示は従来どおり希望納期と提案文から）。
+-- 本番のSupabaseには、この「Phase 31」の部分だけをSQL Editorで実行する。
+-- ---------------------------------------------------------------------------
+
+alter table proposals add column if not exists delivery_days integer
+  check (delivery_days is null or delivery_days > 0);
+
+create or replace function public.proposals_guard_update()
+returns trigger
+language plpgsql
+as $$
+declare
+  is_request_owner boolean;
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
+    return new;
+  end if;
+
+  if new.price is distinct from old.price
+     or new.request_id is distinct from old.request_id
+     or new.craftsman_id is distinct from old.craftsman_id
+     or new.message is distinct from old.message
+     or new.delivery_days is distinct from old.delivery_days
+     or new.created_at is distinct from old.created_at then
+    raise exception 'この項目は変更できません。' using errcode = '42501';
+  end if;
+
+  select exists (
+    select 1 from requests where id = old.request_id and client_id = auth.uid()
+  ) into is_request_owner;
+
+  if (new.countered_price is distinct from old.countered_price
+      or new.countered_message is distinct from old.countered_message
+      or (new.status = 'countered' and old.status is distinct from 'countered'))
+     and not is_request_owner then
+    raise exception '交渉価格の提示は依頼主のみ行えます。' using errcode = '42501';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_proposals_guard_update on proposals;
+create trigger trg_proposals_guard_update
+  before update on proposals
+  for each row
+  execute function public.proposals_guard_update();

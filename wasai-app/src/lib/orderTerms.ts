@@ -38,12 +38,13 @@ export function checkoutSubmitMessage(delivery: string): string {
   ].join("\n");
 }
 
-// Service orders carry the listing's 納期目安; orders from a proposal only
-// have the request's desired date. A listing hidden since (draft) isn't
-// readable by the client under RLS — fall back to the desired date then.
+// The 納期目安 comes from the listing (service orders) or the craftsman's
+// proposal (Phase 31); proposals made before that have none, and a listing
+// hidden since (draft) isn't readable by the client under RLS — fall back to
+// the request's desired date then.
 export async function loadDeliveryNote(
   supabase: SupabaseClient,
-  order: { service_id?: string | null; desired_by?: string | null }
+  order: { service_id?: string | null; proposal_id?: string | null; desired_by?: string | null }
 ): Promise<string> {
   let deliveryDays: number | null = null;
   if (order.service_id) {
@@ -53,6 +54,13 @@ export async function loadDeliveryNote(
       .eq("id", order.service_id)
       .maybeSingle();
     deliveryDays = service?.delivery_days ?? null;
+  } else if (order.proposal_id) {
+    const { data: proposal } = await supabase
+      .from("proposals")
+      .select("delivery_days")
+      .eq("id", order.proposal_id)
+      .maybeSingle();
+    deliveryDays = proposal?.delivery_days ?? null;
   }
   return deliveryNote({ deliveryDays, desiredBy: order.desired_by });
 }

@@ -93,6 +93,9 @@ export interface Proposal {
   status: ProposalStatus;
   countered_price: number | null;
   countered_message: string | null;
+  // Phase 31: the craftsman's 納期目安 in days; null on proposals made
+  // before it existed.
+  delivery_days: number | null;
   created_at: string;
 }
 
