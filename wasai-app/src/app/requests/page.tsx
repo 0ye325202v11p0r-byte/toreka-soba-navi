@@ -31,7 +31,11 @@ export default async function RequestsPage({
   let query = supabase
     .from("requests")
     .select("*, profiles!inner(*)")
-    .eq("status", "open");
+    .eq("status", "open")
+    // 指名依頼 (sent to one craftsman) never go on the public board — RLS
+    // already hides them from everyone else; this keeps them off for the
+    // two people who can see them too.
+    .is("directed_to", null);
   if (q) query = query.ilike("title", `%${q}%`);
   if (garment_type) query = query.eq("garment_type", garment_type);
   if (min_grade) query = query.eq("min_grade", min_grade);

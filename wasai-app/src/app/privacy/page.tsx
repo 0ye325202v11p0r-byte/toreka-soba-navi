@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SITE_NAME } from "@/lib/site";
-import { BUSINESS_LABEL, CONTACT_EMAIL } from "@/lib/legal";
+import { BUSINESS_LABEL, CONTACT_PATH } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "プライバシーポリシー",
@@ -28,7 +28,10 @@ export default function PrivacyPage() {
             <br />
             運営者の氏名・住所：ご請求をいただいた場合には、遅滞なくお答えします。
             <br />
-            連絡先：{CONTACT_EMAIL}
+            連絡先：
+            <a href={CONTACT_PATH} className="text-accent-strong underline">
+              お問い合わせフォーム
+            </a>
           </p>
         </section>
 
@@ -177,12 +180,15 @@ export default function PrivacyPage() {
           </p>
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
-              <b>ご請求の方法</b>：登録しているメールアドレスから、{CONTACT_EMAIL}
-              宛てに、ご請求の内容を書いたメールをお送りください。
+              <b>ご請求の方法</b>：
+              <a href={`${CONTACT_PATH}?category=個人情報の開示等の請求`} className="text-accent-strong underline">
+                お問い合わせフォーム
+              </a>
+              で種類「個人情報の開示等の請求」を選び、ご請求の内容を書いてお送りください。
             </li>
             <li>
               <b>ご本人の確認</b>
-              ：登録しているメールアドレスからの送信であることで確認します。必要な場合は、追加の確認をお願いすることがあります。代理人によるご請求の場合は、代理権を確認できる書面（委任状など）をお送りいただきます。
+              ：和裁マッチにログインした状態での送信であること、または登録しているメールアドレスへのご連絡で確認します。必要な場合は、追加の確認をお願いすることがあります。代理人によるご請求の場合は、代理権を確認できる書面（委任状など）をお送りいただきます。
             </li>
             <li>
               <b>お答えの方法</b>：原則として、電子メールで遅滞なくお答えします。
@@ -195,7 +201,13 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="mb-2 font-bold">9. 苦情・ご相談の窓口</h2>
-          <p>個人情報の取扱いに関する苦情・ご相談は、{CONTACT_EMAIL} までご連絡ください。</p>
+          <p>
+            個人情報の取扱いに関する苦情・ご相談は、
+            <a href={CONTACT_PATH} className="text-accent-strong underline">
+              お問い合わせフォーム
+            </a>
+            からご連絡ください。
+          </p>
         </section>
 
         <section>

@@ -98,7 +98,7 @@ export default async function CraftsmenPage({
           ))}
         </select>
         <select name="grade" defaultValue={grade} className="rounded-md border border-border bg-bg px-2 py-1.5">
-          <option value="">資格: すべて</option>
+          <option value="">資格: 指定なし</option>
           <option value="1級">1級</option>
           <option value="2級">2級</option>
           <option value="3級">3級</option>

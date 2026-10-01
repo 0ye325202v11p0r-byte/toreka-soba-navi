@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 import { notify } from "@/lib/notifications";
 import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
+import { parseMeasurements } from "@/lib/measurements";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 
 const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
@@ -50,6 +51,27 @@ export async function createRequest(
     return { error: CONTACT_INFO_ERROR };
   }
 
+  const measurements = parseMeasurements(formData);
+  if (measurements.error) return { error: measurements.error };
+  if (measurements.value?.note && containsContactInfo(measurements.value.note)) {
+    return { error: CONTACT_INFO_ERROR };
+  }
+
+  // 指名依頼 (「この和裁士に相談する」): only that craftsman sees it and can
+  // propose — enforced by requests_select_visible / proposals_insert_own
+  // (Phase 33), checked here so the client gets a readable error.
+  const directedTo = String(formData.get("directed_to") ?? "").trim() || null;
+  if (directedTo) {
+    const { data: target } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", directedTo)
+      .maybeSingle();
+    if (!target || target.role !== "craftsman") return { error: "相談先の和裁士が見つかりません。" };
+    const capacity = await checkCraftsmanCanAcceptWork(supabase, directedTo);
+    if (!capacity.ok) return { error: capacity.reason };
+  }
+
   const { data: request, error } = await supabase
     .from("requests")
     .insert({
@@ -60,13 +82,36 @@ export async function createRequest(
       budget_min: budgetMinRaw ? Number(budgetMinRaw) : null,
       budget_max: budgetMaxRaw ? Number(budgetMaxRaw) : null,
       deadline: deadline || null,
-      min_grade: minGrade,
+      // A grade filter means nothing on a request only one craftsman sees.
+      min_grade: directedTo ? null : minGrade,
       status: "open",
+      directed_to: directedTo,
     })
     .select("id")
     .single();
 
   if (error) return { error: error.message };
+
+  if (measurements.value) {
+    // Best-effort: the request itself is posted either way, and the craftsman
+    // can still ask for sizes in the messages.
+    await supabase.from("request_measurements").insert({
+      request_id: request.id,
+      client_id: user.id,
+      ...measurements.value,
+    });
+  }
+
+  if (directedTo) {
+    await notify({
+      userId: directedTo,
+      type: "directed_request",
+      title: "あなたへの相談が届きました",
+      body: title,
+      link: `/requests/${request.id}`,
+    });
+    redirect(`/requests/${request.id}`);
+  }
 
   // Until now, a newly posted request had zero passive discovery for
   // craftsmen — they had to browse /requests themselves to notice it. Notify

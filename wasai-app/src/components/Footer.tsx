@@ -20,6 +20,9 @@ export default function Footer() {
           <Link href="/tokushoho" className="hover:underline">
             特定商取引法に基づく表示
           </Link>
+          <Link href="/contact" className="hover:underline">
+            お問い合わせ
+          </Link>
         </nav>
         <p className="mt-2">© {new Date().getFullYear()} {SITE_NAME}</p>
       </div>

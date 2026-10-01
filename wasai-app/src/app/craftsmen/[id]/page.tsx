@@ -7,6 +7,8 @@ import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
+import { getCurrentUser } from "@/lib/auth";
+import FavoriteButton from "./FavoriteButton";
 import { CRAFTSMAN_PUBLIC_COLUMNS } from "@/lib/types";
 import type { CraftsmanPublicProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
 
@@ -69,6 +71,25 @@ export default async function CraftsmanDetailPage({
     .returns<CraftsmanRate[]>();
 
   const rating = await getRatingSummary(supabase, id);
+
+  // 「相談する」 and お気に入り are for clients (and signed-out visitors, who
+  // are sent to log in first); a craftsman doesn't order from a craftsman.
+  const current = await getCurrentUser();
+  const viewerRole = current?.profile?.role ?? null;
+  let favorited = false;
+  if (viewerRole === "client") {
+    const { data: fav } = await supabase
+      .from("favorites")
+      .select("craftsman_id")
+      .eq("client_id", current!.id)
+      .eq("craftsman_id", id)
+      .maybeSingle();
+    favorited = Boolean(fav);
+  }
+  const consultHref = `/requests/new?to=${id}`;
+  const canTakeWork =
+    craftsmanProfile?.is_accepting_orders !== false &&
+    !(craftsmanProfile?.max_concurrent_orders != null && activeOrderCount >= craftsmanProfile.max_concurrent_orders);
 
   return (
     <div>
@@ -134,6 +155,39 @@ export default async function CraftsmanDetailPage({
           </p>
         )}
       </div>
+
+      {viewerRole !== "craftsman" && (
+        <section className="mt-6 rounded-lg border border-border bg-bg-elevated p-4">
+          <h2 className="text-lg font-bold">この和裁士に相談する</h2>
+          <p className="mt-1 text-sm text-ink-muted">
+            出品にないお仕立て・お直しや、寸法・生地のことなど、この和裁士にだけ相談できます。和裁士から見積り（提案）が届きます。相談の内容は掲示板には表示されません。
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {canTakeWork ? (
+              <Link
+                href={viewerRole ? consultHref : `/login?next=${encodeURIComponent(consultHref)}`}
+                className="rounded-md bg-accent px-4 py-3 text-center font-semibold text-bg-elevated hover:bg-accent-strong transition-colors"
+              >
+                相談する
+              </Link>
+            ) : (
+              <p className="rounded-md bg-warn-soft px-4 py-3 text-center text-sm text-warn">
+                現在、新しい相談・依頼を受け付けていません
+              </p>
+            )}
+            {viewerRole === "client" ? (
+              <FavoriteButton craftsmanId={id} favorited={favorited} />
+            ) : (
+              <Link
+                href={`/login?next=${encodeURIComponent(`/craftsmen/${id}`)}`}
+                className="rounded-md border border-border px-4 py-3 text-center text-sm font-semibold hover:bg-bg-sunken"
+              >
+                ☆ お気に入りに追加（ログイン）
+              </Link>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="mt-6">
         <h2 className="text-lg font-bold">出品中のサービス</h2>

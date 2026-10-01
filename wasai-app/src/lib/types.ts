@@ -91,6 +91,9 @@ export interface JobRequest {
   deadline: string | null;
   min_grade: GradeRequirement | null;
   status: RequestStatus;
+  // Phase 33: set on a 指名依頼 (「この和裁士に相談する」) — only this
+  // craftsman and the client can see it.
+  directed_to: string | null;
   created_at: string;
 }
 

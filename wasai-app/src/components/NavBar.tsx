@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { SITE_NAME } from "@/lib/site";
 import LogoutButton from "@/components/LogoutButton";
+import { NavLink } from "@/components/NavLinks";
 
 export default async function NavBar() {
   const user = await getCurrentUser();
@@ -18,7 +19,6 @@ export default async function NavBar() {
     unreadCount = count ?? 0;
   }
 
-  const linkClass = "shrink-0 whitespace-nowrap py-1 text-ink-muted hover:text-ink transition-colors";
 
   // Phones: the logo and the account actions (登録・ログイン / 通知・マイページ)
   // share the first row and the browse links wrap onto a second row, so
@@ -35,24 +35,20 @@ export default async function NavBar() {
         <div className="order-2 ml-auto flex items-center gap-4 text-sm sm:order-3">
           {user?.profile ? (
             <>
-              <Link href="/notifications" className={`relative ${linkClass}`}>
+              <NavLink href="/notifications" className="relative">
                 通知
                 {unreadCount > 0 && (
                   <span className="absolute -right-3 -top-1 rounded-full bg-warn px-1.5 py-0.5 text-[10px] font-bold leading-none text-bg-elevated">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
-              </Link>
-              <Link href="/dashboard" className={linkClass}>
-                マイページ
-              </Link>
+              </NavLink>
+              <NavLink href="/dashboard">マイページ</NavLink>
               <LogoutButton />
             </>
           ) : (
             <>
-              <Link href="/login" className={linkClass}>
-                ログイン
-              </Link>
+              <NavLink href="/login">ログイン</NavLink>
               <Link
                 href="/signup"
                 className="shrink-0 whitespace-nowrap rounded-md bg-accent px-3 py-2 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors"
@@ -63,18 +59,10 @@ export default async function NavBar() {
           )}
         </div>
         <nav className="order-3 flex w-full flex-wrap gap-x-4 gap-y-1 text-sm sm:order-2 sm:w-auto sm:flex-1">
-          <Link href="/craftsmen" className={linkClass}>
-            和裁士を探す
-          </Link>
-          <Link href="/services" className={linkClass}>
-            出品一覧
-          </Link>
-          <Link href="/requests" className={linkClass}>
-            依頼掲示板
-          </Link>
-          <Link href="/market-rates" className={linkClass}>
-            相場データ
-          </Link>
+          <NavLink href="/craftsmen">和裁士を探す</NavLink>
+          <NavLink href="/services">出品一覧</NavLink>
+          <NavLink href="/requests">依頼掲示板</NavLink>
+          <NavLink href="/market-rates">相場データ</NavLink>
         </nav>
       </div>
     </header>
