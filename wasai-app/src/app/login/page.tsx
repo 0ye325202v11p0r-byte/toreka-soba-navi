@@ -34,7 +34,7 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ ne
             <label htmlFor="password" className="block text-sm font-medium">
               パスワード
             </label>
-            <Link href="/forgot-password" className="text-xs text-accent-strong underline">
+            <Link href="/forgot-password" className="text-xs text-link underline">
               パスワードをお忘れですか？
             </Link>
           </div>
@@ -63,7 +63,7 @@ export default function LoginPage({ searchParams }: { searchParams: Promise<{ ne
       </form>
 
       <p className="mt-4 text-sm text-ink-muted">
-        アカウントをお持ちでない方は <Link href="/signup" className="text-accent-strong underline">新規登録</Link>
+        アカウントをお持ちでない方は <Link href="/signup" className="text-link underline">新規登録</Link>
       </p>
     </div>
   );

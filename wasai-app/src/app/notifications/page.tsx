@@ -53,7 +53,7 @@ export default async function NotificationsPage() {
             <div
               className={
                 wasUnread
-                  ? "rounded-lg border border-accent bg-accent-soft p-4"
+                  ? "rounded-lg border border-link bg-link-soft p-4"
                   : "rounded-lg border border-border bg-bg-elevated p-4"
               }
             >

@@ -20,7 +20,7 @@ export default function AvatarUploader() {
 
   return (
     <div className="inline-block">
-      <label className="cursor-pointer text-xs text-accent-strong underline">
+      <label className="cursor-pointer text-xs text-link underline">
         {pending ? "アップロード中…" : "画像をアップロード"}
         <input
           type="file"

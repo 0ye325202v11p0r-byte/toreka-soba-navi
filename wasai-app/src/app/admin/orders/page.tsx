@@ -73,7 +73,7 @@ export default async function AdminOrdersPage() {
               </div>
             )}
             <details className="mt-2 text-sm">
-              <summary className="cursor-pointer text-accent-strong">取引メッセージを見る</summary>
+              <summary className="cursor-pointer text-link">取引メッセージを見る</summary>
               <ul className="mt-2 space-y-1">
                 {messages
                   .filter((m) => m.order_id === o.id)

@@ -27,7 +27,7 @@ export default function PrePaymentSummary({ price, delivery }: { price: number; 
           <dt className="inline font-medium text-ink">キャンセル：</dt>
           <dd className="inline">
             {CANCELLATION_SUMMARY}詳しくは
-            <Link href="/terms" target="_blank" className="text-accent-strong underline">
+            <Link href="/terms" target="_blank" className="text-link underline">
               利用規約
             </Link>
             第7条をご覧ください。

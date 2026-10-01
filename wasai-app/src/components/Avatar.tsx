@@ -30,7 +30,7 @@ export default function Avatar({
     <span
       style={style}
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent-strong"
+      className="flex shrink-0 items-center justify-center rounded-full bg-bg-sunken text-sm font-semibold text-ink-muted"
     >
       {initial}
     </span>

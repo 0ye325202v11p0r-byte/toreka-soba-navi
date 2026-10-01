@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
       </p>
 
       {state.sent ? (
-        <p className="mt-6 rounded-md bg-accent-soft px-3 py-2 text-sm text-accent-strong">
+        <p className="mt-6 rounded-md bg-link-soft px-3 py-2 text-sm text-ink">
           メールを送信しました。届いたリンクからパスワードを再設定してください。
         </p>
       ) : (
@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       )}
 
       <p className="mt-4 text-sm text-ink-muted">
-        <Link href="/login" className="text-accent-strong underline">
+        <Link href="/login" className="text-link underline">
           ログインに戻る
         </Link>
       </p>

@@ -59,7 +59,7 @@ export default async function AdminInquiriesPage() {
               <p className="text-xs text-ink-muted">{q.created_at.slice(0, 16).replace("T", " ")}</p>
             </div>
             <p className="mt-1 text-sm">
-              {q.name} ・ <a href={`mailto:${q.email}`} className="text-accent-strong underline">{q.email}</a>
+              {q.name} ・ <a href={`mailto:${q.email}`} className="text-link underline">{q.email}</a>
               {q.user_id ? " ・ ログイン中に送信" : ""}
             </p>
             <p className="mt-2 whitespace-pre-wrap text-sm">{q.body}</p>

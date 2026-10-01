@@ -21,7 +21,7 @@ export default function OnboardButton({
           <input type="checkbox" name="agree_payment_agency" value="yes" required className="mt-0.5" />
           <span>
             依頼者からの代金を、運営者が私の代わりに受け取り、取引完了後に手数料を差し引いて私に引き渡すこと（
-            <a href="/terms" target="_blank" className="text-accent-strong underline">
+            <a href="/terms" target="_blank" className="text-link underline">
               利用規約
             </a>
             第5条）に同意します。依頼者が支払いを済ませた時点で、その代金は私への支払いが済んだものとして扱われます。

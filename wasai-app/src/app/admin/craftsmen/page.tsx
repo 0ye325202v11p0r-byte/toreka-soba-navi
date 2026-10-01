@@ -64,7 +64,7 @@ export default async function AdminCraftsmenPage() {
         {rows.map((r) => (
           <li key={r.profile_id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center justify-between">
-              <Link href={`/craftsmen/${r.profile_id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/craftsmen/${r.profile_id}`} className="font-semibold text-ink hover:underline">
                 {r.profiles.display_name}
               </Link>
               <span className="text-sm font-bold">{r.grade}</span>
@@ -77,7 +77,7 @@ export default async function AdminCraftsmenPage() {
                 href={signedUrls.get(r.profile_id)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-1 block text-sm text-accent-strong underline"
+                className="mt-1 block text-sm text-link underline"
               >
                 証明書を確認する
               </a>

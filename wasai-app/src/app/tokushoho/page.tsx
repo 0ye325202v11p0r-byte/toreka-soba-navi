@@ -20,7 +20,7 @@ const ROWS: { label: string; value: React.ReactNode }[] = [
         <br />
         <span className="text-xs text-ink-muted">
           ご請求は
-          <a href={`${CONTACT_PATH}?category=特商法の表示事項の請求`} className="text-accent-strong underline">
+          <a href={`${CONTACT_PATH}?category=特商法の表示事項の請求`} className="text-link underline">
             お問い合わせフォーム
           </a>
           から、種類「特商法の表示事項の請求」を選んでお送りください。
@@ -31,7 +31,7 @@ const ROWS: { label: string; value: React.ReactNode }[] = [
   {
     label: "お問い合わせ",
     value: (
-      <a href={CONTACT_PATH} className="text-accent-strong underline">
+      <a href={CONTACT_PATH} className="text-link underline">
         お問い合わせフォーム
       </a>
     ),
@@ -106,7 +106,7 @@ export default function TokushohoPage() {
               </th>
               <td className="block pb-3 pt-1 leading-relaxed sm:table-cell sm:py-3">
                 {CANCELLATION_SUMMARY}詳細は
-                <a href="/terms" className="text-accent-strong underline">
+                <a href="/terms" className="text-link underline">
                   利用規約
                 </a>
                 第7条をご覧ください。

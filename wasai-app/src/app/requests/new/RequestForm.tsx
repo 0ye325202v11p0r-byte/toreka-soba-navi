@@ -15,7 +15,7 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
       {directedTo && (
         <>
           <input type="hidden" name="directed_to" value={directedTo} />
-          <p className="rounded-md bg-accent-soft p-3 text-sm text-accent-strong">
+          <p className="rounded-md bg-link-soft p-3 text-sm text-ink">
             {directedName}さんへの相談です。この依頼は{directedName}さんにだけ届き、依頼掲示板には表示されません。
           </p>
         </>

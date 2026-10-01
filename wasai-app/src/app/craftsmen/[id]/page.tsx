@@ -114,7 +114,7 @@ export default async function CraftsmanDetailPage({
         {craftsmanProfile && craftsmanProfile.specialties.length > 0 && (
           <p className="mt-4 flex flex-wrap gap-1">
             {craftsmanProfile.specialties.map((s) => (
-              <span key={s} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent-strong">
+              <span key={s} className="rounded-full bg-bg-sunken px-2 py-0.5 text-xs text-ink-muted">
                 {s}
               </span>
             ))}
@@ -194,7 +194,7 @@ export default async function CraftsmanDetailPage({
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
           {(services ?? []).map((s) => (
             <li key={s.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-              <Link href={`/services/${s.id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/services/${s.id}`} className="font-semibold text-ink hover:underline">
                 {s.title}
               </Link>
               <p className="mt-1 text-xs text-ink-muted">{s.garment_type}</p>

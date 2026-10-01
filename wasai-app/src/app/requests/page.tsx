@@ -51,7 +51,7 @@ export default async function RequestsPage({
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">依頼掲示板</h1>
-        <Link href="/requests/new" className="text-sm text-accent-strong underline">
+        <Link href="/requests/new" className="text-sm text-link underline">
           依頼を投稿する
         </Link>
       </div>
@@ -93,7 +93,7 @@ export default async function RequestsPage({
         {requests.map((r, i) => (
           <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center gap-2">
-              <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                 {r.title}
               </Link>
               {r.min_grade && (

@@ -129,7 +129,7 @@ export default async function CraftsmenPage({
           <li key={c.profile_id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center gap-2">
               <Avatar url={c.profiles.avatar_url} name={c.profiles.display_name} />
-              <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-accent-strong hover:underline">
+              <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-ink hover:underline">
                 {c.profiles.display_name}
               </Link>
               {c.grade_verified && <VerifiedBadge />}
@@ -141,7 +141,7 @@ export default async function CraftsmenPage({
             {c.specialties.length > 0 && (
               <p className="mt-2 flex flex-wrap gap-1">
                 {c.specialties.map((s) => (
-                  <span key={s} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs text-accent-strong">
+                  <span key={s} className="rounded-full bg-bg-sunken px-2 py-0.5 text-xs text-ink-muted">
                     {s}
                   </span>
                 ))}

@@ -249,14 +249,14 @@ export default function TermsPage() {
           <p>事業者：{BUSINESS_LABEL}</p>
           <p>
             運営者の氏名・所在地・電話番号は、ご請求をいただいた場合には遅滞なく電子メールでお知らせします（
-            <a href="/tokushoho" className="text-accent-strong underline">
+            <a href="/tokushoho" className="text-link underline">
               特定商取引法に基づく表示
             </a>
             ）。
           </p>
           <p className="mt-1">
             本規約に関するお問い合わせは、
-            <a href={CONTACT_PATH} className="text-accent-strong underline">
+            <a href={CONTACT_PATH} className="text-link underline">
               お問い合わせフォーム
             </a>
             からお願いいたします。

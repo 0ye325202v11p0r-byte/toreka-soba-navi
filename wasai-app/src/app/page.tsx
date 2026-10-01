@@ -25,19 +25,19 @@ export default function HomePage() {
 
       <section className="mt-10 grid gap-4 sm:grid-cols-3">
         <div className="rounded-lg border border-border bg-bg-elevated p-5">
-          <h2 className="font-bold text-accent-strong">中抜きゼロ</h2>
+          <h2 className="font-bold text-ink">中抜きゼロ</h2>
           <p className="mt-2 text-sm text-ink-muted">
             教室や問屋を介さず、和裁士自身が価格を決めて依頼者と直接やり取りできます。
           </p>
         </div>
         <div className="rounded-lg border border-border bg-bg-elevated p-5">
-          <h2 className="font-bold text-accent-strong">実績・資格で信頼を可視化</h2>
+          <h2 className="font-bold text-ink">実績・資格で信頼を可視化</h2>
           <p className="mt-2 text-sm text-ink-muted">
             資格級位・得意分野・実績写真・レビューをプロフィールに掲載し、価格だけでなく技術で選ばれます。
           </p>
         </div>
         <div className="rounded-lg border border-border bg-bg-elevated p-5">
-          <h2 className="font-bold text-accent-strong">2つの依頼方法</h2>
+          <h2 className="font-bold text-ink">2つの依頼方法</h2>
           <p className="mt-2 text-sm text-ink-muted">
             決まったメニューから選ぶ「出品」と、要望を伝えて見積りを募る「依頼掲示板」の両方に対応。
           </p>

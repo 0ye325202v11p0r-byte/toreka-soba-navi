@@ -133,7 +133,7 @@ export default async function RequestDetailPage({
         </p>
       )}
       {directedTo && (
-        <p className="mt-2 rounded-md bg-accent-soft px-3 py-2 text-sm text-accent-strong">
+        <p className="mt-2 rounded-md bg-link-soft px-3 py-2 text-sm text-ink">
           {directedName ?? "和裁士"}さんへの相談（この和裁士だけに届いています。掲示板には表示されません）
         </p>
       )}
@@ -171,7 +171,7 @@ export default async function RequestDetailPage({
 
       {order && (isOwner || current?.id) && (
         <p className="mt-4">
-          <Link href={`/orders/${order.id}`} className="text-sm text-accent-strong underline">
+          <Link href={`/orders/${order.id}`} className="text-sm text-link underline">
             取引ページを見る
           </Link>
         </p>
@@ -196,7 +196,7 @@ export default async function RequestDetailPage({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Avatar url={p.profiles.avatar_url} name={p.profiles.display_name} size={28} />
-                  <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-ink hover:underline">
                     {p.profiles.display_name}
                   </Link>
                   {verifiedCraftsmanIds.has(p.craftsman_id) && <VerifiedBadge />}
@@ -211,8 +211,8 @@ export default async function RequestDetailPage({
               <p className="mt-2 whitespace-pre-wrap text-sm">{p.message}</p>
               <p className="mt-2 text-xs text-ink-muted">状態: {STATUS_LABEL[p.status]}</p>
               {p.status === "countered" && p.countered_price != null && (
-                <div className="mt-2 rounded-md bg-accent-soft p-3">
-                  <p className="text-sm font-semibold text-accent-strong">
+                <div className="mt-2 rounded-md bg-link-soft p-3">
+                  <p className="text-sm font-semibold text-ink">
                     依頼者からの提示: ¥{p.countered_price.toLocaleString()}
                   </p>
                   {p.countered_message && (

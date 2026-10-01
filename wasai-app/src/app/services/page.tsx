@@ -39,7 +39,7 @@ export default async function ServicesPage({
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">出品一覧</h1>
-        <Link href="/services/new" className="text-sm text-accent-strong underline">
+        <Link href="/services/new" className="text-sm text-link underline">
           和裁士の方はサービスを出品する
         </Link>
       </div>
@@ -70,7 +70,7 @@ export default async function ServicesPage({
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {services.map((s) => (
           <li key={s.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-            <Link href={`/services/${s.id}`} className="font-semibold text-accent-strong hover:underline">
+            <Link href={`/services/${s.id}`} className="font-semibold text-ink hover:underline">
               {s.title}
             </Link>
             <p className="mt-1 text-xs text-ink-muted">

@@ -111,11 +111,11 @@ export default function SignupPage() {
           <label className="flex items-start gap-2">
             <input type="checkbox" name="agree_terms" value="yes" required className="mt-0.5" />
             <span>
-              <Link href="/terms" target="_blank" className="text-accent-strong underline">
+              <Link href="/terms" target="_blank" className="text-link underline">
                 利用規約
               </Link>
               と
-              <Link href="/privacy" target="_blank" className="text-accent-strong underline">
+              <Link href="/privacy" target="_blank" className="text-link underline">
                 プライバシーポリシー
               </Link>
               を読み、同意します。
@@ -147,7 +147,7 @@ export default function SignupPage() {
       </form>
 
       <p className="mt-4 text-sm text-ink-muted">
-        すでにアカウントをお持ちの方は <Link href="/login" className="text-accent-strong underline">ログイン</Link>
+        すでにアカウントをお持ちの方は <Link href="/login" className="text-link underline">ログイン</Link>
       </p>
     </div>
   );

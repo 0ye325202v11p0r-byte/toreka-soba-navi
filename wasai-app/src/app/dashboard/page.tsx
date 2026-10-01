@@ -153,11 +153,11 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold">マイページ</h1>
         <div className="flex gap-4">
           {!isClient && (
-            <Link href="/dashboard/payouts" className="text-sm text-accent-strong underline">
+            <Link href="/dashboard/payouts" className="text-sm text-link underline">
               振込先の設定
             </Link>
           )}
-          <Link href="/dashboard/profile" className="text-sm text-accent-strong underline">
+          <Link href="/dashboard/profile" className="text-sm text-link underline">
             プロフィールを編集
           </Link>
         </div>
@@ -173,14 +173,14 @@ export default async function DashboardPage() {
           <section className="mt-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">投稿した依頼</h2>
-              <Link href="/requests/new" className="text-sm text-accent-strong underline">
+              <Link href="/requests/new" className="text-sm text-link underline">
                 新しい依頼を投稿
               </Link>
             </div>
             <ul className="mt-3 space-y-2">
               {requests.map((r) => (
                 <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                     {r.title}
                   </Link>
                   <p className="text-xs text-ink-muted">
@@ -200,7 +200,7 @@ export default async function DashboardPage() {
                   <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
                     <Link href={`/craftsmen/${p.id}`} className="flex items-center gap-3">
                       <Avatar url={p.avatar_url} name={p.display_name} size={40} />
-                      <span className="font-semibold text-accent-strong hover:underline">{p.display_name}</span>
+                      <span className="font-semibold text-ink hover:underline">{p.display_name}</span>
                     </Link>
                   </li>
                 ))}
@@ -216,7 +216,7 @@ export default async function DashboardPage() {
                   <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
                     <Link href={`/craftsmen/${p.id}`} className="flex items-center gap-3">
                       <Avatar url={p.avatar_url} name={p.display_name} size={40} />
-                      <span className="font-semibold text-accent-strong hover:underline">{p.display_name}</span>
+                      <span className="font-semibold text-ink hover:underline">{p.display_name}</span>
                     </Link>
                   </li>
                 ))}
@@ -227,13 +227,13 @@ export default async function DashboardPage() {
       ) : (
         <>
           {directedRequests.length > 0 && (
-            <section className="mt-6 rounded-lg border border-accent bg-accent-soft p-4">
+            <section className="mt-6 rounded-lg border border-link bg-link-soft p-4">
               <h2 className="text-lg font-bold">あなたへの相談</h2>
               <p className="mt-1 text-sm text-ink-muted">依頼者からあなたにだけ届いた相談です。内容を見て、見積り（提案）を送ってください。</p>
               <ul className="mt-3 space-y-2">
                 {directedRequests.map((r) => (
                   <li key={r.id} className="rounded-md border border-border bg-bg-elevated p-3">
-                    <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+                    <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                       {r.title}
                     </Link>
                     <p className="text-xs text-ink-muted">{r.garment_type}</p>
@@ -246,14 +246,14 @@ export default async function DashboardPage() {
           <section className="mt-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">出品中のサービス</h2>
-              <Link href="/services/new" className="text-sm text-accent-strong underline">
+              <Link href="/services/new" className="text-sm text-link underline">
                 新しく出品する
               </Link>
             </div>
             <ul className="mt-3 space-y-2">
               {services.map((s) => (
                 <li key={s.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/services/${s.id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/services/${s.id}`} className="font-semibold text-ink hover:underline">
                     {s.title}
                   </Link>
                   {s.status !== "published" && (
@@ -271,7 +271,7 @@ export default async function DashboardPage() {
             <ul className="mt-3 space-y-2">
               {proposals.map((p) => (
                 <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/requests/${p.request_id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/requests/${p.request_id}`} className="font-semibold text-ink hover:underline">
                     {p.requests.title}
                   </Link>
                   <p className="text-xs text-ink-muted">
@@ -299,7 +299,7 @@ export default async function DashboardPage() {
         <ul className="mt-3 space-y-2">
           {(orders ?? []).map((o) => (
             <li key={o.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-              <Link href={`/orders/${o.id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/orders/${o.id}`} className="font-semibold text-ink hover:underline">
                 {o.title}
               </Link>
               <p className="text-xs text-ink-muted">

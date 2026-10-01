@@ -29,7 +29,7 @@ export default function PrivacyPage() {
             運営者の氏名・住所：ご請求をいただいた場合には、遅滞なくお答えします。
             <br />
             連絡先：
-            <a href={CONTACT_PATH} className="text-accent-strong underline">
+            <a href={CONTACT_PATH} className="text-link underline">
               お問い合わせフォーム
             </a>
           </p>
@@ -134,7 +134,7 @@ export default function PrivacyPage() {
           </div>
           <p className="mt-2">
             米国には、日本の個人情報保護法に相当する、連邦全体に適用される包括的な個人情報保護の法律はなく、分野ごとの法律や州法（カリフォルニア州の法律など）によって保護されています。詳しくは、個人情報保護委員会の
-            <a href={PPC_US_URL} target="_blank" rel="noopener noreferrer" className="text-accent-strong underline">
+            <a href={PPC_US_URL} target="_blank" rel="noopener noreferrer" className="text-link underline">
               外国制度（アメリカ合衆国）
             </a>
             のページをご覧ください。各事業者は、それぞれのプライバシーポリシー・データ保護に関する契約に基づいて個人情報を取り扱います。
@@ -181,7 +181,7 @@ export default function PrivacyPage() {
           <ul className="mt-2 list-disc space-y-1 pl-5">
             <li>
               <b>ご請求の方法</b>：
-              <a href={`${CONTACT_PATH}?category=個人情報の開示等の請求`} className="text-accent-strong underline">
+              <a href={`${CONTACT_PATH}?category=個人情報の開示等の請求`} className="text-link underline">
                 お問い合わせフォーム
               </a>
               で種類「個人情報の開示等の請求」を選び、ご請求の内容を書いてお送りください。
@@ -203,7 +203,7 @@ export default function PrivacyPage() {
           <h2 className="mb-2 font-bold">9. 苦情・ご相談の窓口</h2>
           <p>
             個人情報の取扱いに関する苦情・ご相談は、
-            <a href={CONTACT_PATH} className="text-accent-strong underline">
+            <a href={CONTACT_PATH} className="text-link underline">
               お問い合わせフォーム
             </a>
             からご連絡ください。
