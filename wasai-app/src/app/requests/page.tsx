@@ -5,6 +5,8 @@ import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import Avatar from "@/components/Avatar";
+import GarmentChip from "@/components/GarmentChip";
+import { garmentStyle } from "@/lib/garmentStyle";
 import { GARMENT_TYPES, type JobRequest, type Profile } from "@/lib/types";
 
 type RequestRow = JobRequest & { profiles: Profile };
@@ -91,8 +93,13 @@ export default async function RequestsPage({
 
       <ul className="mt-6 space-y-3">
         {requests.map((r, i) => (
-          <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-            <div className="flex items-center gap-2">
+          <li
+            key={r.id}
+            className="rounded-lg border border-border bg-bg-elevated p-4"
+            style={{ borderTopColor: garmentStyle(r.garment_type).fg, borderTopWidth: 4 }}
+          >
+            <GarmentChip garmentType={r.garment_type} />
+            <div className="mt-2 flex items-center gap-2">
               <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                 {r.title}
               </Link>
@@ -103,7 +110,7 @@ export default async function RequestsPage({
               )}
             </div>
             <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
-              {r.garment_type} ・ 依頼者:
+              依頼者:
               <Avatar url={r.profiles.avatar_url} name={r.profiles.display_name} size={20} />
               {r.profiles.display_name}
               {r.deadline ? ` ・ 希望納期: ${r.deadline}` : ""}

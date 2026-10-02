@@ -1,4 +1,5 @@
 import Link from "next/link";
+import GarmentChip from "@/components/GarmentChip";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getRatingSummary } from "@/lib/reviews";
@@ -141,9 +142,7 @@ export default async function CraftsmenPage({
             {c.specialties.length > 0 && (
               <p className="mt-2 flex flex-wrap gap-1">
                 {c.specialties.map((s) => (
-                  <span key={s} className="rounded-full bg-bg-sunken px-2 py-0.5 text-xs text-ink-muted">
-                    {s}
-                  </span>
+                  <GarmentChip key={s} garmentType={s} />
                 ))}
               </p>
             )}
