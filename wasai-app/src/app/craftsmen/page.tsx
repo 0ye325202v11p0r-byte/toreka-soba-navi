@@ -127,10 +127,15 @@ export default async function CraftsmenPage({
 
       <ul className="mt-6 grid gap-4 sm:grid-cols-2">
         {craftsmen.map((c, i) => (
-          <li key={c.profile_id} className="rounded-lg border border-border bg-bg-elevated p-4">
+          // The name link's ::after covers the whole card, so a tap anywhere
+          // on it opens the profile (trial feedback: only the title worked).
+          <li key={c.profile_id} className="relative rounded-lg border border-border bg-bg-elevated p-4 transition-shadow hover:shadow-md">
             <div className="flex items-center gap-2">
               <Avatar url={c.profiles.avatar_url} name={c.profiles.display_name} />
-              <Link href={`/craftsmen/${c.profile_id}`} className="text-lg font-semibold text-ink hover:underline">
+              <Link
+                href={`/craftsmen/${c.profile_id}`}
+                className="text-lg font-semibold text-ink after:absolute after:inset-0 after:content-[''] hover:underline"
+              >
                 {c.profiles.display_name}
               </Link>
               {c.grade_verified && <VerifiedBadge />}

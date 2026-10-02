@@ -7,6 +7,7 @@ import { getRatingSummary } from "@/lib/reviews";
 import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import OrderButton from "./OrderButton";
+import GarmentChip from "@/components/GarmentChip";
 import PrePaymentSummary from "@/components/PrePaymentSummary";
 import { deliveryNote } from "@/lib/orderTerms";
 import ManageServiceButtons from "./ManageServiceButtons";
@@ -33,11 +34,12 @@ export default async function ServiceDetailPage({
   const rating = await getRatingSummary(supabase, service.craftsman_id);
   const current = await getCurrentUser();
   const isOwner = current?.id === service.craftsman_id;
+  const consultHref = `/requests/new?to=${service.craftsman_id}&menu=${service.id}`;
 
   return (
     <div className="grid gap-6 sm:grid-cols-3">
       <div className="sm:col-span-2">
-        <p className="text-xs text-ink-muted">{service.garment_type}</p>
+        <GarmentChip garmentType={service.garment_type} />
         <h1 className="mt-1 text-2xl font-bold">{service.title}</h1>
         <p className="mt-4 whitespace-pre-wrap text-sm">{service.description}</p>
       </div>
@@ -68,12 +70,34 @@ export default async function ServiceDetailPage({
           {isOwner ? (
             <ManageServiceButtons serviceId={service.id} published={service.status === "published"} />
           ) : (
+            // Trial feedback: going straight from the menu to the payment
+            // screen felt too fast — the client hasn't said their sizes or
+            // wishes yet. 相談 first (a 相談 to this craftsman, with the menu
+            // filled in → the craftsman's 見積り → 申し込み・お支払い), and
+            // paying right away stays available for those who've settled it.
             <div className="space-y-3">
-              <PrePaymentSummary
-                price={service.price}
-                delivery={deliveryNote({ deliveryDays: service.delivery_days })}
-              />
-              <OrderButton serviceId={service.id} />
+              <Link
+                href={current ? consultHref : `/login?next=${encodeURIComponent(consultHref)}`}
+                className="block rounded-md bg-accent px-4 py-3 text-center font-semibold text-bg-elevated transition-colors hover:bg-accent-strong"
+              >
+                このメニューで相談する
+              </Link>
+              <p className="text-xs text-ink-muted">
+                寸法や希望を伝えて、和裁士から見積り（提案）をもらいます。内容と金額に納得してから申し込み・お支払いに進めます。
+              </p>
+              <details className="rounded-md border border-border p-3">
+                <summary className="cursor-pointer text-sm font-semibold">相談せずに、すぐ申し込む</summary>
+                <p className="mt-2 text-xs text-ink-muted">
+                  内容と寸法がもう決まっている方向けです。申し込み後、取引のメッセージで寸法などを伝えます。
+                </p>
+                <div className="mt-3 space-y-3">
+                  <PrePaymentSummary
+                    price={service.price}
+                    delivery={deliveryNote({ deliveryDays: service.delivery_days })}
+                  />
+                  <OrderButton serviceId={service.id} />
+                </div>
+              </details>
             </div>
           )}
         </div>

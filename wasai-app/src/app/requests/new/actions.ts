@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 import { notify } from "@/lib/notifications";
 import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
-import { parseMeasurements } from "@/lib/measurements";
+import { checkRequiredMeasurements, parseMeasurements } from "@/lib/measurements";
 import { GRADE_RANK, type Grade, type GradeRequirement } from "@/lib/types";
 
 const GRADE_REQUIREMENTS: GradeRequirement[] = ["1級", "2級", "3級", "その他資格"];
@@ -53,6 +53,8 @@ export async function createRequest(
 
   const measurements = parseMeasurements(formData);
   if (measurements.error) return { error: measurements.error };
+  const missing = checkRequiredMeasurements(garmentType, measurements.value);
+  if (missing) return { error: missing };
   if (measurements.value?.note && containsContactInfo(measurements.value.note)) {
     return { error: CONTACT_INFO_ERROR };
   }

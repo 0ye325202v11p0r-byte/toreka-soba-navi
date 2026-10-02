@@ -95,12 +95,15 @@ export default async function RequestsPage({
         {requests.map((r, i) => (
           <li
             key={r.id}
-            className="rounded-lg border border-border bg-bg-elevated p-4"
+            className="relative rounded-lg border border-border bg-bg-elevated p-4 transition-shadow hover:shadow-md"
             style={{ borderTopColor: garmentStyle(r.garment_type).fg, borderTopWidth: 4 }}
           >
             <GarmentChip garmentType={r.garment_type} />
             <div className="mt-2 flex items-center gap-2">
-              <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
+              <Link
+                href={`/requests/${r.id}`}
+                className="font-semibold text-ink after:absolute after:inset-0 after:content-[''] hover:underline"
+              >
                 {r.title}
               </Link>
               {r.min_grade && (
