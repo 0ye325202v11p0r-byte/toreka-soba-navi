@@ -25,7 +25,7 @@ export async function createService(
     .eq("id", user.id)
     .maybeSingle();
   if (profile?.role !== "craftsman") {
-    return { error: "和裁士アカウントのみサービスを出品できます。" };
+    return { error: "和裁士アカウントのみ仕立てメニューを作れます。" };
   }
 
   const title = String(formData.get("title") ?? "").trim();

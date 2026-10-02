@@ -42,7 +42,7 @@ export default function TokushohoPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold">特定商取引法に基づく表示</h1>
-      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年10月1日</p>
+      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年10月2日</p>
 
 
       <div className="overflow-x-auto">
@@ -61,7 +61,7 @@ export default function TokushohoPage() {
                 販売価格・利用料金
               </th>
               <td className="block pb-3 pt-1 leading-relaxed sm:table-cell sm:py-3">
-                個々の仕立て・お直し等の代金は、和裁士が出品ごとに設定する価格、または依頼への提案において提示する見積り価格によります（各出品ページ・提案内容に表示）。
+                個々の仕立て・お直し等の代金は、和裁士が仕立てメニューごとに設定する価格、または依頼への提案において提示する見積り価格によります（各メニューのページ・提案内容に表示）。
                 <br />
                 当方は、代金を和裁士へ引き渡す際に、代金から{Math.round(PLATFORM_FEE_RATE * 100)}
                 %（同一の依頼者・和裁士間で過去に完了した取引がある場合は{Math.round(REPEAT_PLATFORM_FEE_RATE * 100)}
@@ -89,7 +89,7 @@ export default function TokushohoPage() {
                 お支払い時期
               </th>
               <td className="block pb-3 pt-1 leading-relaxed sm:table-cell sm:py-3">
-                出品への申込み時、または提案の承諾時に表示される決済画面で、その場でお支払いいただきます（前払い）。決済の完了をもってお申込みが確定し、取引が成立します。
+                仕立てメニューへの申込み時、または提案の承諾時に表示される決済画面で、その場でお支払いいただきます（前払い）。決済の完了をもってお申込みが確定し、取引が成立します。
               </td>
             </tr>
             <tr className="border-b border-border align-top">
@@ -97,7 +97,7 @@ export default function TokushohoPage() {
                 役務の提供時期
               </th>
               <td className="block pb-3 pt-1 leading-relaxed sm:table-cell sm:py-3">
-                出品の場合は出品ページに表示する納期目安、提案の場合は依頼の希望納期と提案内容を目安とし、具体的な日程は取引メッセージで和裁士と調整します。
+                仕立てメニューの場合はメニューのページに表示する納期目安、提案の場合は依頼の希望納期と提案内容を目安とし、具体的な日程は取引メッセージで和裁士と調整します。
               </td>
             </tr>
             <tr className="align-top">

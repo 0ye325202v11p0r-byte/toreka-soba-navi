@@ -13,7 +13,7 @@ export default function ManageServiceButtons({ serviceId, published }: { service
   return (
     <div className="space-y-2">
       <p className="text-sm text-ink-muted">
-        自分が出品したサービスです。{published ? "" : "現在は停止中で、他の人には表示されていません。"}
+        自分が作った仕立てメニューです。{published ? "" : "現在は停止中で、他の人には表示されていません。"}
       </p>
       <form action={statusAction}>
         <input type="hidden" name="service_id" value={serviceId} />
@@ -23,13 +23,13 @@ export default function ManageServiceButtons({ serviceId, published }: { service
           disabled={statusPending}
           className="w-full rounded-md border border-border px-4 py-2 text-sm font-semibold hover:bg-bg transition-colors disabled:opacity-60"
         >
-          {statusPending ? "更新中…" : published ? "出品を停止する" : "出品を再開する"}
+          {statusPending ? "更新中…" : published ? "公開を停止する" : "公開を再開する"}
         </button>
       </form>
       <form
         action={deleteAction}
         onSubmit={(e) => {
-          if (!window.confirm("この出品を削除します。よろしいですか？（過去の取引の記録は残ります）")) e.preventDefault();
+          if (!window.confirm("このメニューを削除します。よろしいですか？（過去の取引の記録は残ります）")) e.preventDefault();
         }}
       >
         <input type="hidden" name="service_id" value={serviceId} />
@@ -38,7 +38,7 @@ export default function ManageServiceButtons({ serviceId, published }: { service
           disabled={deletePending}
           className="w-full rounded-md px-4 py-2 text-sm text-warn hover:underline disabled:opacity-60"
         >
-          {deletePending ? "削除中…" : "この出品を削除する"}
+          {deletePending ? "削除中…" : "このメニューを削除する"}
         </button>
       </form>
       {error && (

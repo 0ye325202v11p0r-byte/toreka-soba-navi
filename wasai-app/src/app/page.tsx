@@ -39,7 +39,7 @@ export default function HomePage() {
         <div className="rounded-lg border border-border bg-bg-elevated p-5">
           <h2 className="font-bold text-ink">2つの依頼方法</h2>
           <p className="mt-2 text-sm text-ink-muted">
-            決まったメニューから選ぶ「出品」と、要望を伝えて見積りを募る「依頼掲示板」の両方に対応。
+            決まったメニューから選ぶ「仕立てメニュー」と、要望を伝えて見積りを募る「依頼掲示板」の両方に対応。
           </p>
         </div>
       </section>
@@ -51,7 +51,7 @@ export default function HomePage() {
             <h3 className="font-semibold">依頼者の方</h3>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-muted">
               <li>無料登録（依頼者として）</li>
-              <li>和裁士の出品から選ぶ、または依頼掲示板に投稿して提案を待つ</li>
+              <li>和裁士の仕立てメニューから選ぶ、または依頼掲示板に投稿して提案を待つ</li>
               <li>チャットで詳細をすり合わせて仕立てを依頼</li>
               <li>納品確認後、レビューを投稿</li>
             </ol>
@@ -60,7 +60,7 @@ export default function HomePage() {
             <h3 className="font-semibold">和裁士の方</h3>
             <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-ink-muted">
               <li>無料登録（和裁士として）してプロフィール・資格・実績を掲載</li>
-              <li>固定価格のサービスを出品、または依頼掲示板から気になる案件に提案</li>
+              <li>固定価格の仕立てメニューを作る、または依頼掲示板から気になる案件に提案</li>
               <li>チャットで詳細をすり合わせて受注</li>
               <li>納品後、レビューで実績を積み上げる</li>
             </ol>

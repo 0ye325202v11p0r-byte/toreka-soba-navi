@@ -58,9 +58,9 @@ export default async function NavBar() {
             </>
           )}
         </div>
-        <nav className="order-3 flex w-full flex-wrap gap-x-4 gap-y-1 text-sm sm:order-2 sm:w-auto sm:flex-1">
+        <nav className="order-3 flex w-full flex-wrap justify-between gap-x-2 gap-y-1 text-[13px] sm:order-2 sm:w-auto sm:flex-1 sm:justify-start sm:gap-x-4 sm:text-sm">
           <NavLink href="/craftsmen">和裁士を探す</NavLink>
-          <NavLink href="/services">出品一覧</NavLink>
+          <NavLink href="/services">仕立てメニュー</NavLink>
           <NavLink href="/requests">依頼掲示板</NavLink>
           <NavLink href="/market-rates">相場データ</NavLink>
         </nav>
