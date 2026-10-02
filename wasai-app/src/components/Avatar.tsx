@@ -25,20 +25,19 @@ export default function Avatar({
     );
   }
 
-  // First letter or kanji, skipping a leading 【…】/（…）-style tag and any
-  // symbols — "【見本】杉浦 恵" shows 杉, not 【.
-  const initial =
-    name
-      .trim()
-      .replace(/^[【\[（(「『〔][^】\]）)」』〕]*[】\]）)」』〕]\s*/u, "")
-      .match(/[\p{L}\p{N}]/u)?.[0] ?? "?";
+  // No photo: a plain gray person silhouette, the usual "not set" icon.
+  // (It used to show the name's first character, which read as a random
+  // kanji — 春, 森 — in the middle of cards.)
   return (
     <span
       style={style}
       aria-hidden
-      className="flex shrink-0 items-center justify-center rounded-full bg-bg-sunken text-sm font-semibold text-ink-muted"
+      className="flex shrink-0 items-end justify-center overflow-hidden rounded-full bg-bg-sunken"
     >
-      {initial}
+      <svg viewBox="0 0 24 24" className="h-[82%] w-[82%] text-border-strong" fill="currentColor">
+        <circle cx="12" cy="8.5" r="4.5" />
+        <path d="M3.5 24c0-5 3.8-8.5 8.5-8.5s8.5 3.5 8.5 8.5z" />
+      </svg>
     </span>
   );
 }
