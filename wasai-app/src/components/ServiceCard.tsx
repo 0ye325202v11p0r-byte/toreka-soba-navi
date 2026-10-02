@@ -23,6 +23,10 @@ export default function ServiceCard({ service, craftsman }: { service: Service; 
         className="block h-full overflow-hidden rounded-lg border border-border bg-bg-elevated transition-shadow hover:shadow-md"
         style={{ borderTopColor: fg, borderTopWidth: 4 }}
       >
+        {service.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URL, no Next Image domain config
+          <img src={service.image_url} alt="" className="aspect-[16/9] w-full object-cover" />
+        )}
         <div className="p-4">
           <GarmentChip garmentType={service.garment_type} />
           <p className="mt-2 font-bold leading-snug text-ink">{service.title}</p>

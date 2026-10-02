@@ -1,12 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { shrinkInputFiles } from "@/lib/shrinkImage";
 import { submitFabricCheck, type FabricCheckState } from "./actions";
 
 const initialState: FabricCheckState = {};
 
 export default function FabricCheckForm({ orderId }: { orderId: string }) {
   const [state, formAction, pending] = useActionState(submitFabricCheck, initialState);
+  const [preparing, setPreparing] = useState(false);
 
   return (
     <form action={formAction} className="space-y-3 rounded-lg border border-border bg-bg-elevated p-4">
@@ -53,7 +55,14 @@ export default function FabricCheckForm({ orderId }: { orderId: string }) {
           multiple
           accept="image/jpeg,image/png,image/webp,image/gif"
           className="mt-1 block w-full text-sm"
+          onChange={(e) => {
+            // Shrink phone photos before the form sends them (lib/shrinkImage).
+            const input = e.currentTarget;
+            setPreparing(true);
+            void shrinkInputFiles(input).finally(() => setPreparing(false));
+          }}
         />
+        {preparing && <p className="mt-1 text-xs text-ink-muted">写真を準備中…</p>}
       </div>
 
       {state.error && (
@@ -64,7 +73,7 @@ export default function FabricCheckForm({ orderId }: { orderId: string }) {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || preparing}
         className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-bg-elevated disabled:opacity-60"
       >
         {pending ? "記録中…" : "記録する"}

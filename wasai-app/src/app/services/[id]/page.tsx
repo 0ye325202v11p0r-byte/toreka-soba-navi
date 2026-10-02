@@ -8,6 +8,8 @@ import StarRating from "@/components/StarRating";
 import SetupNotice from "@/components/SetupNotice";
 import OrderButton from "./OrderButton";
 import GarmentChip from "@/components/GarmentChip";
+import ImageUploadButton from "@/components/ImageUploadButton";
+import { setServiceImage, removeServiceImage } from "./actions";
 import PrePaymentSummary from "@/components/PrePaymentSummary";
 import { deliveryNote } from "@/lib/orderTerms";
 import ManageServiceButtons from "./ManageServiceButtons";
@@ -39,6 +41,10 @@ export default async function ServiceDetailPage({
   return (
     <div className="grid gap-6 sm:grid-cols-3">
       <div className="sm:col-span-2">
+        {service.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URL, no Next Image domain config
+          <img src={service.image_url} alt={service.title} className="mb-4 aspect-[16/9] w-full rounded-lg object-cover" />
+        )}
         <GarmentChip garmentType={service.garment_type} />
         <h1 className="mt-1 text-2xl font-bold">{service.title}</h1>
         <p className="mt-4 whitespace-pre-wrap text-sm">{service.description}</p>
@@ -68,7 +74,19 @@ export default async function ServiceDetailPage({
 
         <div className="mt-4">
           {isOwner ? (
-            <ManageServiceButtons serviceId={service.id} published={service.status === "published"} />
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-xs text-ink-muted">メニューの写真（一覧とこのページに表示されます）</p>
+                <ImageUploadButton
+                  upload={setServiceImage}
+                  remove={removeServiceImage}
+                  fields={{ service_id: service.id }}
+                  hasImage={Boolean(service.image_url)}
+                  label="写真"
+                />
+              </div>
+              <ManageServiceButtons serviceId={service.id} published={service.status === "published"} />
+            </div>
           ) : (
             // Trial feedback: going straight from the menu to the payment
             // screen felt too fast — the client hasn't said their sizes or

@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { shrinkImages } from "@/lib/shrinkImage";
 import { addPortfolioPhoto, type UploadState } from "./uploadActions";
 
 const initialState: UploadState = {};
@@ -34,10 +35,13 @@ export default function PortfolioUploader() {
             // of its own (nested forms are invalid HTML and broke hydration)
             // — dispatch the upload action directly instead. The input has
             // no name, so it's never sent along with the profile form.
-            const formData = new FormData();
-            for (const file of Array.from(e.target.files)) formData.append("files", file);
-            startTransition(() => formAction(formData));
+            const picked = Array.from(e.target.files);
             e.target.value = "";
+            void shrinkImages(picked).then((files) => {
+              const formData = new FormData();
+              for (const file of files) formData.append("files", file);
+              startTransition(() => formAction(formData));
+            });
           }}
         />
       </label>

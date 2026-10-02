@@ -38,6 +38,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Photo uploads go through Server Actions, whose default limit is 1MB —
+  // a phone photo failed with a 500. Images are also shrunk in the browser
+  // first (lib/shrinkImage.ts); this leaves room for several photos or a
+  // PDF certificate. Vercel refuses bodies over 4.5MB, so stay under it.
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
+  },
   async headers() {
     return [
       {

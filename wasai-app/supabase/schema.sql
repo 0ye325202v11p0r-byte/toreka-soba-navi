@@ -1110,3 +1110,51 @@ create table if not exists inquiries (
 create index if not exists idx_inquiries_status on inquiries(status, created_at);
 alter table inquiries enable row level security;
 -- ポリシーは作らない（anon/authenticatedは一切読み書きできない。service roleだけ）。
+
+-- ---------------------------------------------------------------------------
+-- Phase 34（2026-10-02追加）: 和裁士のトップ画像・仕立てメニューの写真と、
+-- 登録区分（依頼者／和裁士）の書き換え防止。
+--
+-- 1. profiles.cover_url（和裁士のページの上に大きく出す横長の画像）と
+--    services.image_url（仕立てメニューの写真）。画像そのものは既存の
+--    portfolio バケット（公開・本人のフォルダにだけ書ける）に置き、ここには
+--    URLだけを持つ。http(s)のURL以外は入れられない。
+-- 2. profiles.role は登録時にしか決めない（アプリが後から変える処理は無い）が、
+--    本人がAPIを直接叩くと書き換えられた。依頼者が和裁士に化けると、登録時の
+--    代金受領の同意（利用規約第5条）を経ずに提案・受注できてしまうため、
+--    service role 以外からの変更を止める。
+-- 本番のSupabaseには、この「Phase 34」の部分だけをSQL Editorで実行する。
+-- 新しいアプリはこれらの列を使うので、アプリの反映「前に」実行する
+-- （今のアプリはこのSQLの後でもそのまま動く）。
+-- ---------------------------------------------------------------------------
+
+alter table profiles add column if not exists cover_url text;
+alter table profiles drop constraint if exists profiles_cover_url_check;
+alter table profiles add constraint profiles_cover_url_check
+  check (cover_url is null or (cover_url ~ '^https?://' and char_length(cover_url) <= 1000));
+
+alter table services add column if not exists image_url text;
+alter table services drop constraint if exists services_image_url_check;
+alter table services add constraint services_image_url_check
+  check (image_url is null or (image_url ~ '^https?://' and char_length(image_url) <= 1000));
+
+create or replace function public.profiles_guard_role()
+returns trigger
+language plpgsql
+as $$
+begin
+  if coalesce(auth.role(), '') not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if new.role is distinct from old.role then
+    raise exception '登録区分（依頼者・和裁士）は変更できません。' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_guard_role on profiles;
+create trigger trg_profiles_guard_role
+  before update on profiles
+  for each row
+  execute function public.profiles_guard_role();

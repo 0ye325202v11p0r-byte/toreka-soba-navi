@@ -547,6 +547,57 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.waitForURL(/\/requests\/[0-9a-f-]{36}$/, { timeout: 15000 }).catch(() => {});
   ok("依頼掲示板はカードのどこを押しても詳細が開く", /\/requests\/[0-9a-f-]{36}$/.test(client.page.url()), client.page.url());
 
+  // ---- 17. Phase 34: トップ画像・メニューの写真 (phone-size photos), role guard
+  // A 3.6MB image stands in for a phone photo — before the fix, uploads over
+  // 1MB failed with a bare 500.
+  const BIG = "/tmp/pgw/big.png";
+  const fs = require("fs");
+  const servedSize = async (url) => { const r = await fetch(url); return { ok: r.ok, type: r.headers.get("content-type"), size: (await r.arrayBuffer()).byteLength }; };
+  await craft.page.goto(`${BASE}/dashboard/profile`);
+  await craft.page.locator("label:has-text('トップ画像を設定する') input[type=file]").setInputFiles(BIG);
+  await craft.page.locator("img[alt='トップ画像']").waitFor({ timeout: 30000 }).catch(() => {});
+  const [cov] = await q("select cover_url from profiles where id=$1", [craft.id]);
+  const covFile = cov.cover_url ? await servedSize(cov.cover_url) : null;
+  await visitor.goto(`${BASE}/craftsmen/${craft.id}`);
+  const covShown = await visitor.locator("img[alt$='のトップ画像']").count();
+  ok("スマホの写真（3.6MB）でもトップ画像を設定できる（縮めて保存・和裁士のページの上に出る）", !!covFile && covFile.ok && covFile.size < 1024 * 1024 && /jpeg/.test(covFile.type) && covShown === 1, covFile ? `${Math.round(covFile.size / 1024)}KB ${covFile.type} 表示${covShown}` : "no cover");
+
+  await craft.page.goto(`${BASE}/dashboard/profile`);
+  await craft.page.locator("label:has-text('画像をアップロード') input[type=file]").setInputFiles(BIG);
+  for (let i = 0; i < 20; i++) { const [a] = await q("select avatar_url from profiles where id=$1", [craft.id]); if (a.avatar_url) break; await sleep(1000); }
+  const [av] = await q("select avatar_url from profiles where id=$1", [craft.id]);
+  ok("スマホの写真（3.6MB）でもアイコン写真を設定できる（前は失敗していた）", !!av.avatar_url, av.avatar_url ? "ok" : "none");
+
+  // New menu with a photo, then remove it from the menu's page.
+  await craft.page.goto(`${BASE}/services/new`);
+  await craft.page.fill("input[name=title]", "テスト 写真つきメニュー");
+  await craft.page.selectOption("select[name=garment_type]", "浴衣");
+  await craft.page.fill("textarea[name=description]", "写真のテストです");
+  await craft.page.fill("input[name=price]", "15000");
+  await craft.page.fill("input[name=delivery_days]", "21");
+  await craft.page.setInputFiles("input[name=image]", BIG);
+  await craft.page.locator("text=写真を準備中…").waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+  await craft.page.click("button:has-text('メニューを公開する')");
+  await craft.page.waitForURL(/\/services\/[0-9a-f-]{36}$/, { timeout: 30000 }).catch(() => {});
+  const [ms] = await q("select id, image_url from services where craftsman_id=$1 and title='テスト 写真つきメニュー'", [craft.id]);
+  await visitor.goto(`${BASE}/services`);
+  const cardImg = ms && ms.image_url ? await visitor.locator(`a[href="/services/${ms.id}"] img[src="${ms.image_url}"]`).count() : 0;
+  ok("仕立てメニューに写真を付けて作れる（一覧のカードに写真が出る）", !!ms && !!ms.image_url && cardImg === 1, ms ? `${!!ms.image_url} カード${cardImg}` : "no menu");
+  await craft.page.goto(`${BASE}/services/${ms.id}`);
+  await craft.page.click("button:has-text('外す')");
+  for (let i = 0; i < 15; i++) { const [m2] = await q("select image_url from services where id=$1", [ms.id]); if (!m2.image_url) break; await sleep(1000); }
+  const [msAfter] = await q("select image_url from services where id=$1", [ms.id]);
+  ok("メニューの写真を外せる", msAfter.image_url === null, String(msAfter.image_url));
+
+  // Nobody can switch between 依頼者 and 和裁士 through the API.
+  if (access) {
+    const anonKey = fs.readFileSync("/tmp/pgw/e2e/keys.env", "utf8").match(/ANON=(.*)/)[1];
+    const r = await fetch(`http://localhost:54321/rest/v1/profiles?id=eq.${client.id}`, { method: "PATCH",
+      headers: { apikey: anonKey, Authorization: `Bearer ${access}`, "content-type": "application/json" }, body: JSON.stringify({ role: "craftsman" }) });
+    const [rl] = await q("select role from profiles where id=$1", [client.id]);
+    ok("依頼者がAPIを直接叩いて和裁士に変わろうとしても拒否される", r.status >= 400 && rl.role === "client", `HTTP ${r.status} ${rl.role}`);
+  }
+
   await browser.close();
   await db.end();
   console.log(results.join("\n"));
