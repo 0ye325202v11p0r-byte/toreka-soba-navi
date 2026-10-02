@@ -51,24 +51,26 @@ export default async function MarketRatesPage() {
         </p>
       ) : (
         <div className="mt-6 overflow-x-auto rounded-lg border border-border bg-bg-elevated">
-          <table className="w-full min-w-[480px] text-sm">
+          <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-ink-muted">
-                <th className="px-4 py-3 font-medium">種類</th>
-                <th className="px-4 py-3 font-medium">成立件数</th>
-                <th className="px-4 py-3 font-medium">平均価格</th>
-                <th className="px-4 py-3 font-medium">最安</th>
-                <th className="px-4 py-3 font-medium">最高</th>
+                <th className="px-3 py-3 font-medium">種類</th>
+                <th className="px-3 py-3 font-medium">成立件数</th>
+                <th className="px-3 py-3 font-medium">平均価格</th>
+                <th className="px-3 py-3 font-medium">価格の幅</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.garment_type} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 font-semibold">{r.garment_type}</td>
-                  <td className="px-4 py-3 text-ink-muted">{r.order_count}件</td>
-                  <td className="px-4 py-3 font-bold">¥{Math.round(r.avg_price).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-ink-muted">¥{r.min_price.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-ink-muted">¥{r.max_price.toLocaleString()}</td>
+                  <td className="px-3 py-3 font-semibold">{r.garment_type}</td>
+                  <td className="px-3 py-3 text-ink-muted">{r.order_count}件</td>
+                  <td className="px-3 py-3 font-bold">¥{Math.round(r.avg_price).toLocaleString()}</td>
+                  <td className="px-3 py-3 text-ink-muted">
+                    {r.min_price === r.max_price
+                      ? `¥${r.min_price.toLocaleString()}`
+                      : `¥${r.min_price.toLocaleString()}〜¥${r.max_price.toLocaleString()}`}
+                  </td>
                 </tr>
               ))}
             </tbody>

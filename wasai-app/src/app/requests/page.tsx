@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { formatBudget } from "@/lib/budget";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { getRatingSummary } from "@/lib/reviews";
@@ -122,12 +123,8 @@ export default async function RequestsPage({
               <StarRating rating={clientRatings[i]?.average ?? null} count={clientRatings[i]?.count ?? 0} />
             </div>
             <p className="mt-2 line-clamp-2 text-sm text-ink-muted">{r.description}</p>
-            {(r.budget_min || r.budget_max) && (
-              <p className="mt-2 text-sm font-semibold">
-                予算: {r.budget_min ? `¥${r.budget_min.toLocaleString()}` : "〜"}
-                {" 〜 "}
-                {r.budget_max ? `¥${r.budget_max.toLocaleString()}` : ""}
-              </p>
+            {formatBudget(r.budget_min, r.budget_max) && (
+              <p className="mt-2 text-sm font-semibold">予算: {formatBudget(r.budget_min, r.budget_max)}</p>
             )}
           </li>
         ))}
