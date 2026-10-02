@@ -5,10 +5,9 @@ import Footer from "@/components/Footer";
 import { SITE_NAME, SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#18181b" },
-  ],
+  // Always light (see globals.css) — no dark variant.
+  themeColor: "#ffffff",
+  colorScheme: "light",
 };
 
 export const metadata: Metadata = {

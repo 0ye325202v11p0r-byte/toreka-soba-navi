@@ -11,6 +11,7 @@ import { getRatingSummary } from "@/lib/reviews";
 import ProposalForm from "./ProposalForm";
 import RespondProposalButtons from "./RespondProposalButtons";
 import CloseRequestButton from "./CloseRequestButton";
+import { MEASUREMENT_FIELDS, type RequestMeasurements } from "@/lib/measurements";
 import PrePaymentSummary from "@/components/PrePaymentSummary";
 import { deliveryNote } from "@/lib/orderTerms";
 import RespondCounterButtons from "./RespondCounterButtons";
@@ -43,6 +44,21 @@ export default async function RequestDetailPage({
     .maybeSingle<JobRequest & { profiles: Profile }>();
 
   if (!request) notFound();
+
+  // Visible only to the client and signed-in craftsmen (RLS on
+  // request_measurements, Phase 33) — everyone else just gets no row.
+  const { data: measurements } = await supabase
+    .from("request_measurements")
+    .select("height_cm, yuki_cm, hip_cm, bust_cm, waist_cm, build, note")
+    .eq("request_id", id)
+    .maybeSingle<RequestMeasurements>();
+
+  const directedTo = request.directed_to;
+  let directedName: string | null = null;
+  if (directedTo) {
+    const { data: target } = await supabase.from("profiles").select("display_name").eq("id", directedTo).maybeSingle();
+    directedName = target?.display_name ?? null;
+  }
 
   const { data: proposalsRaw } = await supabase
     .from("proposals")
@@ -116,7 +132,33 @@ export default async function RequestDetailPage({
           {request.budget_max ? `¥${request.budget_max.toLocaleString()}` : ""}
         </p>
       )}
+      {directedTo && (
+        <p className="mt-2 rounded-md bg-link-soft px-3 py-2 text-sm text-ink">
+          {directedName ?? "和裁士"}さんへの相談（この和裁士だけに届いています。掲示板には表示されません）
+        </p>
+      )}
       <p className="mt-4 whitespace-pre-wrap text-sm">{request.description}</p>
+      {measurements && (
+        <div className="mt-4 rounded-md border border-border bg-bg-elevated p-3 text-sm">
+          <p className="font-semibold">寸法</p>
+          <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+            {MEASUREMENT_FIELDS.filter((f) => measurements[f.key] != null).map((f) => (
+              <div key={f.key} className="flex gap-2">
+                <dt className="text-ink-muted">{f.label}</dt>
+                <dd>{measurements[f.key]}cm</dd>
+              </div>
+            ))}
+            {measurements.build && (
+              <div className="flex gap-2">
+                <dt className="text-ink-muted">体型</dt>
+                <dd>{measurements.build}</dd>
+              </div>
+            )}
+          </dl>
+          {measurements.note && <p className="mt-2 whitespace-pre-wrap text-ink-muted">{measurements.note}</p>}
+          <p className="mt-2 text-xs text-ink-muted">寸法は、依頼者本人とログインした和裁士だけに表示されています。</p>
+        </div>
+      )}
 
       {isOwner && request.status === "open" && (
         <div className="mt-4">
@@ -129,7 +171,7 @@ export default async function RequestDetailPage({
 
       {order && (isOwner || current?.id) && (
         <p className="mt-4">
-          <Link href={`/orders/${order.id}`} className="text-sm text-accent-strong underline">
+          <Link href={`/orders/${order.id}`} className="text-sm text-link underline">
             取引ページを見る
           </Link>
         </p>
@@ -154,7 +196,7 @@ export default async function RequestDetailPage({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Avatar url={p.profiles.avatar_url} name={p.profiles.display_name} size={28} />
-                  <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/craftsmen/${p.craftsman_id}`} className="font-semibold text-ink hover:underline">
                     {p.profiles.display_name}
                   </Link>
                   {verifiedCraftsmanIds.has(p.craftsman_id) && <VerifiedBadge />}
@@ -169,8 +211,8 @@ export default async function RequestDetailPage({
               <p className="mt-2 whitespace-pre-wrap text-sm">{p.message}</p>
               <p className="mt-2 text-xs text-ink-muted">状態: {STATUS_LABEL[p.status]}</p>
               {p.status === "countered" && p.countered_price != null && (
-                <div className="mt-2 rounded-md bg-accent-soft p-3">
-                  <p className="text-sm font-semibold text-accent-strong">
+                <div className="mt-2 rounded-md bg-link-soft p-3">
+                  <p className="text-sm font-semibold text-ink">
                     依頼者からの提示: ¥{p.countered_price.toLocaleString()}
                   </p>
                   {p.countered_message && (

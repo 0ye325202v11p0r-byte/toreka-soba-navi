@@ -39,6 +39,8 @@ export default async function DashboardPage() {
   let services: Service[] = [];
   let proposals: (Proposal & { requests: JobRequest })[] = [];
   let pastCraftsmen: Profile[] = [];
+  let favoriteCraftsmen: Profile[] = [];
+  let directedRequests: JobRequest[] = [];
 
   if (isClient) {
     const { data } = await supabase
@@ -69,7 +71,25 @@ export default async function DashboardPage() {
         .returns<Profile[]>();
       pastCraftsmen = profilesData ?? [];
     }
+
+    // お気に入り (Phase 33) — the client's own list, newest first.
+    const { data: favoriteRows } = await supabase
+      .from("favorites")
+      .select("craftsman_id, profiles!favorites_craftsman_id_fkey(*)")
+      .eq("client_id", current.id)
+      .order("created_at", { ascending: false });
+    favoriteCraftsmen = ((favoriteRows ?? []) as unknown as { profiles: Profile }[]).map((r) => r.profiles).filter(Boolean);
   } else {
+    // 指名依頼 sent to this craftsman that are still open (Phase 33).
+    const { data: directedData } = await supabase
+      .from("requests")
+      .select("*")
+      .eq("directed_to", current.id)
+      .eq("status", "open")
+      .order("created_at", { ascending: false })
+      .returns<JobRequest[]>();
+    directedRequests = directedData ?? [];
+
     const { data: serviceData } = await supabase
       .from("services")
       .select("*")
@@ -89,22 +109,39 @@ export default async function DashboardPage() {
   // The operator's only prompt that a client asked them to step in on a
   // delivered order (Phase 30) — there's no email notification.
   let openDisputes: number | null = null;
+  let openInquiries = 0;
   if (isAdminUser(current.email)) {
-    const { count } = await adminClient()
+    const admin = adminClient();
+    const { count } = await admin
       .from("orders")
       .select("id", { count: "exact", head: true })
       .eq("status", "delivered")
       .not("disputed_at", "is", null);
     openDisputes = count ?? 0;
+    // /contact inquiries waiting for a reply (Phase 33) — the operator's
+    // only prompt, there's no email notification.
+    const { count: inquiryCount } = await admin
+      .from("inquiries")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open");
+    openInquiries = inquiryCount ?? 0;
   }
 
   return (
     <div>
       {openDisputes !== null && (
-        <p className={`mb-4 rounded-md p-3 text-sm ${openDisputes > 0 ? "bg-warn-soft text-warn" : "bg-bg-elevated text-ink-muted"}`}>
-          運営：相談中の取引 {openDisputes}件 ・{" "}
+        <p
+          className={`mb-4 rounded-md p-3 text-sm ${
+            openDisputes > 0 || openInquiries > 0 ? "bg-warn-soft text-warn" : "bg-bg-elevated text-ink-muted"
+          }`}
+        >
+          運営：相談中の取引 {openDisputes}件・未対応のお問い合わせ {openInquiries}件 ・{" "}
           <Link href="/admin/orders" className="underline">
             相談中の取引
+          </Link>{" "}
+          ・{" "}
+          <Link href="/admin/inquiries" className="underline">
+            お問い合わせ
           </Link>{" "}
           ・{" "}
           <Link href="/admin/craftsmen" className="underline">
@@ -116,11 +153,11 @@ export default async function DashboardPage() {
         <h1 className="text-2xl font-bold">マイページ</h1>
         <div className="flex gap-4">
           {!isClient && (
-            <Link href="/dashboard/payouts" className="text-sm text-accent-strong underline">
+            <Link href="/dashboard/payouts" className="text-sm text-link underline">
               振込先の設定
             </Link>
           )}
-          <Link href="/dashboard/profile" className="text-sm text-accent-strong underline">
+          <Link href="/dashboard/profile" className="text-sm text-link underline">
             プロフィールを編集
           </Link>
         </div>
@@ -136,14 +173,14 @@ export default async function DashboardPage() {
           <section className="mt-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">投稿した依頼</h2>
-              <Link href="/requests/new" className="text-sm text-accent-strong underline">
+              <Link href="/requests/new" className="text-sm text-link underline">
                 新しい依頼を投稿
               </Link>
             </div>
             <ul className="mt-3 space-y-2">
               {requests.map((r) => (
                 <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                     {r.title}
                   </Link>
                   <p className="text-xs text-ink-muted">
@@ -155,6 +192,22 @@ export default async function DashboardPage() {
             </ul>
           </section>
 
+          {favoriteCraftsmen.length > 0 && (
+            <section className="mt-6">
+              <h2 className="text-lg font-bold">お気に入りの和裁士</h2>
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+                {favoriteCraftsmen.map((p) => (
+                  <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
+                    <Link href={`/craftsmen/${p.id}`} className="flex items-center gap-3">
+                      <Avatar url={p.avatar_url} name={p.display_name} size={40} />
+                      <span className="font-semibold text-ink hover:underline">{p.display_name}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {pastCraftsmen.length > 0 && (
             <section className="mt-6">
               <h2 className="text-lg font-bold">また依頼したい和裁士</h2>
@@ -163,7 +216,7 @@ export default async function DashboardPage() {
                   <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
                     <Link href={`/craftsmen/${p.id}`} className="flex items-center gap-3">
                       <Avatar url={p.avatar_url} name={p.display_name} size={40} />
-                      <span className="font-semibold text-accent-strong hover:underline">{p.display_name}</span>
+                      <span className="font-semibold text-ink hover:underline">{p.display_name}</span>
                     </Link>
                   </li>
                 ))}
@@ -173,17 +226,34 @@ export default async function DashboardPage() {
         </>
       ) : (
         <>
+          {directedRequests.length > 0 && (
+            <section className="mt-6 rounded-lg border border-link bg-link-soft p-4">
+              <h2 className="text-lg font-bold">あなたへの相談</h2>
+              <p className="mt-1 text-sm text-ink-muted">依頼者からあなたにだけ届いた相談です。内容を見て、見積り（提案）を送ってください。</p>
+              <ul className="mt-3 space-y-2">
+                {directedRequests.map((r) => (
+                  <li key={r.id} className="rounded-md border border-border bg-bg-elevated p-3">
+                    <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
+                      {r.title}
+                    </Link>
+                    <p className="text-xs text-ink-muted">{r.garment_type}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="mt-6">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">出品中のサービス</h2>
-              <Link href="/services/new" className="text-sm text-accent-strong underline">
+              <Link href="/services/new" className="text-sm text-link underline">
                 新しく出品する
               </Link>
             </div>
             <ul className="mt-3 space-y-2">
               {services.map((s) => (
                 <li key={s.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/services/${s.id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/services/${s.id}`} className="font-semibold text-ink hover:underline">
                     {s.title}
                   </Link>
                   {s.status !== "published" && (
@@ -201,7 +271,7 @@ export default async function DashboardPage() {
             <ul className="mt-3 space-y-2">
               {proposals.map((p) => (
                 <li key={p.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-                  <Link href={`/requests/${p.request_id}`} className="font-semibold text-accent-strong hover:underline">
+                  <Link href={`/requests/${p.request_id}`} className="font-semibold text-ink hover:underline">
                     {p.requests.title}
                   </Link>
                   <p className="text-xs text-ink-muted">
@@ -229,7 +299,7 @@ export default async function DashboardPage() {
         <ul className="mt-3 space-y-2">
           {(orders ?? []).map((o) => (
             <li key={o.id} className="rounded-lg border border-border bg-bg-elevated p-3">
-              <Link href={`/orders/${o.id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/orders/${o.id}`} className="font-semibold text-ink hover:underline">
                 {o.title}
               </Link>
               <p className="text-xs text-ink-muted">

@@ -20,7 +20,7 @@ export default function PortfolioUploader() {
 
   return (
     <div className="mt-2">
-      <label className="cursor-pointer text-xs text-accent-strong underline">
+      <label className="cursor-pointer text-xs text-link underline">
         {pending ? "アップロード中…" : "写真をアップロード（複数選択可）"}
         <input
           type="file"

@@ -12,7 +12,7 @@ export default function StarRating({
   const rounded = Math.round(rating);
   return (
     <span className="inline-flex items-center gap-1 text-sm">
-      <span aria-hidden className="text-accent-strong">
+      <span aria-hidden className="text-star">
         {"★".repeat(rounded)}
         {"☆".repeat(5 - rounded)}
       </span>

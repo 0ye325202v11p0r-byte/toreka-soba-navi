@@ -56,7 +56,7 @@ export default async function ServiceDetailPage({
         </dl>
 
         <div className="mt-4 border-t border-border pt-4">
-          <Link href={`/craftsmen/${service.craftsman_id}`} className="font-semibold text-accent-strong hover:underline">
+          <Link href={`/craftsmen/${service.craftsman_id}`} className="font-semibold text-ink hover:underline">
             {service.profiles.display_name}
           </Link>
           <div className="mt-1">

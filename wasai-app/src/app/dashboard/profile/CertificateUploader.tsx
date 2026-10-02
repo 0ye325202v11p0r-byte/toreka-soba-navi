@@ -22,14 +22,14 @@ export default function CertificateUploader({ signedUrl }: { signedUrl: string |
     <div>
       {signedUrl && (
         <p className="mb-1">
-          <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-accent-strong underline">
+          <a href={signedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-link underline">
             現在の証明書を確認する
           </a>
           <span className="ml-1 text-xs text-ink-faint">（このリンクは1時間で無効になります）</span>
         </p>
       )}
       <div>
-        <label className="cursor-pointer text-xs text-accent-strong underline">
+        <label className="cursor-pointer text-xs text-link underline">
           {pending ? "アップロード中…" : signedUrl ? "証明書を差し替える" : "証明書をアップロード"}
           <input
             type="file"

@@ -22,5 +22,8 @@ export async function login(_prevState: LoginState, formData: FormData): Promise
     return { error: "メールアドレスまたはパスワードが正しくありません。" };
   }
 
-  redirect("/dashboard");
+  // Back to where the visitor was headed (e.g. 「この和裁士に相談する」 while
+  // signed out). Only an in-site path — never an outside URL (open redirect).
+  const next = String(formData.get("next") ?? "");
+  redirect(next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/dashboard");
 }

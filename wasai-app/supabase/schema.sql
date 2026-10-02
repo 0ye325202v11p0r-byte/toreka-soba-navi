@@ -985,3 +985,128 @@ create trigger trg_craftsman_profiles_guard_stripe
   before insert or update on craftsman_profiles
   for each row
   execute function public.craftsman_profiles_guard_stripe();
+
+-- ---------------------------------------------------------------------------
+-- Phase 33（2026-10-01追加）: 試用の感想と、連絡先の見直しへの対応。
+--
+-- 1. 特定の和裁士への相談（指名依頼）: requests.directed_toが入った依頼は、
+--    依頼者本人と指名された和裁士にしか見えず、提案できるのもその和裁士だけ。
+--    あわせて、締め切った・成立した依頼にはDB側でも提案できないようにする。
+-- 2. 依頼の寸法: 体の情報なので依頼本体（誰でも見られる）とは別の表に置き、
+--    依頼者本人とログインした和裁士だけが読める（指名依頼なら指名された
+--    和裁士だけ — requestsのRLSが副問い合わせにも効くため）。
+-- 3. お気に入りの和裁士: 依頼者本人だけが見られる・増やせる・消せる。
+-- 4. お問い合わせ: 運営者の個人のメールアドレスをサイトに載せる代わりに、
+--    フォームで受け付けて保存する。読み書きはservice role（サイトの処理と
+--    運営の管理画面）だけ。
+-- 本番のSupabaseには、この「Phase 33」の部分だけをSQL Editorで実行する。
+-- 新しいアプリはこれらの表を使うので、アプリの反映「前に」実行する
+-- （今のアプリはこのSQLの後でも動く）。
+-- ---------------------------------------------------------------------------
+
+-- directed_toはprofilesへの外部キーにしない。requestsからprofilesへの参照が
+-- 2本になると、アプリの `requests.select("*, profiles(*)")`（依頼者の表示）が
+-- どちらの参照か決められずエラーになり、今のアプリの依頼ページが壊れるため。
+-- 和裁士であることは下のrequests_insert_ownで確かめる。
+alter table requests add column if not exists directed_to uuid;
+alter table requests drop constraint if exists requests_directed_to_fkey;
+create index if not exists idx_requests_directed_to on requests(directed_to);
+
+drop policy if exists "requests_insert_own" on requests;
+create policy "requests_insert_own" on requests for insert
+  with check (
+    client_id = auth.uid()
+    and (
+      directed_to is null
+      or exists (select 1 from profiles p where p.id = directed_to and p.role = 'craftsman')
+    )
+  );
+
+drop policy if exists "requests_select_all" on requests;
+drop policy if exists "requests_select_visible" on requests;
+create policy "requests_select_visible" on requests for select
+  using (directed_to is null or client_id = auth.uid() or directed_to = auth.uid());
+
+drop policy if exists "proposals_insert_own" on proposals;
+create policy "proposals_insert_own" on proposals for insert
+  with check (
+    craftsman_id = auth.uid()
+    and exists (
+      select 1 from requests r
+      where r.id = request_id
+        and r.status = 'open'
+        and (r.directed_to is null or r.directed_to = auth.uid())
+    )
+  );
+
+create table if not exists request_measurements (
+  request_id uuid primary key references requests(id) on delete cascade,
+  client_id uuid not null references profiles(id) on delete cascade,
+  height_cm numeric(5,1) check (height_cm between 50 and 250),
+  yuki_cm numeric(5,1) check (yuki_cm between 20 and 100),
+  hip_cm numeric(5,1) check (hip_cm between 30 and 250),
+  bust_cm numeric(5,1) check (bust_cm between 30 and 250),
+  waist_cm numeric(5,1) check (waist_cm between 30 and 250),
+  build text check (build in ('細身', '普通', 'ふくよか')),
+  note text check (char_length(note) <= 500),
+  created_at timestamptz not null default now()
+);
+alter table request_measurements enable row level security;
+
+drop policy if exists "request_measurements_select" on request_measurements;
+create policy "request_measurements_select" on request_measurements for select
+  using (
+    client_id = auth.uid()
+    or (
+      exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'craftsman')
+      and exists (select 1 from requests r where r.id = request_id)
+    )
+  );
+
+drop policy if exists "request_measurements_insert_own" on request_measurements;
+create policy "request_measurements_insert_own" on request_measurements for insert
+  with check (
+    client_id = auth.uid()
+    and exists (select 1 from requests r where r.id = request_id and r.client_id = auth.uid())
+  );
+
+drop policy if exists "request_measurements_update_own" on request_measurements;
+create policy "request_measurements_update_own" on request_measurements for update
+  using (client_id = auth.uid()) with check (client_id = auth.uid());
+
+create table if not exists favorites (
+  client_id uuid not null references profiles(id) on delete cascade,
+  craftsman_id uuid not null references profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (client_id, craftsman_id)
+);
+alter table favorites enable row level security;
+
+drop policy if exists "favorites_select_own" on favorites;
+create policy "favorites_select_own" on favorites for select using (client_id = auth.uid());
+
+drop policy if exists "favorites_insert_own" on favorites;
+create policy "favorites_insert_own" on favorites for insert
+  with check (
+    client_id = auth.uid()
+    and exists (select 1 from profiles p where p.id = craftsman_id and p.role = 'craftsman')
+  );
+
+drop policy if exists "favorites_delete_own" on favorites;
+create policy "favorites_delete_own" on favorites for delete using (client_id = auth.uid());
+
+create table if not exists inquiries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id) on delete set null,
+  name text not null check (char_length(name) between 1 and 100),
+  email text not null check (char_length(email) between 3 and 254),
+  category text not null check (category in (
+    'サービスについて', '取引について', '特商法の表示事項の請求', '個人情報の開示等の請求', '不具合の報告', 'その他'
+  )),
+  body text not null check (char_length(body) between 1 and 4000),
+  status text not null default 'open' check (status in ('open', 'closed')),
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_inquiries_status on inquiries(status, created_at);
+alter table inquiries enable row level security;
+-- ポリシーは作らない（anon/authenticatedは一切読み書きできない。service roleだけ）。

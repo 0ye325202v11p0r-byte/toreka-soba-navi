@@ -111,7 +111,7 @@ export default async function OrderDetailPage({
       </p>
       {order.payment_status !== "unpaid" && (
         <p className="mt-1">
-          <Link href={`/orders/${order.id}/receipt`} className="text-xs text-accent-strong underline">
+          <Link href={`/orders/${order.id}/receipt`} className="text-xs text-link underline">
             取引明細書を表示
           </Link>
         </p>

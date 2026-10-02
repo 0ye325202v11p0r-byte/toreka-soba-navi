@@ -44,7 +44,7 @@ export default async function OrderReceiptPage({
         <p className="mt-4 text-sm text-ink-muted">
           支払いが完了すると、この取引の明細書を発行できます。
         </p>
-        <Link href={`/orders/${id}`} className="mt-4 inline-block text-sm text-accent-strong underline">
+        <Link href={`/orders/${id}`} className="mt-4 inline-block text-sm text-link underline">
           取引ページへ戻る
         </Link>
       </div>
@@ -62,7 +62,7 @@ export default async function OrderReceiptPage({
   return (
     <div className="mx-auto max-w-xl">
       <div className="mb-4 flex items-center justify-between print:hidden">
-        <Link href={`/orders/${id}`} className="text-sm text-accent-strong underline">
+        <Link href={`/orders/${id}`} className="text-sm text-link underline">
           ← 取引ページへ戻る
         </Link>
         <PrintButton />

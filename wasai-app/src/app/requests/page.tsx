@@ -31,7 +31,11 @@ export default async function RequestsPage({
   let query = supabase
     .from("requests")
     .select("*, profiles!inner(*)")
-    .eq("status", "open");
+    .eq("status", "open")
+    // 指名依頼 (sent to one craftsman) never go on the public board — RLS
+    // already hides them from everyone else; this keeps them off for the
+    // two people who can see them too.
+    .is("directed_to", null);
   if (q) query = query.ilike("title", `%${q}%`);
   if (garment_type) query = query.eq("garment_type", garment_type);
   if (min_grade) query = query.eq("min_grade", min_grade);
@@ -47,7 +51,7 @@ export default async function RequestsPage({
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">依頼掲示板</h1>
-        <Link href="/requests/new" className="text-sm text-accent-strong underline">
+        <Link href="/requests/new" className="text-sm text-link underline">
           依頼を投稿する
         </Link>
       </div>
@@ -89,7 +93,7 @@ export default async function RequestsPage({
         {requests.map((r, i) => (
           <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
             <div className="flex items-center gap-2">
-              <Link href={`/requests/${r.id}`} className="font-semibold text-accent-strong hover:underline">
+              <Link href={`/requests/${r.id}`} className="font-semibold text-ink hover:underline">
                 {r.title}
               </Link>
               {r.min_grade && (

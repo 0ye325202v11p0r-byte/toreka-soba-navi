@@ -1,19 +1,21 @@
 "use client";
 
-import { useActionState } from "react";
+import { use, useActionState } from "react";
 import Link from "next/link";
 import { login, type LoginState } from "./actions";
 
 const initialState: LoginState = {};
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const [state, formAction, pending] = useActionState(login, initialState);
+  const { next } = use(searchParams);
 
   return (
     <div className="mx-auto max-w-sm">
       <h1 className="text-xl font-bold">ログイン</h1>
 
       <form action={formAction} className="mt-6 space-y-4">
+        {next && <input type="hidden" name="next" value={next} />}
         <div>
           <label htmlFor="email" className="block text-sm font-medium">
             メールアドレス
@@ -32,7 +34,7 @@ export default function LoginPage() {
             <label htmlFor="password" className="block text-sm font-medium">
               パスワード
             </label>
-            <Link href="/forgot-password" className="text-xs text-accent-strong underline">
+            <Link href="/forgot-password" className="text-xs text-link underline">
               パスワードをお忘れですか？
             </Link>
           </div>
@@ -61,7 +63,7 @@ export default function LoginPage() {
       </form>
 
       <p className="mt-4 text-sm text-ink-muted">
-        アカウントをお持ちでない方は <Link href="/signup" className="text-accent-strong underline">新規登録</Link>
+        アカウントをお持ちでない方は <Link href="/signup" className="text-link underline">新規登録</Link>
       </p>
     </div>
   );

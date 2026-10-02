@@ -372,6 +372,100 @@ async function clickOnOrder(user, orderId, text) {
   const canPropose = await craft.page.locator("button:has-text('提案を送る')").count();
   ok("締め切った依頼には提案できない", canPropose === 0, String(canPropose));
 
+  // ---- 15. feedback round 1 (Phase 33)
+  // contact form instead of a published mail address
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto(`${BASE}/tokushoho`);
+  const tok = await visitor.locator("main").innerText();
+  ok("特商法の表示に個人の氏名・メールアドレスが出ない（請求により開示・フォームへの案内）", !/@/.test(tok) && /遅滞なく電子メールでお知らせ/.test(tok) && /お問い合わせフォーム/.test(tok), tok.slice(0, 60));
+  await visitor.goto(`${BASE}/contact?category=特商法の表示事項の請求`);
+  await visitor.fill("input[name=name]", "問い合わせテスト");
+  await visitor.fill("input[name=email]", `inq${stamp}@example.com`);
+  await visitor.fill("textarea[name=body]", "氏名と住所を教えてください");
+  await visitor.click("button:has-text('送信する')");
+  await sleep(2500);
+  const [inq] = await q("select category, status from inquiries where email=$1", [`inq${stamp}@example.com`]);
+  const thanks = await visitor.locator("text=お問い合わせを受け付けました").count();
+  await op.page.goto(`${BASE}/admin/inquiries`);
+  const inbox = await op.page.locator("main").innerText();
+  ok("お問い合わせフォーム → 保存され、運営の受信箱に未対応で出る", inq && inq.category === "特商法の表示事項の請求" && inq.status === "open" && thanks === 1 && inbox.includes(`inq${stamp}@example.com`), JSON.stringify(inq));
+  await visitor.goto(`${BASE}/contact`);
+  await visitor.fill("input[name=name]", "bot"); await visitor.fill("input[name=email]", `bot${stamp}@example.com`);
+  await visitor.selectOption("select[name=category]", "その他"); await visitor.fill("textarea[name=body]", "spam");
+  await visitor.evaluate(() => { document.querySelector("input[name=website]").value = "http://spam.example"; });
+  await visitor.click("button:has-text('送信する')"); await sleep(2000);
+  const [bot] = await q("select count(*)::int as n from inquiries where email=$1", [`bot${stamp}@example.com`]);
+  ok("見えない欄まで埋めるロボットの送信は保存しない", bot.n === 0, String(bot.n));
+
+  // active tab
+  await client.page.goto(`${BASE}/requests`);
+  const current = await client.page.locator("header [aria-current=page]").allTextContents();
+  ok("選んでいるメニューに印が付く", current.join("") === "依頼掲示板", current.join("|"));
+
+  // measurements on a public request: client and craftsmen see them, a signed-out visitor doesn't
+  await client.page.goto(`${BASE}/requests/new`);
+  await client.page.fill("input[name=title]", "寸法テスト");
+  await client.page.selectOption("select[name=garment_type]", "訪問着");
+  await client.page.fill("textarea[name=description]", "寸法のテストです");
+  await client.page.fill("input[name=height_cm]", "158");
+  await client.page.fill("input[name=yuki_cm]", "64.5");
+  await client.page.fill("input[name=hip_cm]", "92");
+  await client.page.click("button:has-text('依頼を投稿する')");
+  await sleep(2500);
+  const [rq3] = await q("select r.id, m.height_cm, m.yuki_cm, m.hip_cm from requests r join request_measurements m on m.request_id=r.id where r.client_id=$1 and r.title='寸法テスト'", [client.id]);
+  await craft.page.goto(`${BASE}/requests/${rq3.id}`);
+  const craftSees = /裄（ゆき）\s*64\.5cm/.test(await craft.page.locator("main").innerText());
+  await visitor.goto(`${BASE}/requests/${rq3.id}`);
+  const anonSees = /64\.5cm/.test(await visitor.locator("main").innerText());
+  ok("寸法は別の欄で保存され、和裁士には見え、ログインしていない人には見えない", rq3 && Number(rq3.yuki_cm) === 64.5 && craftSees && !anonSees, `${rq3 && rq3.yuki_cm} 和裁士${craftSees} 未ログイン${anonSees}`);
+
+  // 相談する (directed request) from a craftsman page, starting signed out
+  const guest = await (await browser.newContext()).newPage();
+  await guest.goto(`${BASE}/craftsmen/${craft.id}`);
+  await guest.click("a:has-text('相談する')");
+  await guest.waitForURL(/\/login\?next=/);
+  await guest.fill("input[name=email]", `client${stamp}@example.com`);
+  await guest.fill("input[name=password]", "password123");
+  await guest.click("button[type=submit]");
+  await guest.waitForURL(/\/requests\/new\?to=/, { timeout: 15000 }).catch(() => {});
+  ok("ログインしていなくても「相談する」→ログイン後に相談の画面へ戻る", /\/requests\/new\?to=/.test(guest.url()), guest.url());
+  await guest.fill("input[name=title]", "指名の相談テスト");
+  await guest.selectOption("select[name=garment_type]", "訪問着");
+  await guest.fill("textarea[name=description]", "相談です");
+  const gradeShown = await guest.locator("select[name=min_grade]").count();
+  ok("相談の画面では「相談を送る」ボタンになり、資格級位の指定は出ない", gradeShown === 0 && (await guest.locator("button:has-text('相談を送る')").count()) === 1, `級位の欄${gradeShown}`);
+  await guest.click("button:has-text('相談を送る')");
+  await sleep(2500);
+  const [dr] = await q("select id, directed_to from requests where client_id=$1 and title='指名の相談テスト'", [client.id]);
+  await client.page.goto(`${BASE}/requests`);
+  const onBoard2 = await client.page.locator(`a[href="/requests/${dr.id}"]`).count();
+  const otherSees = await craft2.page.goto(`${BASE}/requests/${dr.id}`);
+  await craft.page.goto(`${BASE}/dashboard`);
+  const inbox2 = await craft.page.locator("text=あなたへの相談").count();
+  const [ntf] = await q("select count(*)::int as n from notifications where user_id=$1 and type='directed_request'", [craft.id]);
+  ok("相談はその和裁士にだけ届く（掲示板に出ない・ほかの和裁士は開けない・本人のマイページと通知に出る）", dr.directed_to === craft.id && onBoard2 === 0 && otherSees.status() === 404 && inbox2 >= 1 && ntf.n >= 1, `掲示板${onBoard2} 他の和裁士HTTP${otherSees.status()} マイページ${inbox2} 通知${ntf.n}`);
+  await craft.page.goto(`${BASE}/requests/${dr.id}`);
+  await craft.page.fill("input[name=price]", "15000");
+  await craft.page.fill("input[name=delivery_days]", "20");
+  await craft.page.fill("textarea[name=message]", "お受けできます");
+  await craft.page.click("button:has-text('提案を送る')");
+  await sleep(2500);
+  const [dp] = await q("select count(*)::int as n from proposals where request_id=$1 and craftsman_id=$2", [dr.id, craft.id]);
+  ok("指名された和裁士は相談に見積りを送れる", dp.n === 1, String(dp.n));
+
+  // favorites
+  await client.page.goto(`${BASE}/craftsmen/${craft.id}`);
+  await client.page.click("button:has-text('お気に入りに追加')");
+  await sleep(2000);
+  const [fv] = await q("select count(*)::int as n from favorites where client_id=$1 and craftsman_id=$2", [client.id, craft.id]);
+  await client.page.goto(`${BASE}/dashboard`);
+  const favSection = await client.page.locator("text=お気に入りの和裁士").count();
+  await client.page.goto(`${BASE}/craftsmen/${craft.id}`);
+  await client.page.click("button:has-text('お気に入りに登録済み')");
+  await sleep(2000);
+  const [fv2] = await q("select count(*)::int as n from favorites where client_id=$1 and craftsman_id=$2", [client.id, craft.id]);
+  ok("お気に入りに追加 → マイページに出る → もう一度押すと外れる", fv.n === 1 && favSection === 1 && fv2.n === 0, `${fv.n}/${favSection}/${fv2.n}`);
+
   await browser.close();
   await db.end();
   console.log(results.join("\n"));

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SITE_NAME } from "@/lib/site";
 import { PLATFORM_FEE_RATE, REPEAT_PLATFORM_FEE_RATE } from "@/lib/stripe";
 import { AUTO_COMPLETE_AFTER_DAYS } from "@/lib/escrow";
-import { BUSINESS_LABEL, CONTACT_EMAIL, TERMS_UPDATED_LABEL } from "@/lib/legal";
+import { BUSINESS_LABEL, CONTACT_PATH, TERMS_UPDATED_LABEL } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "利用規約",
@@ -248,14 +248,19 @@ export default function TermsPage() {
           <h2 className="mb-2 font-bold">第18条（事業者情報・お問い合わせ）</h2>
           <p>事業者：{BUSINESS_LABEL}</p>
           <p>
-            運営者の氏名は
-            <a href="/tokushoho" className="text-accent-strong underline">
+            運営者の氏名・所在地・電話番号は、ご請求をいただいた場合には遅滞なく電子メールでお知らせします（
+            <a href="/tokushoho" className="text-link underline">
               特定商取引法に基づく表示
             </a>
-            のとおりです。所在地・電話番号は、ご請求をいただいた場合には遅滞なく開示いたします。
+            ）。
           </p>
-          <p className="mt-1">本規約に関するお問い合わせは、以下の連絡先までお願いいたします。</p>
-          <p className="mt-1">{CONTACT_EMAIL}</p>
+          <p className="mt-1">
+            本規約に関するお問い合わせは、
+            <a href={CONTACT_PATH} className="text-link underline">
+              お問い合わせフォーム
+            </a>
+            からお願いいたします。
+          </p>
         </section>
       </div>
     </div>
