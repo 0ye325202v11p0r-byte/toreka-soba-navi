@@ -11,7 +11,7 @@ import type { Order, Profile } from "@/lib/types";
 export const metadata = { title: "取引明細書" };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
+  return new Date(iso).toLocaleDateString("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric" });
 }
 
 const PAYMENT_STATUS_LABEL: Record<Order["payment_status"], string> = {
