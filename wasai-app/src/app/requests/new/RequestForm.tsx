@@ -1,14 +1,42 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createRequest, type RequestFormState } from "./actions";
 import { GARMENT_TYPES } from "@/lib/types";
-import { BUILD_OPTIONS, MEASUREMENT_FIELDS } from "@/lib/measurements";
+import {
+  BUILD_OPTIONS,
+  MEASUREMENT_FIELDS,
+  browserRequiredKeys,
+  measurementRequirement,
+  measurementRequirementText,
+} from "@/lib/measurements";
 
 const initialState: RequestFormState = {};
 
-export default function RequestForm({ directedTo, directedName }: { directedTo?: string; directedName?: string }) {
+export interface ConsultMenu {
+  title: string;
+  garmentType: string;
+  price: number;
+  deliveryDays: number;
+}
+
+export default function RequestForm({
+  directedTo,
+  directedName,
+  menu,
+}: {
+  directedTo?: string;
+  directedName?: string;
+  // Set when the client came from a 仕立てメニュー's 「このメニューで相談する」.
+  menu?: ConsultMenu;
+}) {
   const [state, formAction, pending] = useActionState(createRequest, initialState);
+  // Which measurements are required depends on the garment (see
+  // measurementRequirement), so the fieldset follows the selection.
+  const [garment, setGarment] = useState(menu?.garmentType ?? "");
+  const requirement = measurementRequirement(garment);
+  const requiredKeys: string[] = browserRequiredKeys(requirement);
+  const requirementText = measurementRequirementText(garment);
 
   return (
     <form action={formAction} className="mt-4 space-y-4">
@@ -20,6 +48,18 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
           </p>
         </>
       )}
+      {menu && (
+        <div className="rounded-md border border-border p-3 text-sm">
+          <p className="text-xs text-ink-muted">相談するメニュー</p>
+          <p className="mt-1 font-semibold">{menu.title}</p>
+          <p className="mt-1 text-ink-muted">
+            ¥{menu.price.toLocaleString()}〜 ・ 納期目安 {menu.deliveryDays}日
+          </p>
+          <p className="mt-2 text-xs text-ink-muted">
+            寸法や希望を送ると、和裁士から見積り（提案）が届きます。内容と金額に納得してから申し込み・お支払いに進めます。
+          </p>
+        </div>
+      )}
       <div>
         <label htmlFor="title" className="block text-sm font-medium">
           タイトル
@@ -28,6 +68,7 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
           id="title"
           name="title"
           required
+          defaultValue={menu ? `「${menu.title}」について相談` : undefined}
           placeholder="例: 振袖の仕立てをお願いしたいです"
           className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
         />
@@ -41,7 +82,8 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
           id="garment_type"
           name="garment_type"
           required
-          defaultValue=""
+          value={garment}
+          onChange={(e) => setGarment(e.target.value)}
           className="mt-1 w-full rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
         >
           <option value="" disabled>
@@ -70,19 +112,31 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
       </div>
 
       <fieldset className="rounded-lg border border-border p-3">
-        <legend className="px-1 text-sm font-semibold">寸法（わかる範囲で・任意）</legend>
+        <legend className="px-1 text-sm font-semibold">
+          {requirementText ? "寸法（必須の項目があります）" : "寸法（わかる範囲で・任意）"}
+        </legend>
+        {requirementText && (
+          <p className="mb-2 rounded-md bg-link-soft px-3 py-2 text-sm text-ink">{requirementText}</p>
+        )}
         <p className="text-xs text-ink-muted">
-          わからない項目は空欄で大丈夫です。前巾・後巾などは和裁士がヒップから割り出し、足りない寸法は和裁士がメッセージで確認します。寸法は、あなたとログインした和裁士だけが見られます（掲示板には表示されません）。
+          {requirementText
+            ? "測り方は各項目の説明を見てください。前巾・後巾などは和裁士がヒップから割り出し、足りない寸法は和裁士がメッセージで確認します。"
+            : "わからない項目は空欄で大丈夫です。足りない寸法は和裁士がメッセージで確認します。"}
+          寸法は、あなたとログインした和裁士だけが見られます（掲示板には表示されません）。
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {MEASUREMENT_FIELDS.map((f) => (
             <div key={f.key}>
               <label htmlFor={f.key} className="block text-sm font-medium">
                 {f.label}（cm）
+                {requiredKeys.includes(f.key) && (
+                  <span className="ml-1.5 rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-bg-elevated">必須</span>
+                )}
               </label>
               <input
                 id={f.key}
                 name={f.key}
+                required={requiredKeys.includes(f.key)}
                 type="number"
                 inputMode="decimal"
                 step="0.1"
@@ -110,7 +164,7 @@ export default function RequestForm({ directedTo, directedName }: { directedTo?:
                 </option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-ink-muted">男性の着物は、身長と体型だけでも見積もれる場合があります。</p>
+            <p className="mt-1 text-xs text-ink-muted">男性の着物で寸法がわからない場合は、身長と体型を入れてください。</p>
           </div>
         </div>
         <div className="mt-3">

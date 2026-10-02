@@ -14,8 +14,8 @@ export const MEASUREMENT_FIELDS = [
     max: 100,
   },
   { key: "hip_cm", label: "ヒップ", hint: "腰回りのいちばん太いところです。", min: 30, max: 250 },
-  { key: "bust_cm", label: "バスト", hint: "女性の着物の場合の参考にします。", min: 30, max: 250 },
-  { key: "waist_cm", label: "ウエスト", hint: "男性の着物の場合に使います。", min: 30, max: 250 },
+  { key: "bust_cm", label: "バスト", hint: "女性の着物で使います。", min: 30, max: 250 },
+  { key: "waist_cm", label: "ウエスト", hint: "男性の着物で使います。", min: 30, max: 250 },
 ] as const;
 
 export type MeasurementKey = (typeof MEASUREMENT_FIELDS)[number]["key"];
@@ -49,7 +49,7 @@ export function parseMeasurements(formData: FormData): { value: RequestMeasureme
     if (!raw) continue;
     const n = Number(raw);
     if (!Number.isFinite(n) || n < f.min || n > f.max) {
-      return { value: null, error: `${f.label}は${f.min}〜${f.max}cmの数字で入力してください（わからなければ空欄で大丈夫です）。` };
+      return { value: null, error: `${f.label}は${f.min}〜${f.max}cmの数字で入力してください。` };
     }
     value[f.key] = Math.round(n * 10) / 10;
     any = true;
@@ -66,4 +66,54 @@ export function parseMeasurements(formData: FormData): { value: RequestMeasureme
     any = true;
   }
   return { value: any ? value : null };
+}
+
+// Which measurements a request must include (trial feedback: some are
+// needed to tailor at all). Same source as above — きもの町 lists women's
+// 身長・ヒップ・バスト・裄 and men's 身長・裄・ウエスト・ヒップ as the
+// required items, and for men who don't know them, 身長 and 体型 alone.
+// Only for making a kimono from scratch: 浴衣 can be either, and 帯・羽織・
+// コート・寸法直し・その他 don't follow this list, so they stay optional.
+export type MeasurementRequirement = "women" | "men" | "either" | "none";
+
+const WOMEN_KEYS: MeasurementKey[] = ["height_cm", "yuki_cm", "hip_cm", "bust_cm"];
+const MEN_KEYS: MeasurementKey[] = ["height_cm", "yuki_cm", "waist_cm", "hip_cm"];
+
+export function measurementRequirement(garmentType: string): MeasurementRequirement {
+  if (["振袖", "訪問着", "留袖", "小紋"].includes(garmentType)) return "women";
+  if (garmentType === "男物") return "men";
+  if (garmentType === "浴衣") return "either";
+  return "none";
+}
+
+// Keys the browser itself should insist on (the rest of the men's rule —
+// 身長+体型 instead of the full set — is checked on the server).
+export function browserRequiredKeys(req: MeasurementRequirement): MeasurementKey[] {
+  if (req === "women") return WOMEN_KEYS;
+  if (req === "men" || req === "either") return ["height_cm"];
+  return [];
+}
+
+export function measurementRequirementText(garmentType: string): string | null {
+  switch (measurementRequirement(garmentType)) {
+    case "women":
+      return `${garmentType}の仕立てには、身長・裄・ヒップ・バストが必要です。`;
+    case "men":
+      return "男物の仕立てには、身長・裄・ウエスト・ヒップが必要です。わからない場合は、身長と体型だけでも大丈夫です。";
+    case "either":
+      return "浴衣の仕立てには、女性用なら身長・裄・ヒップ・バスト、男性用なら身長・裄・ウエスト・ヒップ（わからなければ身長と体型）が必要です。";
+    default:
+      return null;
+  }
+}
+
+// Returns the error to show, or null when the required measurements are in.
+export function checkRequiredMeasurements(garmentType: string, m: RequestMeasurements | null): string | null {
+  const req = measurementRequirement(garmentType);
+  if (req === "none") return null;
+  const has = (keys: MeasurementKey[]) => keys.every((k) => m?.[k] != null);
+  const women = has(WOMEN_KEYS);
+  const men = has(MEN_KEYS) || (m?.height_cm != null && m?.build != null);
+  const ok = req === "women" ? women : req === "men" ? men : women || men;
+  return ok ? null : measurementRequirementText(garmentType);
 }

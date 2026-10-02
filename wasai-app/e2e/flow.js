@@ -9,6 +9,14 @@ const ok = (name, cond, detail = "") => { results.push(`${cond ? "PASS" : "FAIL"
 const q = async (sql, p = []) => (await db.query(sql, p)).rows;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// With loading.tsx the page streams, so a missing page is a "soft 404":
+// HTTP 200 plus the not-found screen (and a noindex tag).
+const isNotFound = async (page, resp) =>
+  resp.status() === 404 || (await page.locator("h1:has-text('ページが見つかりません')").count()) > 0;
+// The four sizes a woman's kimono request requires (measurementRequirement).
+async function fillSizes(page) {
+  for (const [k, v] of [["height_cm", "158"], ["yuki_cm", "64.5"], ["hip_cm", "92"], ["bust_cm", "84"]]) await page.fill(`input[name=${k}]`, v);
+}
 async function webhook(event, secret) {
   const payload = JSON.stringify(event);
   const header = stripe.webhooks.generateTestHeaderString({ payload, secret });
@@ -74,6 +82,7 @@ async function createService(craft, title, price) {
 }
 async function orderServiceAndPay(client, serviceId) {
   await client.page.goto(`${BASE}/services/${serviceId}`);
+  await client.page.click("summary:has-text('相談せずに、すぐ申し込む')");
   const url = await clickExpectingStripe(client.page, "button:has-text('お支払い画面へ進む')");
   const [order] = await q("select * from orders where service_id=$1 and client_id=$2 order by created_at desc limit 1", [serviceId, client.id]);
   return { url, order };
@@ -91,6 +100,23 @@ async function clickOnOrder(user, orderId, text) {
 (async () => {
   await db.connect();
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+  // Pages stream behind a loading skeleton (loading.tsx) and React swaps the
+  // content in shortly after "load" — read the page only once it's gone.
+  const settle = (page) => page.waitForFunction(() => !document.querySelector("[data-page-loading]"), null, { timeout: 15000 }).catch(() => {});
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (...args) => {
+    const ctx = await newContext(...args);
+    const newPage = ctx.newPage.bind(ctx);
+    ctx.newPage = async () => {
+      const page = await newPage();
+      for (const m of ["goto", "waitForURL", "click"]) {
+        const orig = page[m].bind(page);
+        page[m] = async (...a) => { const r = await orig(...a); await settle(page); return r; };
+      }
+      return page;
+    };
+    return ctx;
+  };
   const stamp = Date.now();
 
   // ---- 0. consent is enforced server-side, not just by the checkbox's `required`
@@ -168,6 +194,7 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.fill("input[name=title]", "交渉テスト");
   await client.page.selectOption("select[name=garment_type]", "訪問着");
   await client.page.fill("textarea[name=description]", "交渉のテストです");
+  await fillSizes(client.page);
   await client.page.click("button:has-text('依頼を投稿する')");
   await sleep(2500);
   const [reqRow] = await q("select id from requests where client_id=$1 and title='交渉テスト'", [client.id]);
@@ -265,13 +292,13 @@ async function clickOnOrder(user, orderId, text) {
   await sleep(2500);
   let [sv] = await q("select status from services where id=$1", [svc[0].id]);
   let r2 = await client.page.goto(svcUrl);
-  ok("和裁士が出品を停止 → 他の人には表示されない", sv.status === "draft" && r2.status() === 404, `${sv.status} / 依頼者側 HTTP ${r2.status()}`);
+  ok("和裁士が出品を停止 → 他の人には表示されない", sv.status === "draft" && (await isNotFound(client.page, r2)), `${sv.status} / 依頼者側 HTTP ${r2.status()}`);
   await craft.page.goto(svcUrl);
   await craft.page.click("button:has-text('公開を再開する')");
   await sleep(2500);
   r2 = await client.page.goto(svcUrl);
   [sv] = await q("select status from services where id=$1", [svc[0].id]);
-  ok("出品を再開 → また表示される", sv.status === "published" && r2.status() === 200, `${sv.status} / HTTP ${r2.status()}`);
+  ok("出品を再開 → また表示される", sv.status === "published" && r2.status() === 200 && !(await isNotFound(client.page, r2)), `${sv.status} / HTTP ${r2.status()}`);
   r2 = await fetch(`http://localhost:54321/rest/v1/services?id=eq.${svc[0].id}`, { method: "DELETE",
     headers: { apikey: require("fs").readFileSync("/tmp/pgw/e2e/keys.env", "utf8").match(/ANON=(.*)/)[1], Authorization: `Bearer ${access}` } });
   [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
@@ -321,7 +348,7 @@ async function clickOnOrder(user, orderId, text) {
   await op.page.goto(`${BASE}/dashboard`);
   const opBanner = await op.page.locator("text=運営：相談中の取引").textContent().catch(() => "");
   const outsider = await client.page.goto(`${BASE}/admin/orders`);
-  ok("運営のマイページに相談中の件数が出る／運営以外は管理画面を開けない", /相談中の取引 [1-9]\d*件/.test(opBanner) && outsider.status() === 404, `${opBanner} / 依頼者 HTTP ${outsider.status()}`);
+  ok("運営のマイページに相談中の件数が出る／運営以外は管理画面を開けない", /相談中の取引 [1-9]\d*件/.test(opBanner) && (await isNotFound(client.page, outsider)), `${opBanner} / 依頼者 HTTP ${outsider.status()}`);
   const resolve = async (orderId, label) => {
     await op.page.goto(`${BASE}/admin/orders`);
     const item = op.page.locator(`li[data-order-id="${orderId}"]`);
@@ -349,6 +376,7 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.fill("input[name=title]", "締め切りテスト");
   await client.page.selectOption("select[name=garment_type]", "訪問着");
   await client.page.fill("textarea[name=description]", "締め切りのテストです");
+  await fillSizes(client.page);
   await client.page.click("button:has-text('依頼を投稿する')");
   await sleep(2500);
   const [rq2] = await q("select id from requests where client_id=$1 and title='締め切りテスト'", [client.id]);
@@ -410,6 +438,7 @@ async function clickOnOrder(user, orderId, text) {
   await client.page.fill("input[name=height_cm]", "158");
   await client.page.fill("input[name=yuki_cm]", "64.5");
   await client.page.fill("input[name=hip_cm]", "92");
+  await client.page.fill("input[name=bust_cm]", "84");
   await client.page.click("button:has-text('依頼を投稿する')");
   await sleep(2500);
   const [rq3] = await q("select r.id, m.height_cm, m.yuki_cm, m.hip_cm from requests r join request_measurements m on m.request_id=r.id where r.client_id=$1 and r.title='寸法テスト'", [client.id]);
@@ -434,6 +463,7 @@ async function clickOnOrder(user, orderId, text) {
   await guest.fill("textarea[name=description]", "相談です");
   const gradeShown = await guest.locator("select[name=min_grade]").count();
   ok("相談の画面では「相談を送る」ボタンになり、資格級位の指定は出ない", gradeShown === 0 && (await guest.locator("button:has-text('相談を送る')").count()) === 1, `級位の欄${gradeShown}`);
+  await fillSizes(guest);
   await guest.click("button:has-text('相談を送る')");
   await sleep(2500);
   const [dr] = await q("select id, directed_to from requests where client_id=$1 and title='指名の相談テスト'", [client.id]);
@@ -443,7 +473,7 @@ async function clickOnOrder(user, orderId, text) {
   await craft.page.goto(`${BASE}/dashboard`);
   const inbox2 = await craft.page.locator("text=あなたへの相談").count();
   const [ntf] = await q("select count(*)::int as n from notifications where user_id=$1 and type='directed_request'", [craft.id]);
-  ok("相談はその和裁士にだけ届く（掲示板に出ない・ほかの和裁士は開けない・本人のマイページと通知に出る）", dr.directed_to === craft.id && onBoard2 === 0 && otherSees.status() === 404 && inbox2 >= 1 && ntf.n >= 1, `掲示板${onBoard2} 他の和裁士HTTP${otherSees.status()} マイページ${inbox2} 通知${ntf.n}`);
+  ok("相談はその和裁士にだけ届く（掲示板に出ない・ほかの和裁士は開けない・本人のマイページと通知に出る）", dr.directed_to === craft.id && onBoard2 === 0 && (await isNotFound(craft2.page, otherSees)) && inbox2 >= 1 && ntf.n >= 1, `掲示板${onBoard2} 他の和裁士HTTP${otherSees.status()} マイページ${inbox2} 通知${ntf.n}`);
   await craft.page.goto(`${BASE}/requests/${dr.id}`);
   await craft.page.fill("input[name=price]", "15000");
   await craft.page.fill("input[name=delivery_days]", "20");
@@ -465,6 +495,57 @@ async function clickOnOrder(user, orderId, text) {
   await sleep(2000);
   const [fv2] = await q("select count(*)::int as n from favorites where client_id=$1 and craftsman_id=$2", [client.id, craft.id]);
   ok("お気に入りに追加 → マイページに出る → もう一度押すと外れる", fv.n === 1 && favSection === 1 && fv2.n === 0, `${fv.n}/${favSection}/${fv2.n}`);
+
+  // ---- 16. trial feedback round 2
+  // A 仕立てメニュー leads to 相談 first; paying right away is folded away.
+  const svcM = await createService(craft, "テスト 相談メニュー", 3000);
+  await client.page.goto(`${BASE}/services/${svcM[0].id}`);
+  const directHidden = !(await client.page.locator("button:has-text('お支払い画面へ進む')").isVisible());
+  await client.page.click("a:has-text('このメニューで相談する')");
+  await client.page.waitForURL(/\/requests\/new\?to=.*menu=/, { timeout: 15000 }).catch(() => {});
+  const titleVal = await client.page.inputValue("input[name=title]").catch(() => "");
+  const garmentVal = await client.page.inputValue("select[name=garment_type]").catch(() => "");
+  const menuBox = await client.page.locator("text=相談するメニュー").count();
+  ok("仕立てメニューは「相談する」が先（すぐ申し込むは折りたたみ）・相談画面にメニュー名と種類が入る", directHidden && titleVal.includes("テスト 相談メニュー") && garmentVal === "訪問着" && menuBox === 1, `${directHidden} / ${titleVal} / ${garmentVal}`);
+
+  // Required sizes, checked on the server even if the browser check is skipped.
+  await client.page.goto(`${BASE}/requests/new`);
+  await client.page.fill("input[name=title]", "寸法必須テスト");
+  await client.page.selectOption("select[name=garment_type]", "振袖");
+  await client.page.fill("textarea[name=description]", "寸法なし");
+  const reqMarks = await client.page.locator("label:has-text('必須')").count();
+  await client.page.evaluate(() => document.querySelectorAll("input[required]").forEach((el) => { if (el.name.endsWith("_cm")) el.removeAttribute("required"); }));
+  await client.page.click("button:has-text('依頼を投稿する')");
+  await sleep(2500);
+  const sizeErr = await client.page.locator("p[role=alert]").first().textContent().catch(() => "");
+  const [noSize] = await q("select count(*)::int as n from requests where client_id=$1 and title='寸法必須テスト'", [client.id]);
+  ok("振袖は身長・裄・ヒップ・バストが必須（画面に「必須」・寸法なしでは保存されない）", reqMarks === 4 && /身長・裄・ヒップ・バスト/.test(sizeErr) && noSize.n === 0, `必須${reqMarks} ${sizeErr}`);
+
+  // Men who don't know their sizes: 身長 + 体型 is enough. 帯 needs none.
+  await client.page.goto(`${BASE}/requests/new`);
+  await client.page.fill("input[name=title]", "男物の身長と体型だけ");
+  await client.page.selectOption("select[name=garment_type]", "男物");
+  await client.page.fill("textarea[name=description]", "寸法がわからない");
+  await client.page.fill("input[name=height_cm]", "172");
+  await client.page.selectOption("select[name=build]", "普通");
+  await client.page.click("button:has-text('依頼を投稿する')");
+  await sleep(2500);
+  await client.page.goto(`${BASE}/requests/new`);
+  await client.page.fill("input[name=title]", "帯は寸法なし");
+  await client.page.selectOption("select[name=garment_type]", "帯");
+  await client.page.fill("textarea[name=description]", "名古屋帯の仕立て");
+  await client.page.click("button:has-text('依頼を投稿する')");
+  await sleep(2500);
+  const [loose] = await q("select count(*)::int as n from requests where client_id=$1 and title in ('男物の身長と体型だけ','帯は寸法なし')", [client.id]);
+  ok("男物は身長と体型だけでも送れる・帯は寸法なしで送れる", loose.n === 2, String(loose.n));
+
+  // A tap anywhere on a board card opens it (not only the title).
+  await client.page.goto(`${BASE}/requests`);
+  const desc = client.page.locator("li", { hasText: "帯は寸法なし" }).first().locator("p", { hasText: "名古屋帯の仕立て" });
+  const box = await desc.boundingBox();
+  if (box) await client.page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await client.page.waitForURL(/\/requests\/[0-9a-f-]{36}$/, { timeout: 15000 }).catch(() => {});
+  ok("依頼掲示板はカードのどこを押しても詳細が開く", /\/requests\/[0-9a-f-]{36}$/.test(client.page.url()), client.page.url());
 
   await browser.close();
   await db.end();
