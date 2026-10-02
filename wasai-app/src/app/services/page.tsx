@@ -7,7 +7,7 @@ import { GARMENT_TYPES, type Service, type Profile } from "@/lib/types";
 
 type ServiceRow = Service & { profiles: Profile };
 
-export const metadata = { title: "出品一覧" };
+export const metadata = { title: "仕立てメニュー" };
 
 export default async function ServicesPage({
   searchParams,
@@ -17,7 +17,7 @@ export default async function ServicesPage({
   if (!isSupabaseConfigured()) {
     return (
       <div>
-        <h1 className="mb-4 text-2xl font-bold">出品一覧</h1>
+        <h1 className="mb-4 text-2xl font-bold">仕立てメニュー</h1>
         <SetupNotice />
       </div>
     );
@@ -55,10 +55,10 @@ export default async function ServicesPage({
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">出品一覧</h1>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold">仕立てメニュー</h1>
         <Link href="/services/new" className="text-sm text-link underline">
-          和裁士の方はサービスを出品する
+          和裁士の方はメニューを作る
         </Link>
       </div>
       <p className="mt-1 text-sm text-ink-muted">
@@ -111,7 +111,7 @@ export default async function ServicesPage({
           );
         })}
         {services.length === 0 && !error && (
-          <p className="text-sm text-ink-muted">まだ出品がありません。</p>
+          <p className="text-sm text-ink-muted">まだメニューがありません。</p>
         )}
       </ul>
     </div>

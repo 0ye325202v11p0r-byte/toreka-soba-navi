@@ -18,7 +18,7 @@ export async function orderService(
 ): Promise<OrderFromServiceState> {
   const serviceId = String(formData.get("service_id") ?? "");
   const desiredBy = String(formData.get("desired_by") ?? "").trim();
-  if (!serviceId) return { error: "サービスが見つかりません。" };
+  if (!serviceId) return { error: "メニューが見つかりません。" };
   if (!isStripeConfigured()) return { error: "決済機能は準備中です。しばらくお待ちください。" };
 
   const supabase = await createClient();
@@ -34,10 +34,10 @@ export async function orderService(
     .maybeSingle();
 
   if (serviceError || !service || service.status !== "published") {
-    return { error: "このサービスは現在依頼できません。" };
+    return { error: "このメニューは現在申し込めません。" };
   }
   if (service.craftsman_id === user.id) {
-    return { error: "自分自身のサービスには依頼できません。" };
+    return { error: "自分のメニューには申し込めません。" };
   }
 
   const capacityCheck = await checkCraftsmanCanAcceptWork(supabase, service.craftsman_id);

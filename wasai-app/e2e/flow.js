@@ -68,7 +68,7 @@ async function createService(craft, title, price) {
   await craft.page.fill("textarea[name=description]", "テスト用の出品です");
   await craft.page.fill("input[name=price]", String(price));
   await craft.page.fill("input[name=delivery_days]", "14");
-  await craft.page.click("button:has-text('出品する')");
+  await craft.page.click("button:has-text('メニューを公開する')");
   await sleep(2500);
   return q("select id, price from services where craftsman_id=$1 and title=$2", [craft.id, title]);
 }
@@ -261,13 +261,13 @@ async function clickOnOrder(user, orderId, text) {
   // ---- 12. craftsman pauses / resumes / deletes a listing
   const svcUrl = `${BASE}/services/${svc[0].id}`;
   await craft.page.goto(svcUrl);
-  await craft.page.click("button:has-text('出品を停止する')");
+  await craft.page.click("button:has-text('公開を停止する')");
   await sleep(2500);
   let [sv] = await q("select status from services where id=$1", [svc[0].id]);
   let r2 = await client.page.goto(svcUrl);
   ok("和裁士が出品を停止 → 他の人には表示されない", sv.status === "draft" && r2.status() === 404, `${sv.status} / 依頼者側 HTTP ${r2.status()}`);
   await craft.page.goto(svcUrl);
-  await craft.page.click("button:has-text('出品を再開する')");
+  await craft.page.click("button:has-text('公開を再開する')");
   await sleep(2500);
   r2 = await client.page.goto(svcUrl);
   [sv] = await q("select status from services where id=$1", [svc[0].id]);
@@ -277,7 +277,7 @@ async function clickOnOrder(user, orderId, text) {
   [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
   ok("依頼者が他人の出品を消そうとしても消えない", sv.n === 1, `HTTP ${r2.status}`);
   await craft.page.goto(svcUrl);
-  await craft.page.click("button:has-text('この出品を削除する')");
+  await craft.page.click("button:has-text('このメニューを削除する')");
   await craft.page.waitForURL("**/dashboard", { timeout: 15000 }).catch(() => {});
   [sv] = await q("select count(*)::int as n from services where id=$1", [svc[0].id]);
   [ord] = await q("select status, price, title, service_id from orders where id=$1", [o1.order.id]);

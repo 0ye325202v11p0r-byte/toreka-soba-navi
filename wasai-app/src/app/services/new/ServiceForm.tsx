@@ -113,7 +113,7 @@ export default function ServiceForm() {
         disabled={pending}
         className="rounded-md bg-accent px-4 py-2 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors disabled:opacity-60"
       >
-        {pending ? "出品中…" : "出品する"}
+        {pending ? "公開中…" : "メニューを公開する"}
       </button>
     </form>
   );

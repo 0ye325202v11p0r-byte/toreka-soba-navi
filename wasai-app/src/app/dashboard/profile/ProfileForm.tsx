@@ -186,7 +186,7 @@ export default function ProfileForm({
             <div>
               <p className="text-sm font-medium">得意分野ごとの目安料金（任意）</p>
               <p className="mt-1 text-xs text-ink-muted">
-                依頼者が予算に合う和裁士を探しやすくなります。「出品」ほど作り込まなくても、大まかな相場感だけ伝えられます。
+                依頼者が予算に合う和裁士を探しやすくなります。「仕立てメニュー」ほど作り込まなくても、大まかな相場感だけ伝えられます。
               </p>
               <div className="mt-2 space-y-2">
                 {specialties.map((g) => (
@@ -251,7 +251,7 @@ export default function ProfileForm({
               className="mt-1 w-32 rounded-md border border-border bg-bg-elevated px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-ink-muted">
-              進行中の取引がこの件数に達すると、新規受注（提案の送信・提案の承諾・サービスへの直接注文）が自動的に止まります。
+              進行中の取引がこの件数に達すると、新規受注（提案の送信・提案の承諾・仕立てメニューへの直接の申込み）が自動的に止まります。
             </p>
           </div>
         </div>

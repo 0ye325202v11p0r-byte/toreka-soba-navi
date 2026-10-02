@@ -15,7 +15,7 @@ export default function PrivacyPage() {
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold">プライバシーポリシー</h1>
-      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年9月29日</p>
+      <p className="mb-6 text-xs text-ink-faint">最終更新日：2026年10月2日</p>
 
       <div className="space-y-6 text-sm leading-relaxed">
         <section>
@@ -52,8 +52,8 @@ export default function PrivacyPage() {
               ：和裁士が任意で登録した場合に、当方による確認（プロフィールへの「確認済み」表示）のためにのみ使用します。他の利用者には公開しません。
             </li>
             <li>
-              <b>依頼・提案・出品・取引・メッセージ・レビューの内容</b>
-              ：ご自身が投稿・入力した内容です。依頼・出品・レビューは他の利用者が閲覧できます。取引メッセージは、その取引の当事者（依頼者・和裁士）だけが閲覧できます。
+              <b>依頼・提案・仕立てメニュー・取引・メッセージ・レビューの内容</b>
+              ：ご自身が投稿・入力した内容です。依頼・仕立てメニュー・レビューは他の利用者が閲覧できます。取引メッセージは、その取引の当事者（依頼者・和裁士）だけが閲覧できます。
             </li>
             <li>
               <b>決済に関する情報</b>
@@ -78,7 +78,7 @@ export default function PrivacyPage() {
           <h2 className="mb-2 font-bold">3. 利用目的</h2>
           <ul className="list-disc space-y-1 pl-5">
             <li>ログイン機能の提供（本人確認）</li>
-            <li>依頼者・和裁士のマッチング機能の提供（依頼・提案・出品・取引・メッセージ・レビュー・通知の表示）</li>
+            <li>依頼者・和裁士のマッチング機能の提供（依頼・提案・仕立てメニュー・取引・メッセージ・レビュー・通知の表示）</li>
             <li>取引代金の決済、和裁士への引渡し、キャンセル時の返金</li>
             <li>和裁士の資格級位の確認と表示</li>
             <li>不正利用の防止（連絡先交換の検知、アクセス記録の確認等）</li>

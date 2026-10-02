@@ -14,5 +14,5 @@ export const CONTACT_PATH = "/contact";
 // Bump together with the "最終更新日" on /terms whenever the terms change.
 // Stored in each user's auth user_metadata at signup (terms_version), so we
 // can tell later which version someone agreed to.
-export const TERMS_VERSION = "2026-09-29";
-export const TERMS_UPDATED_LABEL = "2026年9月29日";
+export const TERMS_VERSION = "2026-10-02";
+export const TERMS_UPDATED_LABEL = "2026年10月2日";

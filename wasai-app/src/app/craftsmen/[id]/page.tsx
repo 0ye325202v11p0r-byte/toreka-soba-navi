@@ -160,7 +160,7 @@ export default async function CraftsmanDetailPage({
         <section className="mt-6 rounded-lg border border-border bg-bg-elevated p-4">
           <h2 className="text-lg font-bold">この和裁士に相談する</h2>
           <p className="mt-1 text-sm text-ink-muted">
-            出品にないお仕立て・お直しや、寸法・生地のことなど、この和裁士にだけ相談できます。和裁士から見積り（提案）が届きます。相談の内容は掲示板には表示されません。
+            メニューにないお仕立て・お直しや、寸法・生地のことなど、この和裁士にだけ相談できます。和裁士から見積り（提案）が届きます。相談の内容は掲示板には表示されません。
           </p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
             {canTakeWork ? (
@@ -190,13 +190,13 @@ export default async function CraftsmanDetailPage({
       )}
 
       <section className="mt-6">
-        <h2 className="text-lg font-bold">出品中のサービス</h2>
+        <h2 className="text-lg font-bold">この和裁士の仕立てメニュー</h2>
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
           {(services ?? []).map((s) => (
             <ServiceCard key={s.id} service={s} />
           ))}
           {(services ?? []).length === 0 && (
-            <p className="text-sm text-ink-muted">現在出品中のサービスはありません。</p>
+            <p className="text-sm text-ink-muted">現在公開中のメニューはありません。</p>
           )}
         </ul>
       </section>

@@ -245,9 +245,9 @@ export default async function DashboardPage() {
 
           <section className="mt-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">出品中のサービス</h2>
+              <h2 className="text-lg font-bold">公開中の仕立てメニュー</h2>
               <Link href="/services/new" className="text-sm text-link underline">
-                新しく出品する
+                新しくメニューを作る
               </Link>
             </div>
             <ul className="mt-3 space-y-2">
@@ -262,7 +262,7 @@ export default async function DashboardPage() {
                   <p className="text-xs text-ink-muted">¥{s.price.toLocaleString()}〜</p>
                 </li>
               ))}
-              {services.length === 0 && <p className="text-sm text-ink-muted">まだ出品していません。</p>}
+              {services.length === 0 && <p className="text-sm text-ink-muted">まだメニューを作っていません。</p>}
             </ul>
           </section>
 
