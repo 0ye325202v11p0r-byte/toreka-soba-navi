@@ -9,6 +9,8 @@ import Avatar from "@/components/Avatar";
 import SetupNotice from "@/components/SetupNotice";
 import { getCurrentUser } from "@/lib/auth";
 import FavoriteButton from "./FavoriteButton";
+import ServiceCard from "@/components/ServiceCard";
+import GarmentChip from "@/components/GarmentChip";
 import { CRAFTSMAN_PUBLIC_COLUMNS } from "@/lib/types";
 import type { CraftsmanPublicProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
 
@@ -114,9 +116,7 @@ export default async function CraftsmanDetailPage({
         {craftsmanProfile && craftsmanProfile.specialties.length > 0 && (
           <p className="mt-4 flex flex-wrap gap-1">
             {craftsmanProfile.specialties.map((s) => (
-              <span key={s} className="rounded-full bg-bg-sunken px-2 py-0.5 text-xs text-ink-muted">
-                {s}
-              </span>
+              <GarmentChip key={s} garmentType={s} />
             ))}
           </p>
         )}
@@ -193,13 +193,7 @@ export default async function CraftsmanDetailPage({
         <h2 className="text-lg font-bold">出品中のサービス</h2>
         <ul className="mt-3 grid gap-3 sm:grid-cols-2">
           {(services ?? []).map((s) => (
-            <li key={s.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-              <Link href={`/services/${s.id}`} className="font-semibold text-ink hover:underline">
-                {s.title}
-              </Link>
-              <p className="mt-1 text-xs text-ink-muted">{s.garment_type}</p>
-              <p className="mt-2 font-bold">¥{s.price.toLocaleString()}〜</p>
-            </li>
+            <ServiceCard key={s.id} service={s} />
           ))}
           {(services ?? []).length === 0 && (
             <p className="text-sm text-ink-muted">現在出品中のサービスはありません。</p>
