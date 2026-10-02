@@ -10,6 +10,7 @@ export const metadata = { title: "通知" };
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "numeric",
     day: "numeric",

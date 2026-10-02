@@ -25,7 +25,13 @@ export default function Avatar({
     );
   }
 
-  const initial = name.trim().charAt(0) || "?";
+  // First letter or kanji, skipping a leading 【…】/（…）-style tag and any
+  // symbols — "【見本】杉浦 恵" shows 杉, not 【.
+  const initial =
+    name
+      .trim()
+      .replace(/^[【\[（(「『〔][^】\]）)」』〕]*[】\]）)」』〕]\s*/u, "")
+      .match(/[\p{L}\p{N}]/u)?.[0] ?? "?";
   return (
     <span
       style={style}

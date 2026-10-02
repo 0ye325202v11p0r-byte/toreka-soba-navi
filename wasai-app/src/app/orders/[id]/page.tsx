@@ -156,12 +156,12 @@ export default async function OrderDetailPage({
             <div className="rounded-lg border border-border bg-bg-elevated p-4">
               <h2 className="text-sm font-semibold">仕様の最終確認</h2>
               <p className="mt-1 text-xs text-ink-muted">
-                {new Date(order.spec_confirmed_at).toLocaleString("ja-JP")} に和裁士が送信
+                {new Date(order.spec_confirmed_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} に和裁士が送信
               </p>
               <p className="mt-2 whitespace-pre-wrap text-sm">{order.spec_confirmation_text}</p>
               {order.spec_approved_at ? (
                 <p className="mt-3 text-xs text-good">
-                  ✓ {new Date(order.spec_approved_at).toLocaleString("ja-JP")} に依頼者が承認済み
+                  ✓ {new Date(order.spec_approved_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} に依頼者が承認済み
                 </p>
               ) : viewerRole === "client" ? (
                 <SpecConfirmationApproveButton orderId={order.id} />
@@ -182,7 +182,7 @@ export default async function OrderDetailPage({
             <div className="rounded-lg border border-border bg-bg-elevated p-4">
               <h2 className="text-sm font-semibold">反物の状態記録</h2>
               <p className="mt-1 text-xs text-ink-muted">
-                {new Date(order.fabric_check_completed_at).toLocaleString("ja-JP")} に和裁士が記録
+                {new Date(order.fabric_check_completed_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} に和裁士が記録
               </p>
               <ul className="mt-2 space-y-1 text-sm">
                 <li>傷・汚れ・シミ: {order.fabric_check_damage ? "あり" : "なし"}</li>
@@ -202,7 +202,7 @@ export default async function OrderDetailPage({
               )}
               {order.fabric_check_approved_at ? (
                 <p className="mt-3 text-xs text-good">
-                  ✓ {new Date(order.fabric_check_approved_at).toLocaleString("ja-JP")} に依頼者が承認済み
+                  ✓ {new Date(order.fabric_check_approved_at).toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })} に依頼者が承認済み
                 </p>
               ) : viewerRole === "client" ? (
                 <FabricCheckApproveButton orderId={order.id} />
