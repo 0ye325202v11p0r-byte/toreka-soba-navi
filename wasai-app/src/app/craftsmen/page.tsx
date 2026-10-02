@@ -129,7 +129,11 @@ export default async function CraftsmenPage({
         {craftsmen.map((c, i) => (
           // The name link's ::after covers the whole card, so a tap anywhere
           // on it opens the profile (trial feedback: only the title worked).
-          <li key={c.profile_id} className="relative rounded-lg border border-border bg-bg-elevated p-4 transition-shadow hover:shadow-md">
+          <li key={c.profile_id} className="relative overflow-hidden rounded-lg border border-border bg-bg-elevated p-4 transition-shadow hover:shadow-md">
+            {c.profiles.cover_url && (
+              // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URL, no Next Image domain config
+              <img src={c.profiles.cover_url} alt="" className="-mx-4 -mt-4 mb-3 aspect-[3/1] w-[calc(100%+2rem)] max-w-none object-cover" />
+            )}
             <div className="flex items-center gap-2">
               <Avatar url={c.profiles.avatar_url} name={c.profiles.display_name} />
               <Link

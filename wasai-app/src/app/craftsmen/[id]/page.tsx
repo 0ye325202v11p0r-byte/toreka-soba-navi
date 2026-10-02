@@ -95,6 +95,14 @@ export default async function CraftsmanDetailPage({
 
   return (
     <div>
+      {profile.cover_url && (
+        // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URL, no Next Image domain config
+        <img
+          src={profile.cover_url}
+          alt={`${profile.display_name}のトップ画像`}
+          className="mb-4 aspect-[2/1] w-full rounded-lg object-cover sm:aspect-[3/1]"
+        />
+      )}
       <div className="rounded-lg border border-border bg-bg-elevated p-6">
         <div className="flex items-center gap-3">
           <Avatar url={profile.avatar_url} name={profile.display_name} size={56} />

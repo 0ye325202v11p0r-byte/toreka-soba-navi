@@ -34,6 +34,49 @@ export async function uploadAvatar(_prevState: UploadState, formData: FormData):
   return {};
 }
 
+// トップ画像 (Phase 34, profiles.cover_url): the wide image at the top of a
+// craftsman's page. Kept in the public portfolio bucket like 実績写真.
+export async function uploadCover(_prevState: UploadState, formData: FormData): Promise<UploadState> {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "画像を選択してください。" };
+  const validationError = validateUploadedFile(file, "image");
+  if (validationError) return { error: validationError };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  if (profile?.role !== "craftsman") return { error: "トップ画像は和裁士のページにだけ設定できます。" };
+
+  try {
+    const path = await uploadUserFile(supabase, "portfolio", user.id, file);
+    const url = publicUrlFor(supabase, "portfolio", path);
+    const { error } = await supabase.from("profiles").update({ cover_url: url }).eq("id", user.id);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "アップロードに失敗しました。" };
+  }
+
+  revalidatePath("/dashboard/profile");
+  revalidatePath(`/craftsmen/${user.id}`);
+  return {};
+}
+
+export async function removeCover(_prevState: UploadState, _formData: FormData): Promise<UploadState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+  const { error } = await supabase.from("profiles").update({ cover_url: null }).eq("id", user.id);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/profile");
+  revalidatePath(`/craftsmen/${user.id}`);
+  return {};
+}
+
 export async function addPortfolioPhoto(_prevState: UploadState, formData: FormData): Promise<UploadState> {
   const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
   if (files.length === 0) return { error: "写真を選択してください。" };

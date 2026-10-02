@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { containsContactInfo, CONTACT_INFO_ERROR } from "@/lib/contactInfoFilter";
 import { isValidOrderPrice, MIN_ORDER_PRICE } from "@/lib/stripe";
+import { validateUploadedFile, uploadUserFile, publicUrlFor } from "@/lib/storage";
 
 export interface ServiceFormState {
   error?: string;
@@ -47,6 +48,14 @@ export async function createService(
   if (!Number.isFinite(deliveryDays) || deliveryDays <= 0) {
     return { error: "納期日数を正しく入力してください。" };
   }
+  // Optional photo (Phase 34). Checked before the menu is created so a bad
+  // file is reported without leaving a half-made menu behind.
+  const image = formData.get("image");
+  const hasImage = image instanceof File && image.size > 0;
+  if (hasImage) {
+    const imageError = validateUploadedFile(image, "image");
+    if (imageError) return { error: imageError };
+  }
 
   const { data: service, error } = await supabase
     .from("services")
@@ -64,6 +73,20 @@ export async function createService(
     .single();
 
   if (error) return { error: error.message };
+
+  if (hasImage) {
+    // Best-effort: the menu exists either way, and the photo can be added
+    // again from the menu's page.
+    try {
+      const path = await uploadUserFile(supabase, "portfolio", user.id, image);
+      await supabase
+        .from("services")
+        .update({ image_url: publicUrlFor(supabase, "portfolio", path) })
+        .eq("id", service.id);
+    } catch {
+      // fall through to the menu page
+    }
+  }
 
   redirect(`/services/${service.id}`);
 }

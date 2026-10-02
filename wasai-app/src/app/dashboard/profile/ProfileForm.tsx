@@ -7,6 +7,8 @@ import Avatar from "@/components/Avatar";
 import AvatarUploader from "./AvatarUploader";
 import PortfolioUploader from "./PortfolioUploader";
 import CertificateUploader from "./CertificateUploader";
+import ImageUploadButton from "@/components/ImageUploadButton";
+import { uploadCover, removeCover } from "./uploadActions";
 
 const initialState: ProfileFormState = {};
 
@@ -105,6 +107,20 @@ export default function ProfileForm({
       {profile.role === "craftsman" && (
         <div className="space-y-4 rounded-lg border border-border p-4">
           <h2 className="text-sm font-semibold">和裁士情報</h2>
+
+          <div>
+            <p className="text-sm font-medium">トップ画像</p>
+            <p className="mt-1 text-xs text-ink-muted">
+              あなたのページのいちばん上に、横長で大きく表示されます。工房の様子や、仕立てた着物の写真などがおすすめです（横長の写真がきれいに収まります）。
+            </p>
+            {profile.cover_url && (
+              // eslint-disable-next-line @next/next/no-img-element -- Supabase Storage public URL, no Next Image domain config
+              <img src={profile.cover_url} alt="トップ画像" className="mt-2 aspect-[3/1] w-full rounded-md object-cover" />
+            )}
+            <div className="mt-2">
+              <ImageUploadButton upload={uploadCover} remove={removeCover} hasImage={Boolean(profile.cover_url)} label="トップ画像" />
+            </div>
+          </div>
 
           <div>
             <label htmlFor="grade" className="block text-sm font-medium">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { shrinkInputFiles } from "@/lib/shrinkImage";
 import { createService, type ServiceFormState } from "./actions";
 import { GARMENT_TYPES } from "@/lib/types";
 
@@ -8,6 +9,7 @@ const initialState: ServiceFormState = {};
 
 export default function ServiceForm() {
   const [state, formAction, pending] = useActionState(createService, initialState);
+  const [preparing, setPreparing] = useState(false);
 
   return (
     <form action={formAction} className="mt-4 space-y-4">
@@ -102,6 +104,29 @@ export default function ServiceForm() {
         </div>
       </div>
 
+      <div>
+        <label htmlFor="image" className="block text-sm font-medium">
+          メニューの写真（任意）
+        </label>
+        <input
+          id="image"
+          name="image"
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          className="mt-1 block w-full text-sm"
+          onChange={(e) => {
+            // Shrink a phone photo before the form sends it (lib/shrinkImage).
+            const input = e.currentTarget;
+            setPreparing(true);
+            void shrinkInputFiles(input).finally(() => setPreparing(false));
+          }}
+        />
+        <p className="mt-1 text-xs text-ink-muted">
+          仕立てた着物の写真などがおすすめです。一覧のカードとメニューのページに表示されます。あとから変えることもできます。
+        </p>
+        {preparing && <p className="mt-1 text-xs text-ink-muted">写真を準備中…</p>}
+      </div>
+
       {state.error && (
         <p role="alert" className="rounded-md bg-warn-soft px-3 py-2 text-sm text-warn">
           {state.error}
@@ -110,7 +135,7 @@ export default function ServiceForm() {
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || preparing}
         className="rounded-md bg-accent px-4 py-2 font-semibold text-bg-elevated hover:bg-accent-strong transition-colors disabled:opacity-60"
       >
         {pending ? "公開中…" : "メニューを公開する"}

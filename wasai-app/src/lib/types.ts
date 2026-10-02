@@ -21,6 +21,8 @@ export interface Profile {
   role: Role;
   display_name: string;
   avatar_url: string | null;
+  // Wide header image on a craftsman's page (Phase 34).
+  cover_url: string | null;
   bio: string | null;
   prefecture: string | null;
   created_at: string;
@@ -73,6 +75,8 @@ export interface Service {
   price: number;
   delivery_days: number;
   revision_count: number;
+  // Photo shown on the menu's card and page (Phase 34).
+  image_url: string | null;
   status: ServiceStatus;
   created_at: string;
   updated_at: string;

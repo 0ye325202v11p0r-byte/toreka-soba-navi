@@ -7,6 +7,8 @@ import { adminClient } from "@/lib/supabase/admin";
 import { isStripeConfigured } from "@/lib/stripe";
 import { createCheckoutSessionUrl } from "@/lib/orderPayment";
 import { checkCraftsmanCanAcceptWork } from "@/lib/capacity";
+import { validateUploadedFile, uploadUserFile, publicUrlFor } from "@/lib/storage";
+import type { UploadState } from "@/app/dashboard/profile/uploadActions";
 
 export interface OrderFromServiceState {
   error?: string;
@@ -143,4 +145,50 @@ export async function deleteService(
 
   revalidatePath("/dashboard");
   redirect("/dashboard");
+}
+
+// メニューの写真 (Phase 34, services.image_url). Only the menu's own
+// craftsman — checked here for a clear message, and by services RLS.
+export async function setServiceImage(_prevState: UploadState, formData: FormData): Promise<UploadState> {
+  const serviceId = String(formData.get("service_id") ?? "");
+  const file = formData.get("file");
+  if (!serviceId) return { error: "メニューが見つかりません。" };
+  if (!(file instanceof File) || file.size === 0) return { error: "写真を選択してください。" };
+  const validationError = validateUploadedFile(file, "image");
+  if (validationError) return { error: validationError };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+  const { data: service } = await supabase.from("services").select("craftsman_id").eq("id", serviceId).maybeSingle();
+  if (!service || service.craftsman_id !== user.id) return { error: "自分のメニューにだけ写真を設定できます。" };
+
+  try {
+    const path = await uploadUserFile(supabase, "portfolio", user.id, file);
+    const url = publicUrlFor(supabase, "portfolio", path);
+    const { error } = await supabase.from("services").update({ image_url: url }).eq("id", serviceId).eq("craftsman_id", user.id);
+    if (error) return { error: error.message };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "アップロードに失敗しました。" };
+  }
+
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath("/services");
+  return {};
+}
+
+export async function removeServiceImage(_prevState: UploadState, formData: FormData): Promise<UploadState> {
+  const serviceId = String(formData.get("service_id") ?? "");
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "ログインが必要です。" };
+  const { error } = await supabase.from("services").update({ image_url: null }).eq("id", serviceId).eq("craftsman_id", user.id);
+  if (error) return { error: error.message };
+  revalidatePath(`/services/${serviceId}`);
+  revalidatePath("/services");
+  return {};
 }
