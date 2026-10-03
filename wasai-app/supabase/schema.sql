@@ -1158,3 +1158,33 @@ create trigger trg_profiles_guard_role
   before update on profiles
   for each row
   execute function public.profiles_guard_role();
+
+-- ---------------------------------------------------------------------------
+-- Phase 35（2026-10-03追加）: 公開バケットのファイル一覧を外から取れないようにする。
+--
+-- avatars・portfolio・fabric-checks の3つは公開バケットで、画像はURLを知って
+-- いれば誰でも見られる（これは今までどおり）。ところが「誰でもSELECTできる」
+-- ポリシーも付けていたため、公開キーでStorage APIを叩くと、バケットの中の
+-- ファイルを全部一覧にできてしまっていた（反物チェックの写真＝取引の記録も
+-- 含む）。Supabaseのlint 0025（public_bucket_allows_listing）の指摘どおり、
+-- 公開バケットの画像をURLで見るのにSELECTポリシーは要らないので、一覧は
+-- 本人の「{auth.uid()}/」フォルダの中だけに絞る。アプリは一覧も上書きも
+-- しない（upload は upsert: false で INSERT だけ）ので、表示も投稿も変わらない。
+-- 本番のSupabaseには、この「Phase 35」の部分だけをSQL Editorで実行する
+-- （何度実行しても同じ結果になる。アプリの反映とは順番を問わない）。
+-- ---------------------------------------------------------------------------
+
+drop policy if exists "avatars_public_read" on storage.objects;
+drop policy if exists "avatars_owner_read" on storage.objects;
+create policy "avatars_owner_read" on storage.objects for select
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "portfolio_public_read" on storage.objects;
+drop policy if exists "portfolio_owner_read" on storage.objects;
+create policy "portfolio_owner_read" on storage.objects for select
+  using (bucket_id = 'portfolio' and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists "fabric_checks_public_read" on storage.objects;
+drop policy if exists "fabric_checks_owner_read" on storage.objects;
+create policy "fabric_checks_owner_read" on storage.objects for select
+  using (bucket_id = 'fabric-checks' and (storage.foldername(name))[1] = auth.uid()::text);
