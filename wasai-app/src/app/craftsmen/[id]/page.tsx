@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { getRatingSummary } from "@/lib/reviews";
+import { getRatingSummary, getReviewsWithContext } from "@/lib/reviews";
+import ReviewList from "@/components/ReviewList";
 import StarRating from "@/components/StarRating";
 import VerifiedBadge from "@/components/VerifiedBadge";
 import Avatar from "@/components/Avatar";
@@ -12,7 +13,7 @@ import FavoriteButton from "./FavoriteButton";
 import ServiceCard from "@/components/ServiceCard";
 import GarmentChip from "@/components/GarmentChip";
 import { CRAFTSMAN_PUBLIC_COLUMNS } from "@/lib/types";
-import type { CraftsmanPublicProfile, CraftsmanRate, Profile, Service, Review } from "@/lib/types";
+import type { CraftsmanPublicProfile, CraftsmanRate, Profile, Service } from "@/lib/types";
 
 export default async function CraftsmanDetailPage({
   params,
@@ -59,12 +60,7 @@ export default async function CraftsmanDetailPage({
     .order("created_at", { ascending: false })
     .returns<Service[]>();
 
-  const { data: reviews } = await supabase
-    .from("reviews")
-    .select("*")
-    .eq("reviewee_id", id)
-    .order("created_at", { ascending: false })
-    .returns<Review[]>();
+  const reviews = await getReviewsWithContext(supabase, id);
 
   const { data: rates } = await supabase
     .from("craftsman_rates")
@@ -118,7 +114,7 @@ export default async function CraftsmanDetailPage({
             : ""}
         </p>
         <div className="mt-2">
-          <StarRating rating={rating.average} count={rating.count} />
+          <StarRating rating={rating.average} count={rating.count} href="#reviews" />
         </div>
         {profile.bio && <p className="mt-4 whitespace-pre-wrap text-sm">{profile.bio}</p>}
         {craftsmanProfile && craftsmanProfile.specialties.length > 0 && (
@@ -209,17 +205,11 @@ export default async function CraftsmanDetailPage({
         </ul>
       </section>
 
-      <section className="mt-6">
+      <section id="reviews" className="mt-6 scroll-mt-4">
         <h2 className="text-lg font-bold">レビュー</h2>
-        <ul className="mt-3 space-y-3">
-          {(reviews ?? []).map((r) => (
-            <li key={r.id} className="rounded-lg border border-border bg-bg-elevated p-4">
-              <StarRating rating={r.rating} count={1} />
-              {r.comment && <p className="mt-2 text-sm">{r.comment}</p>}
-            </li>
-          ))}
-          {(reviews ?? []).length === 0 && <p className="text-sm text-ink-muted">まだレビューがありません。</p>}
-        </ul>
+        <div className="mt-2">
+          <ReviewList summary={rating} reviews={reviews} />
+        </div>
       </section>
     </div>
   );

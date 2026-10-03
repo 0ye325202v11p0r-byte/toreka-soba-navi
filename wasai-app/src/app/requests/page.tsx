@@ -120,7 +120,7 @@ export default async function RequestsPage({
               {r.deadline ? ` ・ 希望納期: ${r.deadline}` : ""}
             </p>
             <div className="mt-1">
-              <StarRating rating={clientRatings[i]?.average ?? null} count={clientRatings[i]?.count ?? 0} />
+              <StarRating rating={clientRatings[i]?.average ?? null} count={clientRatings[i]?.count ?? 0} href={`/reviews/${r.client_id}`} />
             </div>
             <p className="mt-2 line-clamp-2 text-sm text-ink-muted">{r.description}</p>
             {formatBudget(r.budget_min, r.budget_max) && (

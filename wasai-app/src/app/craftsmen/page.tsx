@@ -168,7 +168,7 @@ export default async function CraftsmenPage({
               );
             })()}
             <div className="mt-2">
-              <StarRating rating={ratings[i]?.average ?? null} count={ratings[i]?.count ?? 0} />
+              <StarRating rating={ratings[i]?.average ?? null} count={ratings[i]?.count ?? 0} href={`/craftsmen/${c.profile_id}#reviews`} />
             </div>
             {!c.is_accepting_orders && (
               <p className="mt-2 text-xs text-warn">現在、新規受注を停止中です</p>

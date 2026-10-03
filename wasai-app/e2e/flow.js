@@ -598,6 +598,24 @@ async function clickOnOrder(user, orderId, text) {
     ok("依頼者がAPIを直接叩いて和裁士に変わろうとしても拒否される", r.status >= 400 && rl.role === "client", `HTTP ${r.status} ${rl.role}`);
   }
 
+  // ---- 18. Star ratings open the review list; each review says what and when
+  await q("insert into reviews(order_id, reviewer_id, reviewee_id, rating, comment) values ($1,$2,$3,5,'丁寧な仕立てでした') on conflict do nothing", [o1.order.id, client.id, craft.id]);
+  await q("insert into reviews(order_id, reviewer_id, reviewee_id, rating, comment) values ($1,$2,$3,4,'連絡が早く助かりました') on conflict do nothing", [o1.order.id, craft.id, client.id]);
+  await visitor.goto(`${BASE}/craftsmen`);
+  await visitor.locator(`li:has(a[href="/craftsmen/${craft.id}"]) a[href="/craftsmen/${craft.id}#reviews"]`).first().click();
+  await visitor.waitForURL(/#reviews$/, { timeout: 15000 }).catch(() => {});
+  const revSection = await visitor.locator("#reviews").innerText().catch(() => "");
+  ok("和裁士の星を押すとレビュー欄が開き、着物の種類と取引の時期が出る", /#reviews$/.test(visitor.url()) && /訪問着/.test(revSection) && /の取引/.test(revSection) && /丁寧な仕立てでした/.test(revSection), revSection.replace(/\s+/g, " ").slice(0, 80));
+  await craft2.page.goto(`${BASE}/requests`);
+  const clientStars = craft2.page.locator(`a[href="/reviews/${client.id}"]`).first();
+  const hasClientLink = await clientStars.count();
+  if (hasClientLink) await clientStars.click();
+  await craft2.page.waitForURL(new RegExp(`/reviews/${client.id}$`), { timeout: 15000 }).catch(() => {});
+  const clientRev = await craft2.page.locator("main").innerText().catch(() => "");
+  ok("依頼者の星を押すと、和裁士から受けた評価の一覧が開く", hasClientLink > 0 && /さんの評価/.test(clientRev) && /連絡が早く助かりました/.test(clientRev), craft2.page.url());
+  await visitor.goto(`${BASE}/reviews/${client.id}`);
+  ok("依頼者の評価の一覧はログインした人だけが見られる", /\/login\?next=/.test(visitor.url()), visitor.url());
+
   await browser.close();
   await db.end();
   console.log(results.join("\n"));
