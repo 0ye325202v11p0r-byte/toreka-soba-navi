@@ -124,7 +124,7 @@ export default async function RequestDetailPage({
         {request.status === "open" ? "募集中" : request.status === "matched" ? "マッチング済み" : "締め切り済み"}
       </p>
       <div className="mt-1">
-        <StarRating rating={clientRating.average} count={clientRating.count} />
+        <StarRating rating={clientRating.average} count={clientRating.count} href={`/reviews/${request.client_id}`} />
       </div>
       {formatBudget(request.budget_min, request.budget_max) && (
         <p className="mt-2 text-sm font-semibold">予算: {formatBudget(request.budget_min, request.budget_max)}</p>

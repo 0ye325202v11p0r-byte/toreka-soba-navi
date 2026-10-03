@@ -68,7 +68,7 @@ export default async function ServiceDetailPage({
             {service.profiles.display_name}
           </Link>
           <div className="mt-1">
-            <StarRating rating={rating.average} count={rating.count} />
+            <StarRating rating={rating.average} count={rating.count} href={`/craftsmen/${service.craftsman_id}#reviews`} />
           </div>
         </div>
 
